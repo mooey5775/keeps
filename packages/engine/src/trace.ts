@@ -157,15 +157,19 @@ export class Tracer {
   }
 }
 
-export function canSee(event: TraceEvent, viewer: Seat | 'server'): boolean {
-  return viewer === 'server' || event.visibility === 'all' || event.visibility.includes(viewer);
+/** 'server' sees everything; 'spectator' sees only public events (and redacted copies). */
+export type TraceViewer = Seat | 'server' | 'spectator';
+
+export function canSee(event: TraceEvent, viewer: TraceViewer): boolean {
+  if (viewer === 'server' || event.visibility === 'all') return true;
+  return viewer !== 'spectator' && event.visibility.includes(viewer);
 }
 
 /**
  * The events a viewer may see. Hidden events are replaced by their redacted
  * payload, or dropped if they have none. The original payload never leaks.
  */
-export function eventsFor(events: readonly TraceEvent[], viewer: Seat | 'server'): TraceEvent[] {
+export function eventsFor(events: readonly TraceEvent[], viewer: TraceViewer): TraceEvent[] {
   const out: TraceEvent[] = [];
   for (const event of events) {
     if (canSee(event, viewer)) {

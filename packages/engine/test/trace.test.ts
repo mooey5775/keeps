@@ -79,6 +79,10 @@ describe('trace', () => {
     expect(JSON.stringify(forS2)).not.toContain('SECRET');
 
     expect(eventsFor(tracer.events, 'server')).toHaveLength(3);
+    expect(eventsFor(tracer.events, 'spectator').map((e) => e.payload)).toEqual([
+      { type: 'note', text: 'public' },
+      { type: 'note', text: 'S1 drew a card' },
+    ]);
   });
 
   it('formats one indented line per event with causes and visibility', () => {
