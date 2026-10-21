@@ -34,6 +34,7 @@ For development, `pnpm dev` runs the server and the Vite dev server together. Op
 | Path | What it is |
 |---|---|
 | `packages/engine` | The rules engine: pure TypeScript, no dependencies, shared by the server and the browser. See [docs/ENGINE.md](docs/ENGINE.md). |
+| `docs/ROADMAP.md` | Plans: persistence, bots, accounts and ratings. |
 | `packages/server` | Node server: rooms, WebSockets, static files. |
 | `packages/protocol` | Message types shared by the server and the client. |
 | `packages/web` | React client. |
