@@ -169,7 +169,7 @@ Ops are **plain serializable data**. There are no closures or generators. This m
 
 Triggers are **collected per play** and pushed in `AfterPlay`, after the play's whole effect (including Legerdemain's stolen card) has resolved:
 
-1. **Retribution:** for each seat P ≠ actor that had Retribution face-up in its keep *at the start or end* of the play, and whose hand or keep changed during the play. Pushes `ActionFrame{kind:'retribution', remaining:2}`. **At most once per play per seat.** Covers "swapped out by Providence still triggers" and "Duplicity or its face-down card, not both".
+1. **Retribution:** for each seat P ≠ actor that had Retribution face-up in its keep *when the play started* (Q15), and whose hand or keep changed during the play. Pushes `ActionFrame{kind:'retribution', remaining:2}`. **At most once per play per seat.** Covers "swapped out by Providence still triggers" and "Duplicity or its face-down card, not both".
 2. **Interest:** for each Coin card that entered keep K during the play, where Interest was face-up in K *before that card entered* and Interest itself didn't arrive in the same swap. K's owner draws from their pile.
 3. **Royal Favor:** each time Royal Favor entered a keep during the play, that keep's owner draws from their pile.
 
@@ -178,6 +178,10 @@ The batch is pushed so that it pops in clarification order: **Legerdemain's HOT 
 **Resolution is depth-first.** Triggers caused while resolving a trigger (e.g. Interest draws Blunder → Blunder enters keep → Interest again) resolve before the remaining siblings. This matches the Royal Favor 3 puzzle's narration. It's my interpretation (flagged below).
 
 Keep cards only enter keeps through plays (direct, HOT, or Providence swaps), so "per play" covers every keep entry.
+
+**Which changes count toward a play.** Every op and prompt records the play whose resolution it belongs to. Only changes made while resolving that play count toward it. Actions (including those Hocus Pocus grants) and trigger results never belong to a play, so an Interest draw during someone's Retribution actions can't be credited to an earlier play. Hocus Pocus's extra-actions frame is scheduled *after* its play closes.
+
+Once queued, a trigger resolves even if its card has since moved (e.g. Retribution actions swap Interest away before Interest's draw).
 
 ### Duplicity
 
@@ -322,6 +326,7 @@ These are defaults the engine will implement unless you overrule them. Each one 
 | Q12 | First player of the first round ("the wisest player"). | The host picks, or random. |
 | Q13 | Does **Retribution** trigger from non-play changes (keep abilities like Juggling or Tithes)? | No: the card says "plays a card". |
 | Q14 | Royal Favor entering a keep via a **Providence swap**. | Triggers ("enters your keep"). |
+| Q15 | **Retribution** moved by Providence: does the player receiving it trigger too? | No. Retribution triggers only for a player who had it face-up when the play started (so swapping it *out* still triggers for the original owner, per C-30). Mirrors the official Interest ruling (C-21). |
 
 ## Test plan
 

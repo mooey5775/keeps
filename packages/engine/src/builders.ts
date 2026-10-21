@@ -1,5 +1,5 @@
 import { CARD_IDS, CARDS, type CardId } from './cards.ts';
-import type { Ctx } from './context.ts';
+import { newCtx } from './context.ts';
 import { isImplemented } from './effects.ts';
 import { advance, beginTurn } from './engine.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
@@ -113,14 +113,14 @@ export function buildPosition(spec: PositionSpec): GameState {
   if (spec.frames && spec.turn === undefined) throw new Error('buildPosition: frames require turn');
   if (spec.turn !== undefined) {
     state.startingSeat = spec.turn;
-    const ctx: Ctx = { state, tracer: new Tracer(state) };
+    const ctx = newCtx(state, new Tracer(state));
     beginTurn(ctx, spec.turn);
     const frame = state.stack.at(-1);
     if (spec.actions !== undefined && frame?.op === 'action-frame') frame.remaining = spec.actions;
     let restricted = false;
     for (const extra of spec.frames ?? []) {
       restricted ||= extra.kind === 'retribution';
-      state.stack.push({ op: 'action-frame', ...extra, restricted, cause: null, depth: 0 });
+      state.stack.push({ op: 'action-frame', ...extra, restricted, cause: null, depth: 0, play: null });
     }
     advance(ctx);
     assertInvariants(state);

@@ -62,7 +62,7 @@ describe('buildPosition', () => {
   });
 
   it('rejects Keep cards whose rules are not implemented yet', () => {
-    expect(() => buildPosition({ keeps: { 0: ['interest'] } })).toThrow(/not implemented yet.*interest/);
+    expect(() => buildPosition({ keeps: { 0: ['last-laugh'] } })).toThrow(/not implemented yet.*last-laugh/);
   });
 
   it('rejects invalid positions via the invariant checker', () => {

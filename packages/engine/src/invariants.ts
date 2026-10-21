@@ -132,6 +132,13 @@ export function checkRestInvariants(state: GameState): string[] {
       }
     }
   }
+  // Every open play is waiting on its after-play op, and vice versa.
+  const pending = state.stack.flatMap((op) => (op.op === 'after-play' ? [op.playId] : []));
+  const open = state.openPlays.map((p) => p.id);
+  if ([...pending].sort().join() !== [...open].sort().join()) {
+    problems.push(`open plays [${open.join(', ')}] don't match after-play ops [${pending.join(', ')}]`);
+  }
+
   const ids = state.prompts.map((p) => p.id);
   if (new Set(ids).size !== ids.length) problems.push(`duplicate prompt ids: ${ids.join(', ')}`);
   return problems;

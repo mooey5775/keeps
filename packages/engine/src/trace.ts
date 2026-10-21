@@ -1,6 +1,15 @@
 import { cardName, type CardId } from './cards.ts';
 import type { ActionChoice } from './commands.ts';
-import type { ActionFrameOp, GameState, KeepRef, PileId, PromptKind, Seat, SeatKind } from './state.ts';
+import type {
+  ActionFrameOp,
+  GameState,
+  KeepRef,
+  PileId,
+  PromptKind,
+  Seat,
+  SeatKind,
+  TriggerKind,
+} from './state.ts';
 
 // Every state change emits a TraceEvent. Events record what caused them
 // (`cause`), how deep in the resolution they happened (`depth`), and who may
@@ -38,6 +47,9 @@ export type TracePayload =
   | { type: 'pile-reorder'; seat: Seat; pile: Seat; order: CardId[] | null }
   | { type: 'place-on-pile'; seat: Seat; card: CardId; pile: Seat }
   | { type: 'no-effect'; seat: Seat; card: CardId; reason: string }
+  /** After `card`'s play resolved, these triggers were queued (in resolution order). */
+  | { type: 'triggers'; card: CardId; triggers: { kind: TriggerKind; seat: Seat }[] }
+  | { type: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
   | { type: 'round-end'; reason: 'empty-pile'; ender: Seat }
   | { type: 'round-end'; reason: 'tokens'; winner: Seat }
   /** Scores in half-coins; null for ghost seats. */
@@ -239,6 +251,12 @@ export function describe(payload: TracePayload): string {
       return `${seatLabel(payload.seat)} places ${cardName(payload.card)} face-up on pile@${seatLabel(payload.pile)}`;
     case 'no-effect':
       return `${cardName(payload.card)} has no effect: ${payload.reason}`;
+    case 'triggers':
+      return `after ${cardName(payload.card)}: triggers → [${payload.triggers.map((t) => `${t.kind}(${seatLabel(t.seat)})`).join(', ')}]`;
+    case 'trigger':
+      return payload.kind === 'retribution'
+        ? `RETRIBUTION: ${seatLabel(payload.seat)} must take two actions now`
+        : `${payload.kind === 'interest' ? 'INTEREST' : 'ROYAL FAVOR'}: ${seatLabel(payload.seat)} draws from their pile`;
     case 'round-end':
       return payload.reason === 'empty-pile'
         ? `ROUND END: ${seatLabel(payload.ender)} drew from an empty pile`

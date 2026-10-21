@@ -1,7 +1,15 @@
 import { CARDS, type CardId } from './cards.ts';
 import { EngineFailure, type Answer } from './commands.ts';
-import { push, type Ctx } from './context.ts';
-import { cardEnteredHand, keepRefs, nonEmptyPiles, openPrompt } from './moves.ts';
+import { push, pushAfterPlay, type Ctx } from './context.ts';
+import {
+  cardEnteredHand,
+  hasFaceUp,
+  keepRefs,
+  nonEmptyPiles,
+  openPrompt,
+  recordChange,
+  recordEntry,
+} from './moves.ts';
 import {
   leftOf,
   rightOf,
@@ -44,7 +52,8 @@ const NON_KEEP_EFFECTS: Partial<Record<CardId, Effect>> = {
   'hocus-pocus': (ctx, seat, source) => {
     const parent = ctx.state.stack.findLast((op): op is ActionFrameOp & OpMeta => op.op === 'action-frame');
     ctx.tracer.emit({ type: 'extra-actions', seat, count: 2, source });
-    push(ctx, {
+    // The actions come after Hocus Pocus's play has fully resolved.
+    pushAfterPlay(ctx, {
       op: 'action-frame',
       seat,
       remaining: 2,
@@ -103,18 +112,8 @@ const NON_KEEP_EFFECTS: Partial<Record<CardId, Effect>> = {
   },
 };
 
-/**
- * Keep cards whose rules aren't built yet: on-play effects (Duplicity, Fiat)
- * or triggers (Royal Favor, Interest, Retribution, Last Laugh).
- */
-const KEEP_NOT_YET_IMPLEMENTED: ReadonlySet<CardId> = new Set<CardId>([
-  'duplicity',
-  'fiat',
-  'royal-favor',
-  'interest',
-  'retribution',
-  'last-laugh',
-]);
+/** Keep cards whose rules aren't built yet: on-play effects (Duplicity, Fiat) or Last Laugh. */
+const KEEP_NOT_YET_IMPLEMENTED: ReadonlySet<CardId> = new Set<CardId>(['duplicity', 'fiat', 'last-laugh']);
 
 export function isImplemented(card: CardId): boolean {
   return CARDS[card].keep ? !KEEP_NOT_YET_IMPLEMENTED.has(card) : card in NON_KEEP_EFFECTS;
@@ -298,13 +297,27 @@ function takeIntoHand(ctx: Ctx, seat: Seat, card: CardId, pile: Seat): void {
   cardEnteredHand(ctx, seat, card, seq);
 }
 
-/** Providence: the two cards trade places (a face-down card stays face-down; ruling Q-05). */
+/**
+ * Providence: the two cards trade places (a face-down card stays face-down;
+ * ruling Q-05). A face-up card moving to another keep "enters" it: Royal
+ * Favor triggers (Q-14), and so does Interest if it was in the receiving keep
+ * before and after the swap, so swapping Interest itself for a Coin card
+ * doesn't trigger it (C-21).
+ */
 function swapKeepCards(ctx: Ctx, seat: Seat, a: KeepRef, b: KeepRef): void {
-  const { keeps } = ctx.state;
+  const { state } = ctx;
+  const { keeps } = state;
   const cardA = keeps[a.seat][a.index]!;
   const cardB = keeps[b.seat][b.index]!;
+  const interestBefore = { a: hasFaceUp(state, a.seat, 'interest'), b: hasFaceUp(state, b.seat, 'interest') };
   keeps[a.seat][a.index] = cardB;
   keeps[b.seat][b.index] = cardA;
+  recordChange(ctx, a.seat);
+  recordChange(ctx, b.seat);
+  if (a.seat !== b.seat) {
+    if (!cardA.faceDown) recordEntry(ctx, b.seat, cardA.id, interestBefore.b && hasFaceUp(state, b.seat, 'interest'));
+    if (!cardB.faceDown) recordEntry(ctx, a.seat, cardB.id, interestBefore.a && hasFaceUp(state, a.seat, 'interest'));
+  }
   const full = { type: 'keep-swap' as const, seat, a: { ...a, card: cardA.id }, b: { ...b, card: cardB.id } };
   if (cardA.faceDown || cardB.faceDown) {
     const hide = (ref: KeepRef, card: typeof cardA) => ({ ...ref, card: card.faceDown ? null : card.id });

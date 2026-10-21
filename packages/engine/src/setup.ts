@@ -49,6 +49,7 @@ export function emptyState(config: GameConfig, rng: RngState): GameState {
     turn: null,
     stack: [],
     prompts: [],
+    openPlays: [],
     roundEnd: null,
     traceSeq: 0,
   };
@@ -116,6 +117,7 @@ export function startRound(state: GameState, tracer: Tracer, firstSeat?: Seat): 
   state.box = [];
   state.stack = [];
   state.prompts = [];
+  state.openPlays = [];
   state.turn = null;
   state.roundEnd = null;
   state.phase = 'playing';

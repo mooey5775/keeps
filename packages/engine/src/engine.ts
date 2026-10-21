@@ -1,4 +1,4 @@
-import { CARDS, type CardId } from './cards.ts';
+import { CARDS, isCoinCard, type CardId } from './cards.ts';
 import {
   EngineFailure,
   type ActionChoice,
@@ -7,7 +7,7 @@ import {
   type EngineError,
 } from './commands.ts';
 import { abilityCost, legalAbilities, useAbility } from './abilities.ts';
-import { clone, push, type Ctx } from './context.ts';
+import { clone, newCtx, push, withPlay, type Ctx } from './context.ts';
 import {
   assertImplemented,
   isLegalEffectAnswer,
@@ -16,7 +16,14 @@ import {
   resolveNonKeepEffect,
 } from './effects.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
-import { cardEnteredHand, keepTargets, openPrompt, spendActions } from './moves.ts';
+import {
+  cardEnteredHand,
+  enterKeep,
+  keepTargets,
+  openPrompt,
+  seatsWithFaceUp,
+  spendActions,
+} from './moves.ts';
 import { roundWinner, tokenWinner } from './scoring.ts';
 import { dealGame, startRound, type NewGameOptions } from './setup.ts';
 import {
@@ -26,6 +33,7 @@ import {
   type Op,
   type Prompt,
   type Seat,
+  type TriggerKind,
 } from './state.ts';
 import { assertNever, Tracer, type TraceEvent } from './trace.ts';
 
@@ -36,7 +44,7 @@ export type ApplyResult =
 /** Deals a new game and runs it to the first decision (the first player's action). */
 export function newGame(options: NewGameOptions): { state: GameState; events: TraceEvent[] } {
   const { state, events } = dealGame(options);
-  const ctx: Ctx = { state, tracer: new Tracer(state) };
+  const ctx = newCtx(state, new Tracer(state));
   advance(ctx);
   assertInvariants(state);
   assertRestInvariants(state);
@@ -52,7 +60,7 @@ export function apply(state: GameState, seat: Seat, command: Command): ApplyResu
   if (rejection) return { ok: false, error: rejection };
 
   const draft = clone(state);
-  const ctx: Ctx = { state: draft, tracer: new Tracer(draft) };
+  const ctx = newCtx(draft, new Tracer(draft));
   try {
     execute(ctx, command);
     advance(ctx);
@@ -146,7 +154,9 @@ function execute(ctx: Ctx, command: Command): void {
     case 'answer': {
       const prompt = state.prompts.find((p) => p.id === command.promptId)!;
       state.prompts = state.prompts.filter((p) => p !== prompt);
-      tracer.at(prompt.event, prompt.depth + 1, () => answer(ctx, prompt, command.answer));
+      tracer.at(prompt.event, prompt.depth + 1, () =>
+        withPlay(ctx, prompt.play, () => answer(ctx, prompt, command.answer)),
+      );
       return;
     }
     default:
@@ -157,7 +167,8 @@ function execute(ctx: Ctx, command: Command): void {
 function answer(ctx: Ctx, prompt: Prompt, given: Answer): void {
   switch (given.kind) {
     case 'action':
-      takeAction(ctx, prompt.seat, given.choice);
+      // An action is never part of an earlier play's resolution.
+      withPlay(ctx, null, () => takeAction(ctx, prompt.seat, given.choice));
       return;
     case 'hot-target': {
       if (prompt.kind !== 'hot-target') throw new Error('answer kind does not match prompt');
@@ -212,14 +223,16 @@ export function advance(ctx: Ctx): void {
     }
     if (top.op === 'action-frame') {
       if (top.remaining > 0) {
-        ctx.tracer.at(top.cause, top.depth, () => openPrompt(ctx, { seat: top.seat, kind: 'action' }));
+        ctx.tracer.at(top.cause, top.depth, () =>
+          withPlay(ctx, top.play, () => openPrompt(ctx, { seat: top.seat, kind: 'action' })),
+        );
         return;
       }
       state.stack.pop();
       continue;
     }
     state.stack.pop();
-    ctx.tracer.at(top.cause, top.depth, () => runOp(ctx, top));
+    ctx.tracer.at(top.cause, top.depth, () => withPlay(ctx, top.play, () => runOp(ctx, top)));
   }
 }
 
@@ -231,6 +244,10 @@ function runOp(ctx: Ctx, op: Op): void {
       return runPlay(ctx, op.seat, op.card, op.target, op.hot);
     case 'hot-check':
       return runHotCheck(ctx, op.seat);
+    case 'after-play':
+      return runAfterPlay(ctx, op.playId);
+    case 'trigger':
+      return runTrigger(ctx, op.kind, op.seat, op.source);
     case 'score':
       return runScore(ctx);
     case 'action-frame':
@@ -308,26 +325,86 @@ function runHotCheck(ctx: Ctx, seat: Seat): void {
   }
 }
 
+/**
+ * Plays a card from `seat`'s hand. Keep cards enter the target keep; non-Keep
+ * cards are discarded first, then resolve (so Resurrection can fetch itself).
+ * Triggers are collected while the play resolves and queued by its
+ * after-play op, which runs once everything the play started is finished.
+ */
 function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: boolean): void {
   const { state, tracer } = ctx;
   const hand = state.hands[seat];
   const index = hand.indexOf(card);
   if (index < 0) throw new Error(`seat ${seat} cannot play ${card}: not in hand`);
   assertImplemented(card);
-  hand.splice(index, 1);
-
-  if (CARDS[card].keep) {
-    if (target === null || !keepTargets(state, seat, card).includes(target)) {
-      throw new Error(`invalid keep target ${target} for ${card}`);
-    }
-    state.keeps[target].push({ id: card });
-    tracer.emit({ type: 'play', seat, card, target, hot });
-    return;
+  const keep = CARDS[card].keep;
+  if (keep && (target === null || !keepTargets(state, seat, card).includes(target))) {
+    throw new Error(`invalid keep target ${target} for ${card}`);
   }
-  // Non-Keep cards are discarded first, then resolve (so Resurrection can fetch itself).
-  state.discard.push(card);
-  const seq = tracer.emit({ type: 'play', seat, card, target: null, hot });
-  tracer.within(seq, () => resolveNonKeepEffect(ctx, card, seat));
+
+  const retribution = seatsWithFaceUp(state, 'retribution');
+  hand.splice(index, 1);
+  if (!keep) state.discard.push(card);
+  const id = tracer.emit({ type: 'play', seat, card, target: keep ? target : null, hot });
+  state.openPlays.push({ id, actor: seat, card, retribution, changed: [seat], entries: [] });
+
+  tracer.within(id, () => {
+    withPlay(ctx, null, () => push(ctx, { op: 'after-play', playId: id }));
+    withPlay(ctx, id, () => {
+      if (keep) enterKeep(ctx, target!, { id: card });
+      else resolveNonKeepEffect(ctx, card, seat);
+    });
+  });
+}
+
+/**
+ * Queues the play's triggers so they resolve in the official order
+ * (C-01): Retribution, then Interest, then Royal Favor.
+ * - Retribution: a seat other than the player who had it face-up when the
+ *   play started, and whose hand or keep the play changed. Once per play.
+ * - Interest: each face-up Coin card that entered a keep where Interest
+ *   already was (and stayed).
+ * - Royal Favor: each time it entered a keep face-up.
+ */
+function runAfterPlay(ctx: Ctx, playId: number): void {
+  const { state, tracer } = ctx;
+  const record = state.openPlays.find((p) => p.id === playId);
+  if (!record) throw new Error(`after-play for unknown play ${playId}`);
+  state.openPlays = state.openPlays.filter((p) => p !== record);
+
+  const triggers: { kind: TriggerKind; seat: Seat }[] = [
+    ...record.retribution
+      .filter((s) => s !== record.actor && record.changed.includes(s))
+      .map((seat) => ({ kind: 'retribution' as const, seat })),
+    ...record.entries
+      .filter((e) => e.interest && isCoinCard(e.card))
+      .map((e) => ({ kind: 'interest' as const, seat: e.seat })),
+    ...record.entries
+      .filter((e) => e.card === 'royal-favor')
+      .map((e) => ({ kind: 'royal-favor' as const, seat: e.seat })),
+  ];
+  if (triggers.length === 0) return;
+  const seq = tracer.emit({ type: 'triggers', card: record.card, triggers });
+  tracer.within(seq, () => {
+    for (const trigger of [...triggers].reverse()) push(ctx, { op: 'trigger', ...trigger, source: record.card });
+  });
+}
+
+function runTrigger(ctx: Ctx, kind: TriggerKind, seat: Seat, source: CardId): void {
+  const seq = ctx.tracer.emit({ type: 'trigger', kind, seat, source });
+  ctx.tracer.within(seq, () => {
+    switch (kind) {
+      case 'retribution':
+        push(ctx, { op: 'action-frame', seat, remaining: 2, kind: 'retribution', restricted: true });
+        return;
+      case 'interest':
+      case 'royal-favor':
+        push(ctx, { op: 'draw', seat, from: seat });
+        return;
+      default:
+        assertNever(kind);
+    }
+  });
 }
 
 function endRoundByEmptyPile(ctx: Ctx, ender: Seat): void {
@@ -335,6 +412,7 @@ function endRoundByEmptyPile(ctx: Ctx, ender: Seat): void {
   state.roundEnd = { kind: 'empty-pile', enderSeat: ender };
   state.stack = [];
   state.prompts = [];
+  state.openPlays = [];
   state.phase = 'post-round';
   const seq = tracer.emit({ type: 'round-end', reason: 'empty-pile', ender });
   tracer.within(seq, () => push(ctx, { op: 'score' }));
@@ -360,6 +438,7 @@ function checkTokenVictory(ctx: Ctx): boolean {
   state.roundEnd = { kind: 'tokens', winner };
   state.stack = [];
   state.prompts = [];
+  state.openPlays = [];
   const seq = tracer.emit({ type: 'round-end', reason: 'tokens', winner });
   tracer.within(seq, () => awardMark(ctx, winner));
   return true;

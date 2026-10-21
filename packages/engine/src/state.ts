@@ -97,12 +97,40 @@ export type OpBody =
   | { op: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
   /** Play any HOT card in `seat`'s hand, one at a time. */
   | { op: 'hot-check'; seat: Seat }
+  /** Runs once a play's effect has fully resolved: collects and queues its triggers. */
+  | { op: 'after-play'; playId: number }
+  /** A triggered Keep card resolving for `seat`. `source` is the card whose play triggered it. */
+  | { op: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
   | { op: 'score' };
 
-/** Every op remembers the trace event that caused it, and its nesting depth. */
+export type TriggerKind = 'retribution' | 'interest' | 'royal-favor';
+
+/** Every op remembers the trace event that caused it, its nesting depth, and its play. */
 export interface OpMeta {
   cause: number | null;
   depth: number;
+  /**
+   * The play whose resolution this op is part of, or null. Changes made while
+   * running the op are credited to that play (for Retribution and Interest).
+   * Actions and trigger results never belong to a play.
+   */
+  play: number | null;
+}
+
+/**
+ * A card play that has started but whose after-play step hasn't run yet.
+ * Its id is the seq of its `play` trace event.
+ */
+export interface PlayRecord {
+  id: number;
+  actor: Seat;
+  card: CardId;
+  /** Seats with Retribution face-up in their keep when the play started. */
+  retribution: Seat[];
+  /** Seats whose hand or keep this play changed. */
+  changed: Seat[];
+  /** Cards that entered a keep face-up during this play, in order. */
+  entries: { seat: Seat; card: CardId; interest: boolean }[];
 }
 
 export type Op = OpBody & OpMeta;
@@ -113,6 +141,8 @@ interface PromptBase {
   /** The trace event that opened this prompt; answers are traced as its consequences. */
   event: number;
   depth: number;
+  /** The play this decision belongs to (see OpMeta.play). */
+  play: number | null;
 }
 
 /** A card in a keep, by position (face-down cards can't be named by id). */
@@ -173,6 +203,8 @@ export interface GameState {
   stack: Op[];
   /** Open decisions. Non-empty means the engine is waiting for input. */
   prompts: Prompt[];
+  /** Plays still resolving; each has an after-play op on the stack. */
+  openPlays: PlayRecord[];
   roundEnd: RoundEnd | null;
   /** Sequence number of the last emitted trace event. */
   traceSeq: number;
