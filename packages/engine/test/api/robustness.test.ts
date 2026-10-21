@@ -184,6 +184,33 @@ describe('serialization', () => {
     }
   });
 
+  it('accepts a legal command whatever order its keys arrive in', () => {
+    const start = buildPosition({ keeps: { 0: ['juggling'] }, hands: { 0: ['chalice'] }, piles: { 1: ['dagger'] }, turn: 0 });
+    const promptId = promptFor(start, 0, 'action').id;
+    // Keys reversed at every level, as a browser might serialize them.
+    const reordered = JSON.parse(
+      `{"answer":{"choice":{"target":2,"card":"chalice","action":"play"},"kind":"action"},"promptId":"${promptId}","type":"answer"}`,
+    ) as Command;
+    expect(apply(start, 0, reordered).ok).toBe(true);
+    const juggle = JSON.parse(
+      `{"answer":{"choice":{"piles":[1,3],"card":"juggling","action":"ability"},"kind":"action"},"promptId":"${promptId}","type":"answer"}`,
+    ) as Command;
+    expect(apply(start, 0, juggle).ok).toBe(true);
+    // Order inside arrays still matters where it means something: [3, 1] is not a listed pair.
+    const swapped = JSON.parse(
+      `{"type":"answer","promptId":"${promptId}","answer":{"kind":"action","choice":{"action":"ability","card":"juggling","piles":[3,1]}}}`,
+    ) as Command;
+    expect(apply(start, 0, swapped).ok).toBe(false);
+  });
+
+  it('refuses to hand back a broken state: apply checks every invariant after a command', () => {
+    const start = buildPosition({ piles: { 0: ['chalice', 'dagger'] }, turn: 0 });
+    // Corrupt the input: a card in two places at once.
+    const corrupted = structuredClone(start);
+    corrupted.discard.push('chalice');
+    expect(() => apply(corrupted, 0, actionCommand(corrupted, 0, { action: 'draw' }))).toThrow(/Invariant violation/);
+  });
+
   it('a command for an old state is rejected against the new one', () => {
     const start = buildPosition({ piles: { 0: ['chalice', 'dagger'] }, turn: 0 });
     const stale = actionCommand(start, 0, { action: 'draw' });

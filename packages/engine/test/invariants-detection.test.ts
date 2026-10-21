@@ -96,6 +96,16 @@ describe('rest invariants (the engine waiting for a command)', () => {
     expect(checkRestInvariants(state)).toEqual(["HOT card pandemonium is being held in seat 1's hand"]);
   });
 
+  it('allow a HOT card left in a hand once the round is over (it is redealt next round)', () => {
+    const state = resting();
+    take(state, 'pandemonium');
+    state.hands[1].push('pandemonium');
+    state.phase = 'round-over';
+    state.prompts = [];
+    state.stack = [];
+    expect(checkRestInvariants(state)).toEqual([]);
+  });
+
   it('detect a deadlock: playing with nothing to answer', () => {
     const state = resting();
     state.prompts = [];
