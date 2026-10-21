@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, newGame, viewFor } from '../../src/index.ts';
+import { buildPosition, legalCommands, newGame, viewFor } from '../../src/index.ts';
 import { act, draw, payloads, promptFor, respond, types } from '../helpers.ts';
 
 // Gaps found by mutation testing: rule details whose code could be broken
@@ -58,5 +58,28 @@ describe('the active frame in views', () => {
     const final = draw(state, 0);
     promptFor(final.state, 0, 'hot-target');
     expect(viewFor(final.state, 1).frame).toBeNull();
+  });
+});
+
+describe('consecutive actions belong to one player', () => {
+  it("a Retribution owner with one action left can't remove Blunder by borrowing the turn player's action", () => {
+    const start = buildPosition({
+      keeps: { 1: ['blunder', 'retribution'] },
+      piles: { 1: ['chalice'] },
+      turn: 0,
+      frames: [{ seat: 1, kind: 'retribution', remaining: 1 }],
+    });
+    // S0's turn frame (2 actions) sits right under S1's last Retribution action.
+    expect(start.stack.map((op) => (op.op === 'action-frame' ? `${op.seat}:${op.remaining}` : op.op))).toEqual(['0:2', '1:1']);
+    expect(legalCommands(start, 1).some((c) => c.type === 'answer' && c.answer.kind === 'action' && c.answer.choice.action === 'ability')).toBe(false);
+  });
+});
+
+describe('Tithes reorder options', () => {
+  it('a two-card pile is offered in both orders', () => {
+    const start = buildPosition({ keeps: { 0: ['tithes'] }, piles: { 0: ['chalice', 'dagger'] }, turn: 0 });
+    const used = act(start, 0, { action: 'ability', card: 'tithes' });
+    const orders = legalCommands(used.state, 0).flatMap((c) => (c.type === 'answer' && c.answer.kind === 'order-pile' ? [c.answer.order.join(',')] : []));
+    expect(orders).toEqual(['chalice,dagger', 'dagger,chalice']);
   });
 });
