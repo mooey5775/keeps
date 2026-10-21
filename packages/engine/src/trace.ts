@@ -111,7 +111,11 @@ export class Tracer {
   private depth = 0;
   private cause: number | null = null;
 
-  constructor(private readonly state: GameState) {}
+  private readonly state: GameState;
+
+  constructor(state: GameState) {
+    this.state = state;
+  }
 
   emit(payload: TracePayload, options: EmitOptions = {}): number {
     const seq = ++this.state.traceSeq;

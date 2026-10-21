@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:strict": "SPEC_STRICT=1 vitest run",
-    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
+    "replay": "node scripts/replay.ts"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

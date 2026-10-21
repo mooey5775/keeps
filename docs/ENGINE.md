@@ -97,8 +97,7 @@ interface GameState {
   prompts: Prompt[];                        // open decisions; non-empty ⇒ engine is waiting
   roundEnd: null | { kind: 'empty-pile'; enderSeat: Seat } | { kind: 'tokens'; winner: Seat };
   phase: 'lobby' | 'playing' | 'post-round' | 'scoring' | 'game-over';
-  knowledge: Record<Seat, KnownFact[]>;     // private info each player has seen (for views/log)
-  history: Snapshot[];                      // undo stack for the current round
+  openPlays: PlayRecord[];                  // plays whose after-play step hasn't run yet
   traceSeq: number;
 }
 ```
@@ -292,16 +291,16 @@ interface TraceEvent {
   - Hand counts, marks, whose turn it is, open prompts (who is being waited on, and what kind of prompt).
 - **Only to that player:**
   - Their own hand.
-  - Prompt options addressed to them.
-  - Cards they're currently looking at (Requisition, Epiphany, Prayer, Pluck, Tithes reorder).
-  - Their `knowledge` log, e.g. which card they placed face-down with Duplicity.
+  - Prompt options addressed to them, including cards they're currently looking at (Requisition, Epiphany, Prayer, Pluck, Tithes reorder).
+  - The face-down card they placed with Duplicity.
+  - Their own log of private events (the trace filtered with `eventsFor`).
 - **Never sent to anyone:** pile identities, the order of face-down pile cards, other hands, the RNG state.
 
 A property test serializes every view at every step of random games and checks that no card id appears that the player isn't entitled to see.
 
 ## Undo ("propose undo")
 
-- Before each accepted `answer` command, the engine pushes a snapshot of the state onto `history`. History covers the current round and is cleared when a new round starts.
+- `apply` is pure, so undo needs nothing from the engine: the server's room keeps the list of states before each accepted command. History covers the current round and is cleared when a new round starts.
 - `propose-undo` asks every other real player for approval. If all accept, the state is restored to the snapshot before the most recent command. Repeat to step further back.
 - The RNG state is part of the snapshot, so redoing the same command gives the same random result. Legerdemain can't be re-rolled.
 - **Known leak:** info a player already saw (e.g. Requisition) can't be unseen. That's acceptable for friends.

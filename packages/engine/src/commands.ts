@@ -70,10 +70,10 @@ export interface EngineError {
 
 /** Thrown inside the engine to reject a command; apply() turns it into a result. */
 export class EngineFailure extends Error {
-  constructor(
-    readonly code: EngineErrorCode,
-    message: string,
-  ) {
+  readonly code: EngineErrorCode;
+
+  constructor(code: EngineErrorCode, message: string) {
     super(message);
+    this.code = code;
   }
 }
