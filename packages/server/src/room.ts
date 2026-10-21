@@ -22,6 +22,7 @@ import {
   type UndoState,
 } from '@keeps/protocol';
 import type { Tracker } from './analytics.ts';
+import type { OnlineDisputeInfo } from './dispute.ts';
 
 // One game room: its players, lobby settings, the running game, and undo
 // votes. No sockets here: connections are just `send` callbacks, so the
@@ -424,6 +425,19 @@ export class Room {
       { id: player.client ?? `player:${player.id}`, name: player.name, ip: player.ip },
       { room: this.code, ...properties },
     );
+  }
+
+  /** The reporter and their game, for a rule dispute (by seat token). */
+  disputeInfo(token: string): OnlineDisputeInfo | null {
+    const player = this.players.find((p) => p.token === token);
+    if (!player) return null;
+    const game = this.game;
+    return {
+      name: player.name,
+      seat: player.seat,
+      client: player.client,
+      game: game && { round: game.state.round, phase: game.state.phase, log: game.log, events: game.events },
+    };
   }
 
   /** What the admin page shows about this room. */

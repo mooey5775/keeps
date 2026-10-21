@@ -7,6 +7,7 @@ import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protoc
 import { WebSocketServer, type WebSocket } from 'ws';
 import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
+import { buildDispute, RateLimiter } from './dispute.ts';
 import { Room, type RoomDeps, type Send } from './room.ts';
 
 export interface ServerOptions {
@@ -54,6 +55,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const rooms = new Map<string, Room>();
   const tracker = options.tracker ?? noTracker;
   const visitors = new VisitorLog();
+  const disputeLimit = new RateLimiter(5, 10 * 60 * 1000);
   const startedAt = Date.now();
 
   const deps: RoomDeps = {
@@ -83,6 +85,22 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const http = createServer((req, res) => {
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
+    if (path === '/dispute' && req.method === 'POST') {
+      void readJson(req, 512 * 1024).then((body) => {
+        const reply = (status: number, data: object) =>
+          res.writeHead(status, { 'content-type': 'application/json' }).end(JSON.stringify(data));
+        const ip = clientIp(req);
+        if (!disputeLimit.allow(ip ?? 'unknown', Date.now())) return reply(429, { error: 'Too many reports. Please try again later.' });
+        if (body === undefined) return reply(400, { error: 'Malformed report.' });
+        const result = buildDispute(body, (code, token) => rooms.get(code)?.disputeInfo(token) ?? null);
+        if (!result.ok) return reply(400, { error: result.error });
+        tracker.capture('rules_dispute', { ...result.who, ip }, result.properties);
+        // A backup in the server log, in case analytics is off or delayed.
+        console.log(`[dispute] ${result.who.name} (${ip}) ${String(result.properties.mode)}: ${String(result.properties.text).slice(0, 300).replace(/\s+/g, ' ')}`);
+        reply(200, { ok: true });
+      });
+      return;
+    }
     if (path === '/config.json') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' }).end(JSON.stringify(options.publicConfig ?? {}));
       return;
@@ -187,6 +205,31 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
           }),
       }),
     );
+  });
+}
+
+/** Reads a JSON request body up to `limit` bytes; undefined if too big or not JSON. */
+function readJson(req: IncomingMessage, limit: number): Promise<unknown> {
+  return new Promise((resolveBody) => {
+    const chunks: Buffer[] = [];
+    let size = 0;
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > limit) {
+        resolveBody(undefined);
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      try {
+        resolveBody(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        resolveBody(undefined);
+      }
+    });
+    req.on('error', () => resolveBody(undefined));
   });
 }
 

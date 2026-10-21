@@ -14,6 +14,7 @@ import {
   type TraceEvent,
 } from '@keeps/engine';
 import { useMemo, useState } from 'react';
+import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
 import { navigate } from '../router.ts';
 
@@ -73,6 +74,8 @@ export function Puzzles({ id }: { id: string | null }) {
 function PuzzlePlayer({ puzzle }: { puzzle: Puzzle }) {
   const [state, setState] = useState<GameState>(() => puzzleState(puzzle));
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  // The moves so far, for a rule dispute to reproduce the position.
+  const [moves, setMoves] = useState<{ seat: Seat; command: Command }[]>([]);
   const [showSolution, setShowSolution] = useState(false);
   const startTurn = useMemo(() => puzzleState(puzzle).turnNumber, [puzzle]);
 
@@ -90,6 +93,7 @@ function PuzzlePlayer({ puzzle }: { puzzle: Puzzle }) {
   const restart = () => {
     setState(puzzleState(puzzle));
     setEvents([]);
+    setMoves([]);
   };
   const onCommand = (command: Command) => {
     if (outcome !== 'playing') return;
@@ -97,6 +101,7 @@ function PuzzlePlayer({ puzzle }: { puzzle: Puzzle }) {
     if (!result.ok) return;
     setState(result.state);
     setEvents([...events, ...result.events]);
+    setMoves([...moves, { seat: decider, command }]);
     if (puzzleOutcome(result.state, startTurn) === 'won') markSolved(puzzle.id);
   };
 
@@ -123,6 +128,7 @@ function PuzzlePlayer({ puzzle }: { puzzle: Puzzle }) {
         )}
       </div>
       {showSolution && <p className="solution">{puzzle.solution}</p>}
+      <DisputeButton context={() => ({ mode: 'puzzle', puzzle: puzzle.id, commands: moves })} />
     </div>
   );
 

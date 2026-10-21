@@ -1,5 +1,6 @@
 import { NAME_MAX, type RoomSummary } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
+import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
 import { natoSpelling } from '../game/nato.ts';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
@@ -266,6 +267,12 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
           </button>
         )}
       </div>
+      <DisputeButton
+        context={() => {
+          const token = tabToken(room.code) ?? browserToken(room.code);
+          return token ? { mode: 'online', room: room.code, token } : null;
+        }}
+      />
     </div>
   );
 

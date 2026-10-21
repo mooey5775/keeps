@@ -44,7 +44,8 @@ body,
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
   color: inherit;
 }
@@ -99,7 +100,8 @@ a {
 }
 
 input,
-select {
+select,
+textarea {
   background: var(--bg-raised);
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -108,6 +110,7 @@ select {
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
@@ -869,4 +872,35 @@ a.buy:hover {
   .keep {
     min-height: calc(48px * var(--card-ratio));
   }
+}
+
+/* ---------- Rule disputes ---------- */
+
+.dispute-link {
+  display: block;
+  margin-top: 0.75rem;
+  font-size: 0.85em;
+  color: var(--muted);
+}
+
+.dispute-notice {
+  border-left: 3px solid var(--gold);
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.dispute-notice p {
+  margin: 0.4em 0;
+}
+
+.modal.dispute form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+}
+
+.modal.dispute textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
 }

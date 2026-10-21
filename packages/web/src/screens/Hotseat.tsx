@@ -1,5 +1,6 @@
-import { apply, eventsFor, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
+import { apply, eventsFor, newGame, viewFor, type Command, type GameState, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
 import { useMemo, useState } from 'react';
+import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
 import { navigate } from '../router.ts';
 
@@ -10,14 +11,17 @@ interface Local {
   state: GameState;
   events: TraceEvent[];
   names: (string | null)[];
+  /** The game's options and moves, for a rule dispute to reproduce it. */
+  log: ReplayLog;
 }
 
 function start(players: 2 | 3 | 4, names: string[]): Local {
-  const { state, events } = newGame({ players, seed: crypto.randomUUID(), marksToWin: 3 });
+  const options = { players, seed: crypto.randomUUID(), marksToWin: 3 };
+  const { state, events } = newGame(options);
   const seats = state.config.seats.flatMap((kind, seat) => (kind === 'player' ? [seat] : []));
   const bySeat: (string | null)[] = [null, null, null, null];
   seats.forEach((seat, i) => (bySeat[seat] = names[i] ?? `Player ${i + 1}`));
-  return { state, events, names: bySeat };
+  return { state, events, names: bySeat, log: { options, commands: [] } };
 }
 
 /** Who should be looking at the screen: whoever must decide something. */
@@ -69,7 +73,12 @@ export function Hotseat() {
   const onCommand = (command: Command) => {
     const result = apply(game.state, seat, command);
     if (!result.ok) return alert(result.error.message);
-    setGame({ ...game, state: result.state, events: [...game.events, ...result.events] });
+    setGame({
+      ...game,
+      state: result.state,
+      events: [...game.events, ...result.events],
+      log: { ...game.log, commands: [...game.log.commands, { seat, command }] },
+    });
   };
 
   if (shown !== seat && game.state.phase !== 'round-over' && game.state.phase !== 'game-over') {
@@ -89,6 +98,7 @@ export function Hotseat() {
       log={eventsFor(game.events, seat)}
       names={game.names}
       onCommand={onCommand}
+      side={<DisputeButton context={() => ({ mode: 'hotseat', replay: game.log })} />}
       header={
         <div className="table-header">
           <span>Pass and play · {game.names[seat]}’s view</span>
