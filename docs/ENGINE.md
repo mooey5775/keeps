@@ -226,11 +226,15 @@ type Command =
 Public API:
 
 ```ts
-newGame(config, seed): GameState
-apply(state, seat, command): { state: GameState; events: TraceEvent[] } | { error: EngineError }
+newGame({ players, seed, marksToWin?, firstSeat? }): { state, events }   // dealt and waiting on the first action
+apply(state, seat, command): { ok: true; state; events } | { ok: false; error: EngineError }
 legalCommands(state, seat): Command[]
-viewFor(state, seat | 'spectator'): PlayerView
+viewFor(state, seat | 'spectator'): PlayerView                        // step 7
 ```
+
+`next-round` is a command any player can send once a round is scored (`phase: 'round-over'`).
+
+Cards whose rules aren't built yet are rejected with `not-implemented` instead of being misplayed. The list lives in `effects.ts` and shrinks with each build step.
 
 `apply` never mutates its input. It works on a `structuredClone`, which is cheap for 36 cards.
 

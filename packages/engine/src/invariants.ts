@@ -100,3 +100,46 @@ export function assertInvariants(state: GameState): void {
     throw new Error(`Invariant violation:\n  - ${problems.join('\n  - ')}`);
   }
 }
+
+/**
+ * Extra invariants that hold whenever the engine is at rest (waiting for a
+ * command), as opposed to mid-resolution.
+ */
+export function checkRestInvariants(state: GameState): string[] {
+  const problems: string[] = [];
+  if (state.limbo.length > 0) problems.push(`limbo is not empty: ${state.limbo.map((c) => c.id).join(', ')}`);
+
+  // HOT cards are never held, except one waiting on its owner to pick a keep.
+  for (const seat of SEATS) {
+    for (const id of state.hands[seat]) {
+      if (!CARDS[id].hot) continue;
+      const pending = state.prompts.some((p) => p.kind === 'hot-target' && p.seat === seat && p.card === id);
+      if (!pending) problems.push(`HOT card ${id} is being held in seat ${seat}'s hand`);
+    }
+  }
+
+  const waiting = state.phase === 'playing' || state.phase === 'post-round';
+  if (waiting && state.prompts.length === 0) problems.push(`phase ${state.phase} but no open prompts (deadlock)`);
+  if (!waiting && (state.prompts.length > 0 || state.stack.length > 0)) {
+    problems.push(`phase ${state.phase} but the stack or prompts are not empty`);
+  }
+  for (const prompt of state.prompts) {
+    if (state.config.seats[prompt.seat] !== 'player') problems.push(`prompt ${prompt.id} is for a ghost`);
+    if (prompt.kind === 'action') {
+      const top = state.stack.at(-1);
+      if (top?.op !== 'action-frame' || top.seat !== prompt.seat || top.remaining <= 0) {
+        problems.push(`action prompt ${prompt.id} has no matching action frame on top of the stack`);
+      }
+    }
+  }
+  const ids = state.prompts.map((p) => p.id);
+  if (new Set(ids).size !== ids.length) problems.push(`duplicate prompt ids: ${ids.join(', ')}`);
+  return problems;
+}
+
+export function assertRestInvariants(state: GameState): void {
+  const problems = checkRestInvariants(state);
+  if (problems.length > 0) {
+    throw new Error(`Rest invariant violation:\n  - ${problems.join('\n  - ')}`);
+  }
+}

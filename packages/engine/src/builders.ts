@@ -1,5 +1,8 @@
 import { CARD_IDS, type CardId } from './cards.ts';
-import { assertInvariants } from './invariants.ts';
+import type { Ctx } from './context.ts';
+import { advance, beginTurn } from './engine.ts';
+import { assertInvariants, assertRestInvariants } from './invariants.ts';
+import { Tracer } from './trace.ts';
 import { seedRng, shuffle } from './rng.ts';
 import { emptyState } from './setup.ts';
 import {
@@ -27,16 +30,21 @@ export interface PositionSpec {
   /** Default: four players. */
   seats?: PerSeat<SeatKind>;
   /** Pile contents by seat position, top first. Unlisted positions are empty. */
-  piles?: Partial<Record<Seat, PileCardSpec[]>>;
+  piles?: Partial<Record<Seat, readonly PileCardSpec[]>>;
   /** Hidden pile identity at each position. Default: count, fool, friar, mask. */
   pileAt?: PerSeat<PileId>;
-  hands?: Partial<Record<Seat, CardSpec[]>>;
+  hands?: Partial<Record<Seat, readonly CardSpec[]>>;
   /** Keeps are public, so every card must be named. */
-  keeps?: Partial<Record<Seat, (CardId | KeepCard)[]>>;
+  keeps?: Partial<Record<Seat, readonly (CardId | KeepCard)[]>>;
   /** Bottom first; the last card is the most recent discard. */
-  discard?: CardId[];
-  /** Whose turn it is. Default: nobody's (between turns). */
+  discard?: readonly CardId[];
+  /**
+   * Starts this seat's turn, so the state is waiting on its first action.
+   * Default: nobody's turn (a static position, not ready for commands).
+   */
   turn?: Seat;
+  /** Overrides the number of actions the turn starts with (default: 2, or 1 if Shackled). */
+  actions?: number;
   marks?: PerSeat<number>;
   round?: number;
   marksToWin?: number;
@@ -89,11 +97,16 @@ export function buildPosition(spec: PositionSpec): GameState {
 
   state.round = spec.round ?? 1;
   state.marks = spec.marks ?? [0, 0, 0, 0];
-  if (spec.turn !== undefined) {
-    state.turnNumber = 1;
-    state.startingSeat = spec.turn;
-    state.turn = { seat: spec.turn, actionsTaken: 0, usedOncePerTurn: [] };
-  }
   assertInvariants(state);
+  if (spec.turn !== undefined) {
+    state.startingSeat = spec.turn;
+    const ctx: Ctx = { state, tracer: new Tracer(state) };
+    beginTurn(ctx, spec.turn);
+    const frame = state.stack.at(-1);
+    if (spec.actions !== undefined && frame?.op === 'action-frame') frame.remaining = spec.actions;
+    advance(ctx);
+    assertInvariants(state);
+    assertRestInvariants(state);
+  }
   return state;
 }

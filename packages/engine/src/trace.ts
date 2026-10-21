@@ -1,5 +1,6 @@
 import { cardName, type CardId } from './cards.ts';
-import type { GameState, PileId, Seat, SeatKind } from './state.ts';
+import type { ActionChoice } from './commands.ts';
+import type { ActionFrameOp, GameState, PileId, PromptKind, Seat, SeatKind } from './state.ts';
 
 // Every state change emits a TraceEvent. Events record what caused them
 // (`cause`), how deep in the resolution they happened (`depth`), and who may
@@ -13,6 +14,22 @@ export type TracePayload =
   | { type: 'pile-dealt'; position: Seat; pile: PileId; cards: CardId[] }
   /** Public counterpart of pile-dealt. */
   | { type: 'pile-placed'; position: Seat; size: number }
+  | { type: 'turn-start'; seat: Seat; actions: number }
+  | { type: 'turn-end'; seat: Seat }
+  | { type: 'prompt'; seat: Seat; kind: PromptKind; card?: CardId }
+  /** An action spent from a frame; `remaining` is what the frame has left afterward. */
+  | { type: 'action'; seat: Seat; frame: ActionFrameOp['kind']; remaining: number; choice: ActionChoice }
+  /** `card` is null in the redacted copy other players see. */
+  | { type: 'draw'; seat: Seat; from: Seat; card: CardId | null }
+  | { type: 'empty-draw'; seat: Seat; from: Seat; afterRoundEnd: boolean }
+  | { type: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
+  | { type: 'extra-actions'; seat: Seat; count: number; source: CardId }
+  | { type: 'round-end'; reason: 'empty-pile'; ender: Seat }
+  | { type: 'round-end'; reason: 'tokens'; winner: Seat }
+  /** Scores in half-coins; null for ghost seats. */
+  | { type: 'score'; scores: (number | null)[]; winner: Seat; tiedWith: Seat[] }
+  | { type: 'mark'; seat: Seat; marks: number }
+  | { type: 'game-over'; winner: Seat }
   | { type: 'note'; text: string };
 
 export type TraceType = TracePayload['type'];
@@ -49,7 +66,7 @@ export interface EmitOptions {
 export class Tracer {
   readonly events: TraceEvent[] = [];
   private depth = 0;
-  private readonly causes: number[] = [];
+  private cause: number | null = null;
 
   constructor(private readonly state: GameState) {}
 
@@ -60,7 +77,7 @@ export class Tracer {
       round: this.state.round,
       turn: this.state.turnNumber,
       depth: this.depth,
-      cause: options.cause !== undefined ? options.cause : (this.causes.at(-1) ?? null),
+      cause: options.cause !== undefined ? options.cause : this.cause,
       visibility: options.visibility ?? 'all',
       payload,
     };
@@ -69,16 +86,27 @@ export class Tracer {
     return seq;
   }
 
-  /** Runs fn one level deeper, with `cause` as the default cause of its events. */
-  within<T>(cause: number, fn: () => T): T {
-    this.causes.push(cause);
-    this.depth++;
+  /** The cause and depth new events (and ops pushed now) inherit. */
+  context(): { cause: number | null; depth: number } {
+    return { cause: this.cause, depth: this.depth };
+  }
+
+  /** Runs fn with the given default cause and absolute depth, then restores them. */
+  at<T>(cause: number | null, depth: number, fn: () => T): T {
+    const saved = { cause: this.cause, depth: this.depth };
+    this.cause = cause;
+    this.depth = depth;
     try {
       return fn();
     } finally {
-      this.depth--;
-      this.causes.pop();
+      this.cause = saved.cause;
+      this.depth = saved.depth;
     }
+  }
+
+  /** Runs fn one level deeper, with `cause` as the default cause of its events. */
+  within<T>(cause: number, fn: () => T): T {
+    return this.at(cause, this.depth + 1, fn);
   }
 }
 
@@ -112,6 +140,24 @@ function cardList(ids: readonly CardId[]): string {
   return ids.length === 0 ? '(none)' : ids.map(cardName).join(', ');
 }
 
+/** Formats half-coins as coins: 9 → "4.5". */
+export function coinsLabel(halfCoins: number): string {
+  return String(halfCoins / 2);
+}
+
+function describeChoice(choice: ActionChoice): string {
+  switch (choice.action) {
+    case 'draw':
+      return 'draw';
+    case 'play':
+      return choice.target === undefined
+        ? `play ${cardName(choice.card)}`
+        : `play ${cardName(choice.card)} → keep(${seatLabel(choice.target)})`;
+    default:
+      return assertNever(choice);
+  }
+}
+
 export function describe(payload: TracePayload): string {
   switch (payload.type) {
     case 'game-start':
@@ -122,6 +168,38 @@ export function describe(payload: TracePayload): string {
       return `pile '${payload.pile}' dealt to ${seatLabel(payload.position)} (top first): ${cardList(payload.cards)}`;
     case 'pile-placed':
       return `a pile of ${payload.size} cards placed at ${seatLabel(payload.position)}`;
+    case 'turn-start':
+      return `${seatLabel(payload.seat)} turn start (${payload.actions} action${payload.actions === 1 ? '' : 's'})`;
+    case 'turn-end':
+      return `${seatLabel(payload.seat)} turn end`;
+    case 'prompt':
+      return `waiting on ${seatLabel(payload.seat)}: ${payload.kind}${payload.card ? ` (${cardName(payload.card)})` : ''}`;
+    case 'action':
+      return `${seatLabel(payload.seat)} action [${payload.frame}, ${payload.remaining} left]: ${describeChoice(payload.choice)}`;
+    case 'draw':
+      return `${seatLabel(payload.seat)} draws ${payload.card ? cardName(payload.card) : 'a card'} from pile@${seatLabel(payload.from)}`;
+    case 'empty-draw':
+      return `${seatLabel(payload.seat)} draws from EMPTY pile@${seatLabel(payload.from)}${payload.afterRoundEnd ? ' (round already over: no effect)' : ''}`;
+    case 'play':
+      return `${seatLabel(payload.seat)} plays ${cardName(payload.card)}${payload.hot ? ' (HOT!)' : ''}${payload.target !== null ? ` → keep(${seatLabel(payload.target)})` : ' → discard'}`;
+    case 'extra-actions':
+      return `${seatLabel(payload.seat)} gets ${payload.count} actions from ${cardName(payload.source)}`;
+    case 'round-end':
+      return payload.reason === 'empty-pile'
+        ? `ROUND END: ${seatLabel(payload.ender)} drew from an empty pile`
+        : `ROUND END: token victory for ${seatLabel(payload.winner)}`;
+    case 'score': {
+      const scores = payload.scores
+        .map((s, seat) => (s === null ? null : `${seatLabel(seat as Seat)}=${coinsLabel(s)}`))
+        .filter((s) => s !== null)
+        .join(' ');
+      const tie = payload.tiedWith.length > 0 ? ` (tie-break over ${payload.tiedWith.map(seatLabel).join(',')})` : '';
+      return `score: ${scores} → ${seatLabel(payload.winner)} wins${tie}`;
+    }
+    case 'mark':
+      return `${seatLabel(payload.seat)} earns a victory mark (${payload.marks} total)`;
+    case 'game-over':
+      return `GAME OVER: ${seatLabel(payload.winner)} wins`;
     case 'note':
       return payload.text;
     default:

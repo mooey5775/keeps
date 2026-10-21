@@ -55,7 +55,13 @@ export interface GameConfig {
   partialDeck: boolean;
 }
 
-export type Phase = 'playing' | 'post-round' | 'game-over';
+/**
+ * playing: turns are being taken.
+ * post-round: an empty pile was drawn from; only Last Laugh (and what it
+ *   triggers) and Duplicity reveals remain before scoring.
+ * round-over: scored; waiting for a `next-round` command.
+ */
+export type Phase = 'playing' | 'post-round' | 'round-over' | 'game-over';
 
 export interface TurnState {
   seat: Seat;
@@ -79,13 +85,39 @@ export interface ActionFrameOp {
 }
 
 /** Resolution-stack operations. Grows with each build step. */
-export type Op = ActionFrameOp;
+export type OpBody =
+  | ActionFrameOp
+  /** `seat` draws the top card of the pile at position `from` (looked up when the op runs). */
+  | { op: 'draw'; seat: Seat; from: Seat }
+  /** `seat` plays `card` from their hand. `target` is the receiving keep for Keep cards. */
+  | { op: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
+  /** Play any HOT card in `seat`'s hand, one at a time. */
+  | { op: 'hot-check'; seat: Seat }
+  | { op: 'score' };
 
-export interface Prompt {
+/** Every op remembers the trace event that caused it, and its nesting depth. */
+export interface OpMeta {
+  cause: number | null;
+  depth: number;
+}
+
+export type Op = OpBody & OpMeta;
+
+interface PromptBase {
   id: string;
   seat: Seat;
-  kind: 'action';
+  /** The trace event that opened this prompt; answers are traced as its consequences. */
+  event: number;
+  depth: number;
 }
+
+export type Prompt =
+  /** Choose an action for the top action frame. */
+  | (PromptBase & { kind: 'action' })
+  /** Choose which keep receives a HOT Keep card (the card stays in hand until then). */
+  | (PromptBase & { kind: 'hot-target'; card: CardId });
+
+export type PromptKind = Prompt['kind'];
 
 export interface GameState {
   config: GameConfig;

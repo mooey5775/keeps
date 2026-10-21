@@ -4,6 +4,7 @@ import {
   PILE_IDS,
   SEATS,
   checkInvariants,
+  dealGame,
   eventsFor,
   formatTrace,
   newGame,
@@ -114,7 +115,7 @@ describe('setup', () => {
   });
 
   it('keeps pile contents server-only in the trace', () => {
-    const { state, events } = newGame({ players: 2, seed: 'trace', firstSeat: 0 });
+    const { state, events } = dealGame({ players: 2, seed: 'trace', firstSeat: 0 });
     const dealt = events.filter((e) => e.payload.type === 'pile-dealt');
     expect(dealt).toHaveLength(4);
     for (const e of dealt) expect(e.visibility).toEqual([]);

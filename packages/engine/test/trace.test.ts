@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildPosition, eventsFor, formatTrace, Tracer } from '../src/index.ts';
 
 function setup() {
-  const state = buildPosition({ turn: 0 });
+  const state = buildPosition({});
   return { state, tracer: new Tracer(state) };
 }
 
@@ -22,7 +22,7 @@ describe('trace', () => {
     expect(tracer.events[0]).toEqual({
       seq: 1,
       round: 1,
-      turn: 1,
+      turn: 0,
       depth: 0,
       cause: null,
       visibility: 'all',
@@ -90,9 +90,9 @@ describe('trace', () => {
     });
     expect(formatTrace(tracer.events)).toBe(
       [
-        '#1    R1 T1   S0 plays Royal Favor',
-        '#2    R1 T1     S2 draws  ← #1  [private: S2]',
-        '#3    R1 T1     deal  ← #1  [server only]',
+        '#1    R1 T0   S0 plays Royal Favor',
+        '#2    R1 T0     S2 draws  ← #1  [private: S2]',
+        '#3    R1 T0     deal  ← #1  [server only]',
       ].join('\n'),
     );
   });

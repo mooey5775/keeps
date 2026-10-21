@@ -65,7 +65,8 @@ function seatKinds(players: 2 | 3 | 4, rng: RngState): PerSeat<SeatKind> {
   return perSeat((s) => (s === ghost ? 'ghost' : 'player'));
 }
 
-export function newGame(options: NewGameOptions): { state: GameState; events: TraceEvent[] } {
+/** Seats players and deals round 1, without starting the first turn (see engine.ts newGame). */
+export function dealGame(options: NewGameOptions): { state: GameState; events: TraceEvent[] } {
   const marksToWin = options.marksToWin ?? 3;
   if (!Number.isInteger(marksToWin) || marksToWin < 1) {
     throw new RangeError(`marksToWin must be a positive integer, got ${marksToWin}`);
