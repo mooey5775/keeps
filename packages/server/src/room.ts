@@ -83,7 +83,7 @@ export class Room {
   }
 
   /** Adds a player (a spectator, if a game is running) and connects them. */
-  join(name: string, send: Send): Player {
+  join(name: unknown, send: Send): Player {
     const player: Player = {
       id: this.deps.id(),
       name: this.uniqueName(name),
@@ -134,6 +134,7 @@ export class Room {
       case 'settings':
         if (!player.host) return 'Only the host can change settings.';
         if (this.game) return 'The game has already started.';
+        if (typeof message.settings !== 'object' || message.settings === null) return 'Invalid settings.';
         if (!Number.isInteger(message.settings.marksToWin) || message.settings.marksToWin < 1 || message.settings.marksToWin > 10) {
           return 'Marks to win must be between 1 and 10.';
         }
@@ -294,8 +295,8 @@ export class Room {
     if (this.game?.undo) this.settleUndo();
   }
 
-  private uniqueName(raw: string): string {
-    const base = raw.trim().replace(/\s+/g, ' ').slice(0, NAME_MAX) || 'Player';
+  private uniqueName(raw: unknown): string {
+    const base = String(raw ?? '').trim().replace(/\s+/g, ' ').slice(0, NAME_MAX) || 'Player';
     let name = base;
     for (let n = 2; this.players.some((p) => p.name.toLowerCase() === name.toLowerCase()); n++) {
       name = `${base.slice(0, NAME_MAX - String(n).length - 1)} ${n}`;

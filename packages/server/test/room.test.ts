@@ -391,3 +391,26 @@ describe('leaving and the lobby', () => {
     expect(clients[0]!.errors()).toEqual(['You are already in a room.']);
   });
 });
+
+describe('malformed input', () => {
+  it('rejects junk messages without throwing', () => {
+    const { room, clients } = startedGame(2);
+    const [a] = clients;
+    const junk = [
+      { t: 'settings', settings: null },
+      { t: 'command', command: null },
+      { t: 'command', command: { type: 'answer', promptId: 5, answer: [] } },
+      { t: 'vote-undo' },
+      { t: 'nonsense' },
+    ] as unknown as ClientMessage[];
+    for (const message of junk) expect(() => room.handle(a!.id, message)).not.toThrow();
+    expect(a!.errors()).toHaveLength(junk.length);
+  });
+
+  it('accepts any name value, turning it into a string', () => {
+    const { room } = makeRoom();
+    const client = new Client();
+    room.join(42 as unknown as string, client.send);
+    expect(client.last('room').room.players[0]!.name).toBe('42');
+  });
+});

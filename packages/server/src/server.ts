@@ -34,6 +34,7 @@ const MIME: Record<string, string> = {
   '.css': 'text/css',
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.json': 'application/json',
   '.woff2': 'font/woff2',
@@ -85,7 +86,17 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       } catch {
         return fail('Malformed message.');
       }
-      if (room && playerId) return room.handle(playerId, message);
+      if (room && playerId) {
+        try {
+          room.handle(playerId, message);
+        } catch (error) {
+          // An engine bug must not take down every room on the server.
+          console.error(`room ${room.code}: error handling ${JSON.stringify(message).slice(0, 200)}`, error);
+          fail('Something went wrong handling that. Please try again.');
+        }
+        return;
+      }
+      if (!message || typeof message !== 'object') return fail('Malformed message.');
       switch (message.t) {
         case 'create': {
           const code = newCode();
@@ -163,7 +174,11 @@ function serveStatic(req: IncomingMessage, res: ServerResponse, options: ServerO
     return;
   }
   if (path.startsWith('/cards/')) {
-    sendFile(res, safeJoin(options.cardsDir, path.slice('/cards/'.length)), 'public, max-age=86400');
+    // Optimized images from the web build first, then the original card scans.
+    const name = path.slice('/cards/'.length);
+    const built = options.webDir ? safeJoin(join(options.webDir, 'cards'), name) : null;
+    const file = built && existsSync(built) ? built : safeJoin(options.cardsDir, name);
+    sendFile(res, file, 'public, max-age=86400');
     return;
   }
   if (!options.webDir) {

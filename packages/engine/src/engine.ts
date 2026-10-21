@@ -132,9 +132,19 @@ function canonical(value: unknown): string {
   );
 }
 
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
 function validate(state: GameState, seat: Seat, command: Command): EngineError | null {
   if (state.config.seats[seat] !== 'player') {
     return { code: 'not-a-player', message: `seat ${seat} is not a player` };
+  }
+  // Commands arrive as JSON from browsers: check the shape before reading it.
+  if (!isObject(command) || typeof command.type !== 'string') {
+    return { code: 'illegal', message: 'malformed command' };
+  }
+  if (command.type === 'answer' && (typeof command.promptId !== 'string' || !isObject(command.answer) || typeof command.answer.kind !== 'string')) {
+    return { code: 'illegal', message: 'malformed answer' };
   }
   if (command.type === 'answer') {
     const prompt = state.prompts.find((p) => p.id === command.promptId);

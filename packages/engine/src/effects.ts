@@ -239,6 +239,12 @@ export function resolveKeepOnPlay(ctx: Ctx, card: CardId, seat: Seat): void {
 export type EffectPrompt = Exclude<Prompt, { kind: 'action' } | { kind: 'hot-target' }>;
 export type EffectAnswer = Exclude<Answer, { kind: 'action' } | { kind: 'hot-target' }>;
 
+function isKeepRef(value: unknown): value is KeepRef {
+  if (typeof value !== 'object' || value === null) return false;
+  const { seat, index } = value as Record<string, unknown>;
+  return Number.isInteger(seat) && Number.isInteger(index);
+}
+
 function sameRef(a: KeepRef, b: KeepRef): boolean {
   return a.seat === b.seat && a.index === b.index;
 }
@@ -309,12 +315,15 @@ export function legalEffectAnswers(state: GameState, prompt: EffectPrompt): Effe
 export function isLegalEffectAnswer(state: GameState, prompt: EffectPrompt, answer: EffectAnswer): boolean | null {
   if (prompt.kind === 'order-pile' && answer.kind === 'order-pile') {
     return (
+      Array.isArray(answer.order) &&
+      answer.order.every((c) => typeof c === 'string') &&
       answer.order.length === prompt.cards.length &&
       [...answer.order].sort().join() === [...prompt.cards].sort().join()
     );
   }
   if (prompt.kind === 'choose-keep-pair' && answer.kind === 'choose-keep-pair') {
     // Either order of the two cards is fine.
+    if (!isKeepRef(answer.a) || !isKeepRef(answer.b)) return false;
     const refs = keepRefs(state);
     return refs.some((r) => sameRef(r, answer.a)) && refs.some((r) => sameRef(r, answer.b)) && !sameRef(answer.a, answer.b);
   }
