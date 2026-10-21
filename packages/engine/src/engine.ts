@@ -7,6 +7,7 @@ import {
   type EngineError,
 } from './commands.ts';
 import { abilityCost, legalAbilities, useAbility } from './abilities.ts';
+import { retributionSeats, spendActions } from './actions.ts';
 import { clone, newCtx, push, withPlay, type Ctx } from './context.ts';
 import {
   isLegalEffectAnswer,
@@ -24,7 +25,6 @@ import {
   openPrompt,
   recordChange,
   seatsWithFaceUp,
-  spendActions,
 } from './moves.ts';
 import { roundWinner, tokenWinner } from './scoring.ts';
 import { dealGame, startRound, type NewGameOptions } from './setup.ts';
@@ -450,9 +450,7 @@ function runAfterPlay(ctx: Ctx, playId: number, windowed: boolean): void {
   state.openPlays = state.openPlays.filter((p) => p !== record);
 
   const triggers: { kind: TriggerKind; seat: Seat }[] = [
-    ...record.retribution
-      .filter((s) => s !== record.actor && record.changed.includes(s))
-      .map((seat) => ({ kind: 'retribution' as const, seat })),
+    ...retributionSeats(record).map((seat) => ({ kind: 'retribution' as const, seat })),
     ...record.entries
       .filter((e) => e.interest && isCoinCard(e.card))
       .map((e) => ({ kind: 'interest' as const, seat: e.seat })),

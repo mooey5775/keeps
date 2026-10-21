@@ -85,6 +85,35 @@ try {
     return [page];
   });
 
+  await check('pass-and-play: 400 random clicks through every kind of prompt', async () => {
+    const page = await open(a, `${base}/hotseat`);
+    await page.click('Add player');
+    await page.click('Add player');
+    await page.click('Start');
+    const seen = new Set<string>();
+    for (let i = 0; i < 400; i++) {
+      const step = await page.evaluate<string>(`(() => {
+        const buttons = [...document.querySelectorAll('button')].filter((b) => !b.disabled);
+        const curtain = buttons.find((b) => b.innerText.includes('show my cards'));
+        if (curtain) { curtain.click(); return 'curtain'; }
+        const confirm = buttons.find((b) => b.innerText === 'Confirm order');
+        if (confirm) { confirm.click(); return 'order-pile'; }
+        const options = buttons.filter((b) => b.classList.contains('option'));
+        if (options.length === 0) return document.body.innerText.includes('won the game') ? 'game-over' : 'stuck';
+        const pick = options[Math.floor(Math.random() * options.length)];
+        const label = pick.innerText.split(/[ :]/)[0];
+        pick.click();
+        return label;
+      })()`);
+      if (step === 'stuck') throw new Error(`no options to click after ${i} steps: ${(await page.text()).slice(0, 300)}`);
+      if (step === 'game-over') break;
+      seen.add(step);
+      await sleep(15);
+    }
+    if (seen.size < 5) throw new Error(`only saw ${[...seen].join(', ')}`);
+    return [page];
+  });
+
   await check('online: create, join, start, play, undo, reload', async () => {
     const host = await open(a, base);
     await host.type('input', 'Ada');

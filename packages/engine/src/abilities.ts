@@ -1,7 +1,8 @@
 import { isCoinCard, type CardId } from './cards.ts';
 import type { AbilityChoice } from './commands.ts';
 import { push, type Ctx } from './context.ts';
-import { consecutiveActions, hasFaceUp, openPrompt } from './moves.ts';
+import { consecutiveActions } from './actions.ts';
+import { hasFaceUp, openPrompt } from './moves.ts';
 import { leftOf, rightOf, SEATS, type ActionFrameOp, type GameState, type Seat } from './state.ts';
 import { assertNever } from './trace.ts';
 

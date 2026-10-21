@@ -83,32 +83,3 @@ export function nonEmptyPiles(state: GameState): Seat[] {
 export function hasFaceUp(state: GameState, seat: Seat, card: CardId): boolean {
   return state.keeps[seat].some((c) => c.id === card && !c.faceDown);
 }
-
-/**
- * Actions `seat` can spend consecutively: the remaining actions of the
- * same-seat action frames at the top of the stack, with nothing between them.
- */
-export function consecutiveActions(state: GameState, seat: Seat): number {
-  let total = 0;
-  for (let i = state.stack.length - 1; i >= 0; i--) {
-    const op = state.stack[i]!;
-    if (op.op !== 'action-frame' || op.seat !== seat) break;
-    total += op.remaining;
-  }
-  return total;
-}
-
-/** Spends `count` consecutive actions, top frame first. */
-export function spendActions(state: GameState, seat: Seat, count: number): void {
-  if (consecutiveActions(state, seat) < count) {
-    throw new Error(`seat ${seat} cannot spend ${count} consecutive actions`);
-  }
-  let left = count;
-  for (let i = state.stack.length - 1; left > 0; i--) {
-    const op = state.stack[i]!;
-    if (op.op !== 'action-frame') throw new Error('unreachable: checked by consecutiveActions');
-    const spent = Math.min(op.remaining, left);
-    op.remaining -= spent;
-    left -= spent;
-  }
-}
