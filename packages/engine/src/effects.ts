@@ -1,4 +1,4 @@
-import { CARDS, type CardId } from './cards.ts';
+import { CARDS, isCoinCard, type CardId } from './cards.ts';
 import { EngineFailure, type Answer } from './commands.ts';
 import { push, pushAfterPlay, type Ctx } from './context.ts';
 import {
@@ -10,11 +10,14 @@ import {
   recordChange,
   recordEntry,
 } from './moves.ts';
+import { randomInt } from './rng.ts';
 import {
   leftOf,
+  playerSeats,
   rightOf,
   SEATS,
   type ActionFrameOp,
+  type PileClaim,
   type GameState,
   type KeepRef,
   type OpMeta,
@@ -110,10 +113,99 @@ const NON_KEEP_EFFECTS: Partial<Record<CardId, Effect>> = {
   revelation: (ctx, seat) => {
     openPrompt(ctx, { seat, kind: 'choose-pile', purpose: 'revelation', options: [...SEATS] });
   },
+
+  // "Draw a card from any pile, then play it as if it were HOT!." Any pile,
+  // including an empty one, which ends the round (Resurrection 3).
+  invocation: (ctx, seat) => {
+    openPrompt(ctx, { seat, kind: 'choose-pile', purpose: 'invocation', options: [...SEATS] });
+  },
+
+  // "Choose any player. Steal a random card from their hand, then play it as
+  // if it were HOT!." Yourself (C-25, Q-11) and ghosts (C-26) included.
+  legerdemain: (ctx, seat) => {
+    openPrompt(ctx, { seat, kind: 'choose-player', purpose: 'legerdemain', options: [...SEATS] });
+  },
+
+  // "Choose any player. They must surrender all Coin cards from their hand
+  // into yours." Yourself (Q-11) and ghosts (C-28) included.
+  pickpocket: (ctx, seat) => {
+    openPrompt(ctx, { seat, kind: 'choose-player', purpose: 'pickpocket', options: [...SEATS] });
+  },
+
+  // "All other players must reveal their hand to you. Choose one card from any
+  // player's hand to take into yours."
+  pluck: (ctx, seat, source) => {
+    const { state } = ctx;
+    const others = playerSeats(state).filter((s) => s !== seat);
+    const hands = others.map((s) => ({ seat: s, cards: [...state.hands[s]] }));
+    ctx.tracer.emit(
+      { type: 'look-hands', seat, hands },
+      { visibility: [seat], redacted: { type: 'look-hands', seat, hands: null } },
+    );
+    const options = hands.flatMap((h) => h.cards.map((card) => ({ seat: h.seat, card })));
+    if (options.length === 0) return noEffect(ctx, seat, source, 'no other player has any cards');
+    openPrompt(ctx, { seat, kind: 'choose-hand-card', options });
+  },
+
+  // "Discard your hand. Then, all other players must choose a card from their
+  // hand to give to you." Everyone chooses at the same time.
+  offering: (ctx, seat) => {
+    const { state, tracer } = ctx;
+    const hand = state.hands[seat];
+    if (hand.length > 0) {
+      state.discard.push(...hand);
+      tracer.emit({ type: 'discard', seat, cards: [...hand], from: 'hand' });
+      state.hands[seat] = [];
+      recordChange(ctx, seat);
+    }
+    for (const giver of playerSeats(state)) {
+      if (giver !== seat && state.hands[giver].length > 0) openPrompt(ctx, { seat: giver, kind: 'give-card', to: seat });
+    }
+  },
+
+  // Played as HOT with no non-Keep card to reveal, Joker does nothing (Q-09).
+  // Otherwise resolveNonKeepEffect() runs the copied card's effect.
+  joker: (ctx, seat, source) => noEffect(ctx, seat, source, 'no non-Keep card to reveal'),
 };
 
-/** Keep cards whose rules aren't built yet: on-play effects (Duplicity, Fiat) or Last Laugh. */
-const KEEP_NOT_YET_IMPLEMENTED: ReadonlySet<CardId> = new Set<CardId>(['duplicity', 'fiat', 'last-laugh']);
+/** Keep cards that do something when played (beyond entering the keep). */
+const KEEP_ON_PLAY: Partial<Record<CardId, Effect>> = {
+  // "All players push their piles to the center. Then, in play order starting
+  // with you, players claim a pile from the center." Only real players claim
+  // (C-19); with two players, Fiat's player places the two ghost piles (C-20).
+  // This happens when Fiat is played; afterward it sits in the keep (Q-01).
+  fiat: (ctx, seat) => {
+    const { state } = ctx;
+    ctx.tracer.emit({ type: 'piles-to-center', seat });
+    const players: Seat[] = [];
+    for (let s = seat, i = 0; i < 4; s = leftOf(s), i++) if (state.config.seats[s] === 'player') players.push(s);
+    const ghosts = SEATS.filter((s) => state.config.seats[s] === 'ghost');
+    const queue: PileClaim[] = players.map((p) => ({ decider: p, claimant: p }));
+    if (ghosts.length === 2) queue.push({ decider: seat, claimant: ghosts[0]! });
+    nextPileClaim(ctx, queue, []);
+  },
+};
+
+function nextPileClaim(ctx: Ctx, queue: PileClaim[], claims: { claimant: Seat; from: Seat }[]): void {
+  const { state, tracer } = ctx;
+  const unclaimedPiles = SEATS.filter((from) => !claims.some((c) => c.from === from));
+  const [next, ...rest] = queue;
+  if (next) {
+    openPrompt(ctx, { seat: next.decider, kind: 'claim-pile', claimant: next.claimant, options: unclaimedPiles, claims, queue: rest });
+    return;
+  }
+  // Any seats left (ghosts) get the remaining piles in seat order.
+  const unfilled = SEATS.filter((s) => !claims.some((c) => c.claimant === s));
+  const all = [...claims, ...unfilled.map((claimant, i) => ({ claimant, from: unclaimedPiles[i]! }))];
+  for (const c of all.slice(claims.length)) {
+    tracer.emit({ type: 'note', text: `the remaining pile from @S${c.from} goes to ghost S${c.claimant}` });
+  }
+  const before = [...state.pileAt] as PerSeat<PileId>;
+  for (const c of all) state.pileAt[c.claimant] = before[c.from];
+}
+
+/** Keep cards whose rules aren't built yet. */
+const KEEP_NOT_YET_IMPLEMENTED: ReadonlySet<CardId> = new Set<CardId>(['duplicity']);
 
 export function isImplemented(card: CardId): boolean {
   return CARDS[card].keep ? !KEEP_NOT_YET_IMPLEMENTED.has(card) : card in NON_KEEP_EFFECTS;
@@ -125,10 +217,20 @@ export function assertImplemented(card: CardId): void {
   }
 }
 
-export function resolveNonKeepEffect(ctx: Ctx, card: CardId, seat: Seat): void {
+/** Resolves a non-Keep card's effect. Joker with `copy` reveals that card and takes its effect. */
+export function resolveNonKeepEffect(ctx: Ctx, card: CardId, seat: Seat, copy?: CardId): void {
+  if (card === 'joker' && copy) {
+    ctx.tracer.emit({ type: 'reveal-card', seat, card: copy });
+    return resolveNonKeepEffect(ctx, copy, seat);
+  }
   const effect = NON_KEEP_EFFECTS[card];
   if (!effect) throw new EngineFailure('not-implemented', `${CARDS[card].name} is not implemented yet`);
   effect(ctx, seat, card);
+}
+
+/** Runs a Keep card's on-play effect, if it has one (after it enters the keep). */
+export function resolveKeepOnPlay(ctx: Ctx, card: CardId, seat: Seat): void {
+  KEEP_ON_PLAY[card]?.(ctx, seat, card);
 }
 
 // ---------------------------------------------------------------------------
@@ -170,6 +272,16 @@ export function legalEffectAnswers(state: GameState, prompt: EffectPrompt): Effe
         { kind: 'choose-direction', direction: 'left' },
         { kind: 'choose-direction', direction: 'right' },
       ];
+    case 'choose-player':
+      return prompt.options.map((seat) => ({ kind: 'choose-player', seat }));
+    case 'choose-hand-card':
+      return prompt.options.map(({ seat, card }) => ({ kind: 'choose-hand-card', seat, card }));
+    case 'give-card':
+      return state.hands[prompt.seat].map((card) => ({ kind: 'give-card', card }));
+    case 'joker-copy':
+      return prompt.options.map((card) => ({ kind: 'joker-copy', card }));
+    case 'claim-pile':
+      return prompt.options.map((from) => ({ kind: 'claim-pile', from }));
     case 'order-pile': {
       const reversed = [...prompt.cards].reverse();
       return prompt.cards.length < 2
@@ -211,7 +323,8 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
     case 'choose-pile': {
       if (prompt.kind !== 'choose-pile') break;
       const cards = pileCards(state, answer.pile);
-      switch (prompt.purpose) {
+      const purpose = prompt.purpose;
+      switch (purpose) {
         case 'requisition': {
           const ids = cards.map((c) => c.id);
           look(ctx, seat, [answer.pile], ids);
@@ -230,8 +343,11 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
           tracer.emit({ type: 'pile-flip', seat, pile: answer.pile });
           return;
         }
+        case 'invocation':
+          push(ctx, { op: 'draw', seat, from: answer.pile, invoke: true });
+          return;
         default:
-          return assertNever(prompt.purpose);
+          return assertNever(purpose);
       }
     }
     case 'choose-pile-card': {
@@ -270,6 +386,45 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
       tracer.emit({ type: 'pile-rotate', seat, direction: answer.direction });
       return;
     }
+    case 'choose-player': {
+      if (prompt.kind !== 'choose-player') break;
+      return prompt.purpose === 'legerdemain'
+        ? legerdemainSteal(ctx, seat, answer.seat)
+        : pickpocket(ctx, seat, answer.seat);
+    }
+    case 'choose-hand-card': {
+      const from = state.hands[answer.seat];
+      from.splice(from.indexOf(answer.card), 1);
+      state.hands[seat].push(answer.card);
+      recordChange(ctx, answer.seat);
+      recordChange(ctx, seat);
+      tracer.emit(
+        { type: 'steal', seat, from: answer.seat, cards: [answer.card], count: 1 },
+        { visibility: [seat, answer.seat], redacted: { type: 'steal', seat, from: answer.seat, cards: null, count: 1 } },
+      );
+      return;
+    }
+    case 'give-card': {
+      if (prompt.kind !== 'give-card') break;
+      const hand = state.hands[seat];
+      hand.splice(hand.indexOf(answer.card), 1);
+      state.hands[prompt.to].push(answer.card);
+      recordChange(ctx, seat);
+      recordChange(ctx, prompt.to);
+      tracer.emit(
+        { type: 'give', seat, to: prompt.to, card: answer.card },
+        { visibility: [seat, prompt.to], redacted: { type: 'give', seat, to: prompt.to, card: null } },
+      );
+      return;
+    }
+    case 'joker-copy':
+      push(ctx, { op: 'play', seat, card: 'joker', target: null, hot: true, copy: answer.card });
+      return;
+    case 'claim-pile': {
+      if (prompt.kind !== 'claim-pile') break;
+      tracer.emit({ type: 'pile-claim', seat, claimant: prompt.claimant, from: answer.from });
+      return nextPileClaim(ctx, prompt.queue, [...prompt.claims, { claimant: prompt.claimant, from: answer.from }]);
+    }
     case 'order-pile': {
       if (prompt.kind !== 'order-pile') break;
       const pile = state.piles[state.pileAt[prompt.pile]];
@@ -285,6 +440,38 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
       return assertNever(answer);
   }
   throw new Error(`answer ${answer.kind} does not match prompt ${prompt.kind}`);
+}
+
+/**
+ * Legerdemain: a random card from `victim`'s hand goes to `seat`, who then
+ * plays it as if HOT. The steal is public, since the card is played face-up.
+ */
+function legerdemainSteal(ctx: Ctx, seat: Seat, victim: Seat): void {
+  const { state, tracer } = ctx;
+  const hand = state.hands[victim];
+  if (hand.length === 0) return noEffect(ctx, seat, 'legerdemain', `S${victim} has no cards`);
+  const [card] = hand.splice(randomInt(state.rng, hand.length), 1);
+  state.hands[seat].push(card!);
+  recordChange(ctx, victim);
+  recordChange(ctx, seat);
+  const seq = tracer.emit({ type: 'steal', seat, from: victim, cards: [card!], count: 1 });
+  tracer.within(seq, () => push(ctx, { op: 'play-as-hot', seat, card: card! }));
+}
+
+/** Pickpocket: all Coin cards in `victim`'s hand move to `seat`'s. Only the two of them see which. */
+function pickpocket(ctx: Ctx, seat: Seat, victim: Seat): void {
+  const { state, tracer } = ctx;
+  if (victim === seat) return noEffect(ctx, seat, 'pickpocket', 'chose yourself');
+  const coins = state.hands[victim].filter(isCoinCard);
+  if (coins.length === 0) return noEffect(ctx, seat, 'pickpocket', `S${victim} has no Coin cards in hand`);
+  state.hands[victim] = state.hands[victim].filter((c) => !isCoinCard(c));
+  state.hands[seat].push(...coins);
+  recordChange(ctx, victim);
+  recordChange(ctx, seat);
+  tracer.emit(
+    { type: 'steal', seat, from: victim, cards: coins, count: coins.length },
+    { visibility: [seat, victim], redacted: { type: 'steal', seat, from: victim, cards: null, count: coins.length } },
+  );
 }
 
 /** A card taken from a pile into a hand. Only the taker learns what it is. */

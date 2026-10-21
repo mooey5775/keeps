@@ -20,9 +20,14 @@ export type AbilityCard = AbilityChoice['card'];
 
 export type ActionChoice =
   | { action: 'draw' }
-  /** `target` is required for Keep cards and omitted for non-Keep cards. */
-  | { action: 'play'; card: CardId; target?: Seat }
-  | AbilityChoice;
+  /**
+   * `target` is required for Keep cards and omitted for non-Keep cards.
+   * `copy` is required for Joker: the non-Keep card it reveals and copies.
+   */
+  | { action: 'play'; card: CardId; target?: Seat; copy?: CardId }
+  | AbilityChoice
+  /** Only for Last Laugh's optional action: decline it. */
+  | { action: 'pass' };
 
 /** An answer to an open prompt; `kind` matches the prompt's kind. */
 export type Answer =
@@ -36,7 +41,12 @@ export type Answer =
   | { kind: 'choose-keep-pair'; a: KeepRef; b: KeepRef }
   | { kind: 'choose-direction'; direction: 'left' | 'right' }
   /** The pile's cards in their new order, top first. */
-  | { kind: 'order-pile'; order: CardId[] };
+  | { kind: 'order-pile'; order: CardId[] }
+  | { kind: 'choose-player'; seat: Seat }
+  | { kind: 'choose-hand-card'; seat: Seat; card: CardId }
+  | { kind: 'give-card'; card: CardId }
+  | { kind: 'joker-copy'; card: CardId }
+  | { kind: 'claim-pile'; from: Seat };
 
 export type Command =
   | { type: 'answer'; promptId: string; answer: Answer }

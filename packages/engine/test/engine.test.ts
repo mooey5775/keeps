@@ -73,8 +73,8 @@ describe('apply', () => {
   });
 
   it('rejects cards whose rules are not implemented yet instead of misplaying them', () => {
-    const start = buildPosition({ hands: { 0: ['last-laugh'] }, turn: 0 });
-    const result = apply(start, 0, actionCommand(start, 0, { action: 'play', card: 'last-laugh', target: 0 }));
+    const start = buildPosition({ hands: { 0: ['duplicity', 'chalice'] }, turn: 0 });
+    const result = apply(start, 0, actionCommand(start, 0, { action: 'play', card: 'duplicity', target: 0 }));
     expect(rejection(result)).toBe('not-implemented');
   });
 });

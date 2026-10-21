@@ -13,6 +13,7 @@ import {
   isLegalEffectAnswer,
   legalEffectAnswers,
   resolveEffectAnswer,
+  resolveKeepOnPlay,
   resolveNonKeepEffect,
 } from './effects.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
@@ -21,6 +22,7 @@ import {
   enterKeep,
   keepTargets,
   openPrompt,
+  recordChange,
   seatsWithFaceUp,
   spendActions,
 } from './moves.ts';
@@ -97,15 +99,26 @@ function legalActions(state: GameState, seat: Seat): ActionChoice[] {
   const frame = state.stack.at(-1);
   if (frame?.op !== 'action-frame') throw new Error('action prompt without an action frame on top');
   const choices: ActionChoice[] = [{ action: 'draw' }];
-  for (const card of state.hands[seat]) {
+  const hand = state.hands[seat];
+  for (const card of hand) {
     if (CARDS[card].keep) {
       for (const target of keepTargets(state, seat, card)) choices.push({ action: 'play', card, target });
+    } else if (card === 'joker') {
+      // Joker must reveal a non-Keep card from your hand to copy (Q-09).
+      for (const copy of jokerCopies(state, seat)) choices.push({ action: 'play', card, copy });
     } else {
       choices.push({ action: 'play', card });
     }
   }
   choices.push(...legalAbilities(state, seat, frame));
+  // Last Laugh's action is optional.
+  if (frame.kind === 'last-laugh') choices.push({ action: 'pass' });
   return choices;
+}
+
+/** Non-Keep cards in `seat`'s hand that Joker could reveal and copy. */
+function jokerCopies(state: GameState, seat: Seat): CardId[] {
+  return [...new Set(state.hands[seat].filter((c) => c !== 'joker' && !CARDS[c].keep))];
 }
 
 /** Stable JSON for comparing commands regardless of key order. */
@@ -187,7 +200,7 @@ function takeAction(ctx: Ctx, seat: Seat, choice: ActionChoice): void {
   if (frame?.op !== 'action-frame' || frame.seat !== seat || frame.remaining <= 0) {
     throw new Error(`no action frame for seat ${seat} on top of the stack`);
   }
-  const cost = choice.action === 'ability' ? abilityCost(choice) : 1;
+  const cost = choice.action === 'ability' ? abilityCost(choice) : choice.action === 'pass' ? frame.remaining : 1;
   spendActions(state, seat, cost);
   if (state.turn?.seat === seat) state.turn.actionsTaken += cost;
   const seq = tracer.emit({ type: 'action', seat, frame: frame.kind, remaining: frame.remaining, choice });
@@ -197,10 +210,19 @@ function takeAction(ctx: Ctx, seat: Seat, choice: ActionChoice): void {
         push(ctx, { op: 'draw', seat, from: seat });
         return;
       case 'play':
-        push(ctx, { op: 'play', seat, card: choice.card, target: choice.target ?? null, hot: false });
+        push(ctx, {
+          op: 'play',
+          seat,
+          card: choice.card,
+          target: choice.target ?? null,
+          hot: false,
+          ...(choice.copy ? { copy: choice.copy } : {}),
+        });
         return;
       case 'ability':
         useAbility(ctx, seat, choice);
+        return;
+      case 'pass':
         return;
       default:
         assertNever(choice);
@@ -239,11 +261,16 @@ export function advance(ctx: Ctx): void {
 function runOp(ctx: Ctx, op: Op): void {
   switch (op.op) {
     case 'draw':
-      return runDraw(ctx, op.seat, op.from);
+      return runDraw(ctx, op.seat, op.from, op.invoke ?? false);
     case 'play':
-      return runPlay(ctx, op.seat, op.card, op.target, op.hot);
+      return runPlay(ctx, op.seat, op.card, op.target, op.hot, op.copy);
     case 'hot-check':
       return runHotCheck(ctx, op.seat);
+    case 'play-as-hot':
+      if (!ctx.state.hands[op.seat].includes(op.card)) throw new Error(`${op.card} is not in seat ${op.seat}'s hand`);
+      return playAsHot(ctx, op.seat, op.card);
+    case 'last-laugh':
+      return runLastLaugh(ctx);
     case 'after-play':
       return runAfterPlay(ctx, op.playId);
     case 'trigger':
@@ -285,7 +312,7 @@ function nextTurn(ctx: Ctx): void {
   tracer.at(null, 0, () => beginTurn(ctx, seat));
 }
 
-function runDraw(ctx: Ctx, seat: Seat, from: Seat): void {
+function runDraw(ctx: Ctx, seat: Seat, from: Seat, invoke: boolean): void {
   const { state, tracer } = ctx;
   const pile = pileAtSeat(state, from);
   const top = pile.cards.shift();
@@ -303,7 +330,13 @@ function runDraw(ctx: Ctx, seat: Seat, from: Seat): void {
         { type: 'draw', seat, from, card: top.id },
         { visibility: [seat], redacted: { type: 'draw', seat, from, card: null } },
       );
-  cardEnteredHand(ctx, seat, top.id, seq);
+  if (invoke) {
+    // Invocation: the drawn card is played as if HOT, whatever it is.
+    recordChange(ctx, seat);
+    tracer.within(seq, () => push(ctx, { op: 'play-as-hot', seat, card: top.id }));
+  } else {
+    cardEnteredHand(ctx, seat, top.id, seq);
+  }
 }
 
 /**
@@ -311,17 +344,27 @@ function runDraw(ctx: Ctx, seat: Seat, from: Seat): void {
  * Handles one HOT card, then re-checks for more.
  */
 function runHotCheck(ctx: Ctx, seat: Seat): void {
-  const { state } = ctx;
-  const card = state.hands[seat].find((c) => CARDS[c].hot);
+  const card = ctx.state.hands[seat].find((c) => CARDS[c].hot);
   if (!card) return;
   push(ctx, { op: 'hot-check', seat });
-  if (!CARDS[card].keep) {
-    push(ctx, { op: 'play', seat, card, target: null, hot: true });
-  } else if (card === 'blunder') {
+  playAsHot(ctx, seat, card);
+}
+
+/**
+ * Plays `card` from `seat`'s hand right now at no action cost: HOT cards, and
+ * cards played "as if HOT" (Legerdemain, Invocation). Keep cards need a target
+ * keep (Blunder: always your own); Joker needs a card to reveal and copy.
+ */
+function playAsHot(ctx: Ctx, seat: Seat, card: CardId): void {
+  assertImplemented(card);
+  if (card === 'blunder') {
     push(ctx, { op: 'play', seat, card, target: seat, hot: true });
-  } else {
-    assertImplemented(card);
+  } else if (CARDS[card].keep) {
     openPrompt(ctx, { seat, kind: 'hot-target', card });
+  } else if (card === 'joker' && jokerCopies(ctx.state, seat).length > 0) {
+    openPrompt(ctx, { seat, kind: 'joker-copy', options: jokerCopies(ctx.state, seat) });
+  } else {
+    push(ctx, { op: 'play', seat, card, target: null, hot: true });
   }
 }
 
@@ -331,7 +374,7 @@ function runHotCheck(ctx: Ctx, seat: Seat): void {
  * Triggers are collected while the play resolves and queued by its
  * after-play op, which runs once everything the play started is finished.
  */
-function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: boolean): void {
+function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: boolean, copy?: CardId): void {
   const { state, tracer } = ctx;
   const hand = state.hands[seat];
   const index = hand.indexOf(card);
@@ -345,14 +388,18 @@ function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: b
   const retribution = seatsWithFaceUp(state, 'retribution');
   hand.splice(index, 1);
   if (!keep) state.discard.push(card);
-  const id = tracer.emit({ type: 'play', seat, card, target: keep ? target : null, hot });
+  const id = tracer.emit({ type: 'play', seat, card, target: keep ? target : null, hot, ...(copy ? { copy } : {}) });
   state.openPlays.push({ id, actor: seat, card, retribution, changed: [seat], entries: [] });
 
   tracer.within(id, () => {
     withPlay(ctx, null, () => push(ctx, { op: 'after-play', playId: id }));
     withPlay(ctx, id, () => {
-      if (keep) enterKeep(ctx, target!, { id: card });
-      else resolveNonKeepEffect(ctx, card, seat);
+      if (keep) {
+        enterKeep(ctx, target!, { id: card });
+        resolveKeepOnPlay(ctx, card, seat);
+      } else {
+        resolveNonKeepEffect(ctx, card, seat, copy);
+      }
     });
   });
 }
@@ -415,7 +462,21 @@ function endRoundByEmptyPile(ctx: Ctx, ender: Seat): void {
   state.openPlays = [];
   state.phase = 'post-round';
   const seq = tracer.emit({ type: 'round-end', reason: 'empty-pile', ender });
-  tracer.within(seq, () => push(ctx, { op: 'score' }));
+  // Nothing else happens before scoring except Last Laugh (and what it triggers).
+  tracer.within(seq, () => {
+    push(ctx, { op: 'score' });
+    push(ctx, { op: 'last-laugh' });
+  });
+}
+
+/** "If this card is in your keep when the round ends, you may take one action right before scoring." */
+function runLastLaugh(ctx: Ctx): void {
+  for (const seat of seatsWithFaceUp(ctx.state, 'last-laugh')) {
+    const seq = ctx.tracer.emit({ type: 'last-laugh', seat });
+    ctx.tracer.within(seq, () =>
+      push(ctx, { op: 'action-frame', seat, remaining: 1, kind: 'last-laugh', restricted: true }),
+    );
+  }
 }
 
 function runScore(ctx: Ctx): void {

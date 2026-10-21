@@ -23,7 +23,8 @@ const IMPLEMENTED: CardId[] = [
   'fool-token', 'friar-token', 'hocus-pocus', 'juggling', 'sanction', 'acquisition',
   'blunder', 'shackles', 'purity', 'tithes', 'requisition', 'epiphany', 'prayer',
   'resurrection', 'providence', 'pandemonium', 'revelation', 'royal-favor', 'interest',
-  'retribution',
+  'retribution', 'joker', 'legerdemain', 'pickpocket', 'pluck', 'offering', 'invocation',
+  'fiat', 'last-laugh',
 ];
 
 const SEATINGS: PerSeat<SeatKind>[] = [
@@ -41,7 +42,7 @@ function randomRound(seed: number): { state: GameState; commands: number } {
   let state = buildPosition({ seats, piles, turn: pick(rng, [0, 2] as const), seed });
 
   let commands = 0;
-  while (state.phase === 'playing') {
+  while (state.phase === 'playing' || state.phase === 'post-round') {
     const options = playerSeats(state).flatMap((seat) => legalCommands(state, seat).map((c) => ({ seat, c })));
     expect(options.length, 'deadlock: nobody has a legal command').toBeGreaterThan(0);
     const { seat, c } = pick(rng, options);

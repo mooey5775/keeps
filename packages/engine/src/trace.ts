@@ -31,7 +31,7 @@ export type TracePayload =
   /** `card` is null in the redacted copy other players see. */
   | { type: 'draw'; seat: Seat; from: Seat; card: CardId | null }
   | { type: 'empty-draw'; seat: Seat; from: Seat; afterRoundEnd: boolean }
-  | { type: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
+  | { type: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean; copy?: CardId }
   | { type: 'extra-actions'; seat: Seat; count: number; source: CardId }
   | { type: 'pile-swap'; seat: Seat; a: Seat; b: Seat }
   | { type: 'pile-rotate'; seat: Seat; direction: 'left' | 'right' }
@@ -47,6 +47,17 @@ export type TracePayload =
   | { type: 'pile-reorder'; seat: Seat; pile: Seat; order: CardId[] | null }
   | { type: 'place-on-pile'; seat: Seat; card: CardId; pile: Seat }
   | { type: 'no-effect'; seat: Seat; card: CardId; reason: string }
+  /** `seat` takes `cards` from `from`'s hand. `cards` is null in a redacted copy. */
+  | { type: 'steal'; seat: Seat; from: Seat; cards: CardId[] | null; count: number }
+  /** `seat` gives `card` to `to` (null when redacted). */
+  | { type: 'give'; seat: Seat; to: Seat; card: CardId | null }
+  /** Other players' hands revealed to `seat` only (Pluck). */
+  | { type: 'look-hands'; seat: Seat; hands: { seat: Seat; cards: CardId[] }[] | null }
+  /** `seat` reveals a card from their hand to everyone (Joker). */
+  | { type: 'reveal-card'; seat: Seat; card: CardId }
+  | { type: 'piles-to-center'; seat: Seat }
+  | { type: 'pile-claim'; seat: Seat; claimant: Seat; from: Seat }
+  | { type: 'last-laugh'; seat: Seat }
   /** After `card`'s play resolved, these triggers were queued (in resolution order). */
   | { type: 'triggers'; card: CardId; triggers: { kind: TriggerKind; seat: Seat }[] }
   | { type: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
@@ -176,9 +187,12 @@ function describeChoice(choice: ActionChoice): string {
     case 'draw':
       return 'draw';
     case 'play':
+      if (choice.copy) return `play ${cardName(choice.card)} as ${cardName(choice.copy)}`;
       return choice.target === undefined
         ? `play ${cardName(choice.card)}`
         : `play ${cardName(choice.card)} → keep(${seatLabel(choice.target)})`;
+    case 'pass':
+      return 'pass (decline the action)';
     case 'ability':
       switch (choice.card) {
         case 'juggling':
@@ -228,7 +242,7 @@ export function describe(payload: TracePayload): string {
     case 'empty-draw':
       return `${seatLabel(payload.seat)} draws from EMPTY pile@${seatLabel(payload.from)}${payload.afterRoundEnd ? ' (round already over: no effect)' : ''}`;
     case 'play':
-      return `${seatLabel(payload.seat)} plays ${cardName(payload.card)}${payload.hot ? ' (HOT!)' : ''}${payload.target !== null ? ` → keep(${seatLabel(payload.target)})` : ' → discard'}`;
+      return `${seatLabel(payload.seat)} plays ${cardName(payload.card)}${payload.copy ? ` as ${cardName(payload.copy)}` : ''}${payload.hot ? ' (HOT!)' : ''}${payload.target !== null ? ` → keep(${seatLabel(payload.target)})` : ' → discard'}`;
     case 'extra-actions':
       return `${seatLabel(payload.seat)} gets ${payload.count} actions from ${cardName(payload.source)}`;
     case 'pile-swap':
@@ -251,6 +265,22 @@ export function describe(payload: TracePayload): string {
       return `${seatLabel(payload.seat)} places ${cardName(payload.card)} face-up on pile@${seatLabel(payload.pile)}`;
     case 'no-effect':
       return `${cardName(payload.card)} has no effect: ${payload.reason}`;
+    case 'steal':
+      return `${seatLabel(payload.seat)} takes ${payload.cards ? cardList(payload.cards) : `${payload.count} card${payload.count === 1 ? '' : 's'}`} from ${seatLabel(payload.from)}'s hand`;
+    case 'give':
+      return `${seatLabel(payload.seat)} gives ${payload.card ? cardName(payload.card) : 'a card'} to ${seatLabel(payload.to)}`;
+    case 'look-hands':
+      return `${seatLabel(payload.seat)} sees ${payload.hands ? payload.hands.map((h) => `${seatLabel(h.seat)}: ${cardList(h.cards)}`).join('; ') : "the other players' hands"}`;
+    case 'reveal-card':
+      return `${seatLabel(payload.seat)} reveals ${cardName(payload.card)}`;
+    case 'piles-to-center':
+      return 'all piles are pushed to the center';
+    case 'pile-claim':
+      return payload.seat === payload.claimant
+        ? `${seatLabel(payload.seat)} claims the pile from @${seatLabel(payload.from)}`
+        : `${seatLabel(payload.seat)} places the pile from @${seatLabel(payload.from)} at ${seatLabel(payload.claimant)}`;
+    case 'last-laugh':
+      return `LAST LAUGH: ${seatLabel(payload.seat)} may take one action before scoring`;
     case 'triggers':
       return `after ${cardName(payload.card)}: triggers → [${payload.triggers.map((t) => `${t.kind}(${seatLabel(t.seat)})`).join(', ')}]`;
     case 'trigger':

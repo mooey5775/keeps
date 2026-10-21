@@ -91,12 +91,22 @@ export interface ActionFrameOp {
 /** Resolution-stack operations. Grows with each build step. */
 export type OpBody =
   | ActionFrameOp
-  /** `seat` draws the top card of the pile at position `from` (looked up when the op runs). */
-  | { op: 'draw'; seat: Seat; from: Seat }
-  /** `seat` plays `card` from their hand. `target` is the receiving keep for Keep cards. */
-  | { op: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
+  /**
+   * `seat` draws the top card of the pile at position `from` (looked up when
+   * the op runs). With `invoke`, the drawn card is then played as if HOT (Invocation).
+   */
+  | { op: 'draw'; seat: Seat; from: Seat; invoke?: true }
+  /**
+   * `seat` plays `card` from their hand. `target` is the receiving keep for
+   * Keep cards; `copy` is the card Joker reveals and copies.
+   */
+  | { op: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean; copy?: CardId }
   /** Play any HOT card in `seat`'s hand, one at a time. */
   | { op: 'hot-check'; seat: Seat }
+  /** Play `card` from `seat`'s hand as if it were HOT: now, at no action cost. */
+  | { op: 'play-as-hot'; seat: Seat; card: CardId }
+  /** After the round ends: give Last Laugh's owner their action. */
+  | { op: 'last-laugh' }
   /** Runs once a play's effect has fully resolved: collects and queues its triggers. */
   | { op: 'after-play'; playId: number }
   /** A triggered Keep card resolving for `seat`. `source` is the card whose play triggered it. */
@@ -151,7 +161,13 @@ export interface KeepRef {
   index: number;
 }
 
-export type PilePurpose = 'requisition' | 'prayer' | 'revelation';
+export type PilePurpose = 'requisition' | 'prayer' | 'revelation' | 'invocation';
+
+/** Fiat: who picks next, and for which seat (a 2-player Fiat player also places a ghost's pile). */
+export interface PileClaim {
+  decider: Seat;
+  claimant: Seat;
+}
 
 export type Prompt =
   /** Choose an action for the top action frame. */
@@ -173,7 +189,28 @@ export type Prompt =
   /** Pandemonium: rotate the piles left or right. */
   | (PromptBase & { kind: 'choose-direction' })
   /** Tithes: reorder your pile (top first). */
-  | (PromptBase & { kind: 'order-pile'; pile: Seat; cards: CardId[] });
+  | (PromptBase & { kind: 'order-pile'; pile: Seat; cards: CardId[] })
+  /** Legerdemain or Pickpocket: choose any player (yourself and ghosts included). */
+  | (PromptBase & { kind: 'choose-player'; purpose: 'legerdemain' | 'pickpocket'; options: Seat[] })
+  /** Pluck: choose one card from the other players' revealed hands. */
+  | (PromptBase & { kind: 'choose-hand-card'; options: { seat: Seat; card: CardId }[] })
+  /** Offering: choose a card from your hand to give to `to`. */
+  | (PromptBase & { kind: 'give-card'; to: Seat })
+  /** Joker played as HOT: choose the non-Keep card in your hand to reveal and copy. */
+  | (PromptBase & { kind: 'joker-copy'; options: CardId[] })
+  /**
+   * Fiat: `seat` claims a pile from the center for `claimant`. Piles are named
+   * by the position they were pushed in from (`options`).
+   */
+  | (PromptBase & {
+      kind: 'claim-pile';
+      claimant: Seat;
+      options: Seat[];
+      /** Claims made so far: claimant ← pile from position. */
+      claims: { claimant: Seat; from: Seat }[];
+      /** Claims still to come after this one. */
+      queue: PileClaim[];
+    });
 
 export type PromptKind = Prompt['kind'];
 
