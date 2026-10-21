@@ -110,7 +110,10 @@ export function checkRestInvariants(state: GameState): string[] {
   if (state.limbo.length > 0) problems.push(`limbo is not empty: ${state.limbo.map((c) => c.id).join(', ')}`);
 
   // HOT cards are never held, except one waiting on its owner to pick a keep.
-  for (const seat of SEATS) {
+  // Once the round is over (e.g. a token victory while a HOT card was waiting),
+  // whatever is left in hand doesn't matter: the next round deals everything again.
+  const roundLive = state.phase === 'playing' || state.phase === 'post-round';
+  for (const seat of roundLive ? SEATS : []) {
     for (const id of state.hands[seat]) {
       if (!CARDS[id].hot) continue;
       const pending = state.prompts.some((p) => p.kind === 'hot-target' && p.seat === seat && p.card === id);
