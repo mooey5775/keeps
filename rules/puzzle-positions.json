@@ -1,0 +1,1038 @@
+{
+  "P-01": {
+    "title": "Humble Beginnings",
+    "url": "https://www.keepsgame.com/items/humble-beginnings",
+    "piles": {
+      "you": 1,
+      "left": 3,
+      "upper": 2,
+      "right": 0
+    },
+    "keeps": {
+      "you": [
+        "faberge-egg"
+      ],
+      "left": [
+        "blunder",
+        "chalice"
+      ],
+      "upper": [
+        "friar-token",
+        "royal-favor"
+      ],
+      "right": [
+        "sanction"
+      ]
+    },
+    "hand": [
+      "medallion"
+    ],
+    "discard": [
+      "pandemonium",
+      "legerdemain",
+      "offering"
+    ],
+    "notes": "Coins: you 3 (Faberge Egg), left -8, upper -0.5, right 0. Right pile is empty (0) and not drawn on the page.",
+    "confidence": "high"
+  },
+  "P-02": {
+    "title": "Divine Intervention",
+    "url": "https://www.keepsgame.com/items/divine-intervention",
+    "piles": {
+      "you": 0,
+      "left": 3,
+      "upper": 0,
+      "right": 1
+    },
+    "keeps": {
+      "you": [
+        "blunder",
+        "medallion"
+      ],
+      "left": [
+        "faberge-egg",
+        "duplicity"
+      ],
+      "upper": [
+        "juggling",
+        "tithes",
+        "medallion"
+      ],
+      "right": []
+    },
+    "hand": [
+      "providence",
+      "shackles"
+    ],
+    "discard": [
+      "epiphany",
+      "pickpocket",
+      "joker"
+    ],
+    "notes": "Medallion appears TWICE on the page (your keep and the upper keep); the 36-card deck has only one Medallion. Both are confirmed by media ID and screenshot, and the solution depends on it (you: Blunder + Medallion = -8; upper: Juggling + Tithes(3) + Medallion = 5). A rules engine that enforces unique cards must allow this. Your pile and the upper pile are empty.",
+    "confidence": "high"
+  },
+  "P-03": {
+    "title": "Rags to Riches",
+    "url": "https://www.keepsgame.com/items/rags-to-riches",
+    "piles": {
+      "you": 2,
+      "left": 4,
+      "upper": 5,
+      "right": 0
+    },
+    "keeps": {
+      "you": [
+        "sanction"
+      ],
+      "left": [
+        "acquisition",
+        "dagger",
+        "timepiece"
+      ],
+      "upper": [
+        "retribution"
+      ],
+      "right": [
+        "shackles"
+      ]
+    },
+    "hand": [
+      "hocus-pocus",
+      "purity"
+    ],
+    "discard": [
+      "requisition",
+      "pluck",
+      "epiphany"
+    ],
+    "notes": "Coins: you 0 (Sanction), left 4 (Dagger, Timepiece), upper 0, right -3. Right pile empty.",
+    "confidence": "high"
+  },
+  "P-04": {
+    "title": "This Looks Familar",
+    "url": "https://www.keepsgame.com/items/a-twist-of-fate",
+    "piles": {
+      "you": 3,
+      "left": 0,
+      "upper": 2,
+      "right": 3
+    },
+    "keeps": {
+      "you": [
+        "juggling",
+        "medallion"
+      ],
+      "left": [
+        "chalice",
+        "shackles"
+      ],
+      "upper": [
+        "faberge-egg",
+        "interest"
+      ],
+      "right": [
+        "retribution"
+      ]
+    },
+    "hand": [
+      "epiphany",
+      "fool-token"
+    ],
+    "discard": [
+      "tithes",
+      "prayer",
+      "invocation"
+    ],
+    "notes": "Page title is spelled 'This Looks Familar' on the site; URL slug is a-twist-of-fate. Coins: you 2, upper 3 (Faberge Egg + Interest), left -1, right 0. Left pile empty.",
+    "confidence": "high"
+  },
+  "P-05": {
+    "title": "Better Than Two Pair",
+    "url": "https://www.keepsgame.com/items/better-than-two-pair",
+    "piles": {
+      "you": 1,
+      "left": 4,
+      "upper": 3,
+      "right": 1
+    },
+    "faceUpPileTops": {
+      "you": "friar-token"
+    },
+    "keeps": {
+      "you": [
+        "blunder",
+        "count-token"
+      ],
+      "left": [
+        "juggling",
+        "tithes",
+        "acquisition",
+        "timepiece"
+      ],
+      "upper": [
+        "dagger",
+        "faberge-egg",
+        "interest",
+        "medallion"
+      ],
+      "right": [
+        "purity",
+        "retribution"
+      ]
+    },
+    "hand": [
+      "hocus-pocus",
+      "fool-token"
+    ],
+    "discard": [
+      "requisition",
+      "joker",
+      "revelation"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Your pile's single card is the Friar Token, face-up. Coins: left 6, upper 7, right 10 (Purity), you -11, matching the flavor text.",
+    "confidence": "high"
+  },
+  "P-06": {
+    "title": "Best Served Cold",
+    "url": "https://www.keepsgame.com/items/best-served-cold",
+    "piles": {
+      "you": 3,
+      "left": 1,
+      "upper": 0,
+      "right": 3
+    },
+    "faceUpPileTops": {
+      "left": "count-token"
+    },
+    "keeps": {
+      "you": [
+        "purity",
+        "friar-token",
+        "retribution",
+        "fool-token"
+      ],
+      "left": [
+        "dagger",
+        "faberge-egg"
+      ],
+      "upper": [
+        "interest",
+        "scepter"
+      ],
+      "right": [
+        "blunder"
+      ]
+    },
+    "hand": [
+      "last-laugh",
+      "providence"
+    ],
+    "discard": [
+      "pickpocket",
+      "fiat",
+      "prayer"
+    ],
+    "otherHands": {
+      "upper": "unknown count; holds a card that can steal a card from your hand (flavor text). Legerdemain and Pluck are the candidates not shown on the board",
+      "left": "empty (flavor text)",
+      "right": "empty (flavor text)"
+    },
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Left pile's single card is the Count Token, face-up. Upper pile empty. Flavor text: upper player holds a card that can steal a card from your hand; left and right players are empty-handed. Your keep is worth -2 (Purity off) until Providence swaps Retribution for the left player's Dagger.",
+    "confidence": "high"
+  },
+  "P-07": {
+    "title": "Nothing Doing",
+    "url": "https://www.keepsgame.com/items/nothing-doing",
+    "piles": {
+      "you": 0,
+      "left": 0,
+      "upper": 1,
+      "right": 0
+    },
+    "faceUpPileTops": {
+      "upper": "blunder"
+    },
+    "keeps": {
+      "you": [
+        "friar-token"
+      ],
+      "left": [
+        "sanction",
+        "dagger",
+        "faberge-egg",
+        "royal-favor"
+      ],
+      "upper": [
+        "chalice",
+        "last-laugh",
+        "acquisition",
+        "scepter"
+      ],
+      "right": [
+        "count-token",
+        "purity",
+        "tithes",
+        "shackles"
+      ]
+    },
+    "hand": [
+      "hocus-pocus",
+      "duplicity",
+      "pluck",
+      "providence"
+    ],
+    "discard": [
+      "invocation",
+      "fiat",
+      "pandemonium"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. The only non-empty pile is upper (1 card, Blunder face-up). The page does not show opponents' hands. Cards not shown anywhere on the page (so presumably in opponents' hands, split unknown): legerdemain, pickpocket, requisition, interest, medallion, revelation, timepiece, epiphany, offering, fool-token, prayer, juggling, resurrection, joker, retribution. The solutions need the Fool Token and the Joker to be in opponents' hands (taken with Pluck). Coins: left 5.5, upper 4, right 10 (Purity), as the flavor text says. Exactly three cards in the discard, as the flavor text says.",
+    "confidence": "high"
+  },
+  "P-08": {
+    "title": "Last Laugh 1",
+    "url": "https://www.keepsgame.com/items/last-laugh-1",
+    "piles": {
+      "you": 0,
+      "left": 3,
+      "upper": 2,
+      "right": 5
+    },
+    "keeps": {
+      "you": [
+        "last-laugh"
+      ],
+      "left": [
+        "faberge-egg"
+      ],
+      "upper": [
+        "blunder"
+      ],
+      "right": [
+        "sanction"
+      ]
+    },
+    "hand": [
+      "timepiece",
+      "dagger"
+    ],
+    "discard": [
+      "scepter",
+      "pandemonium",
+      "fiat"
+    ],
+    "notes": "Coins: you 0, left 3 (Faberge Egg), upper -10, right 0; your hand holds 4 coins (Timepiece, Dagger). Your pile is empty.",
+    "confidence": "high"
+  },
+  "P-09": {
+    "title": "Last Laugh 2",
+    "url": "https://www.keepsgame.com/items/last-laugh-2",
+    "piles": {
+      "you": 1,
+      "left": 3,
+      "upper": 4,
+      "right": 7
+    },
+    "keeps": {
+      "you": [
+        "faberge-egg",
+        "last-laugh"
+      ],
+      "left": [
+        "purity"
+      ],
+      "upper": [
+        "sanction",
+        "chalice"
+      ],
+      "right": [
+        "juggling"
+      ]
+    },
+    "hand": [
+      "requisition",
+      "medallion"
+    ],
+    "discard": [
+      "fool-token",
+      "shackles",
+      "invocation"
+    ],
+    "notes": "Coins: you 3, left 10 (Purity), upper 2, right 0.",
+    "confidence": "high"
+  },
+  "P-10": {
+    "title": "Last Laugh 3",
+    "url": "https://www.keepsgame.com/items/last-laugh-3",
+    "piles": {
+      "you": 4,
+      "left": 0,
+      "upper": 3,
+      "right": 1
+    },
+    "faceUpPileTops": {
+      "right": "last-laugh"
+    },
+    "keeps": {
+      "you": [
+        "sanction"
+      ],
+      "left": [
+        "purity"
+      ],
+      "upper": [
+        "scepter",
+        "acquisition",
+        "faberge-egg",
+        "timepiece"
+      ],
+      "right": [
+        "count-token",
+        "fool-token"
+      ]
+    },
+    "hand": [
+      "resurrection",
+      "hocus-pocus"
+    ],
+    "discard": [
+      "epiphany",
+      "interest",
+      "providence"
+    ],
+    "otherHands": {
+      "left": "empty (flavor text)"
+    },
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Right pile's single card is Last Laugh, face-up (the pile count digit is hidden behind the card in the screenshot, but the DOM gives 1, which matches PUZZLES.md). Left player is empty-handed (flavor text) and left pile is empty.",
+    "confidence": "high"
+  },
+  "P-11": {
+    "title": "Royal Favor 1",
+    "url": "https://www.keepsgame.com/items/royal-favor-1",
+    "piles": {
+      "you": 3,
+      "left": 2,
+      "upper": 4,
+      "right": 0
+    },
+    "faceUpPileTops": {
+      "you": "royal-favor"
+    },
+    "keeps": {
+      "you": [
+        "scepter"
+      ],
+      "left": [
+        "acquisition",
+        "juggling"
+      ],
+      "upper": [
+        "timepiece",
+        "dagger",
+        "friar-token"
+      ],
+      "right": []
+    },
+    "hand": [
+      "shackles"
+    ],
+    "discard": [
+      "pandemonium",
+      "offering",
+      "providence"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Your pile (3 cards) shows Royal Favor face-up; the flavor text says your pile was 'revealed', i.e. probably flipped with Revelation, but only Royal Favor is shown. Right player's keep is empty and right pile is empty. Coins: you 2, upper 3, left 0, right 0.",
+    "confidence": "high"
+  },
+  "P-12": {
+    "title": "Royal Favor 2",
+    "url": "https://www.keepsgame.com/items/royal-favor-2",
+    "piles": {
+      "you": 1,
+      "left": 0,
+      "upper": 3,
+      "right": 3
+    },
+    "faceUpPileTops": {
+      "upper": "blunder"
+    },
+    "keeps": {
+      "you": [
+        "purity",
+        "royal-favor",
+        "sanction"
+      ],
+      "left": [
+        "juggling",
+        "shackles"
+      ],
+      "upper": [
+        "tithes",
+        "chalice",
+        "faberge-egg",
+        "medallion"
+      ],
+      "right": [
+        "fool-token"
+      ]
+    },
+    "hand": [
+      "providence"
+    ],
+    "discard": [
+      "resurrection",
+      "requisition",
+      "pickpocket"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Upper pile (3 cards) shows Blunder face-up on top. Left pile empty. Coins: upper 11 (Tithes 4 + Chalice + Faberge + Medallion), you 0.5 (Royal Favor makes Purity worthless), left -3, right -1.",
+    "confidence": "high"
+  },
+  "P-13": {
+    "title": "Royal Favor 3",
+    "url": "https://www.keepsgame.com/items/royal-favor-3",
+    "piles": {
+      "you": 4,
+      "left": 3,
+      "upper": 4,
+      "right": 1
+    },
+    "faceUpPileTops": {
+      "right": "blunder"
+    },
+    "keeps": {
+      "you": [
+        "medallion",
+        "faberge-egg",
+        "shackles"
+      ],
+      "left": [
+        "chalice",
+        "sanction"
+      ],
+      "upper": [
+        "tithes",
+        "count-token"
+      ],
+      "right": [
+        "scepter",
+        "dagger",
+        "interest"
+      ]
+    },
+    "hand": [
+      "offering",
+      "resurrection"
+    ],
+    "discard": [
+      "friar-token",
+      "royal-favor",
+      "joker"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Right pile (1 card) shows Blunder face-up. You are Shackled (Shackles in your keep). Coins: you 2, left 2, upper 1, right 4.",
+    "confidence": "high"
+  },
+  "P-14": {
+    "title": "Purity 1",
+    "url": "https://www.keepsgame.com/items/purity-1",
+    "piles": {
+      "you": 0,
+      "left": 2,
+      "upper": 2,
+      "right": 0
+    },
+    "keeps": {
+      "you": [
+        "medallion"
+      ],
+      "left": [
+        "fool-token",
+        "count-token"
+      ],
+      "upper": [
+        "purity",
+        "juggling"
+      ],
+      "right": [
+        "acquisition"
+      ]
+    },
+    "hand": [
+      "friar-token"
+    ],
+    "discard": [
+      "invocation",
+      "interest",
+      "hocus-pocus"
+    ],
+    "notes": "Coins: upper 10 (Purity), you 2, left -2, right 0. Your and the right piles are empty.",
+    "confidence": "high"
+  },
+  "P-15": {
+    "title": "Purity 2",
+    "url": "https://www.keepsgame.com/items/purity-2",
+    "piles": {
+      "you": 0,
+      "left": 0,
+      "upper": 3,
+      "right": 0
+    },
+    "keeps": {
+      "you": [
+        "purity",
+        "faberge-egg"
+      ],
+      "left": [
+        "acquisition"
+      ],
+      "upper": [
+        "interest",
+        "duplicity"
+      ],
+      "right": [
+        "timepiece",
+        "royal-favor",
+        "retribution",
+        "scepter"
+      ]
+    },
+    "hand": [
+      "shackles"
+    ],
+    "discard": [
+      "offering",
+      "fool-token",
+      "pluck"
+    ],
+    "notes": "Only the upper pile has cards. Coins: you 3 (Purity off), right 4.5, others 0.",
+    "confidence": "high"
+  },
+  "P-16": {
+    "title": "Purity 3",
+    "url": "https://www.keepsgame.com/items/purity-3",
+    "piles": {
+      "you": 0,
+      "left": 2,
+      "upper": 0,
+      "right": 1
+    },
+    "keeps": {
+      "you": [
+        "last-laugh",
+        "interest",
+        "purity",
+        "chalice"
+      ],
+      "left": [
+        "retribution",
+        "sanction",
+        "royal-favor"
+      ],
+      "upper": [
+        "fool-token",
+        "duplicity"
+      ],
+      "right": [
+        "medallion",
+        "faberge-egg",
+        "timepiece"
+      ]
+    },
+    "hand": [
+      "count-token",
+      "resurrection",
+      "joker"
+    ],
+    "discard": [
+      "pandemonium",
+      "tithes",
+      "requisition"
+    ],
+    "notes": "Tithes is in the discard (the solution resurrects it). Your and the upper piles are empty.",
+    "confidence": "high"
+  },
+  "P-17": {
+    "title": "Blunder 1",
+    "url": "https://www.keepsgame.com/items/blunder-1",
+    "piles": {
+      "you": 0,
+      "left": 1,
+      "upper": 2,
+      "right": 1
+    },
+    "keeps": {
+      "you": [
+        "faberge-egg",
+        "blunder"
+      ],
+      "left": [
+        "medallion"
+      ],
+      "upper": [
+        "dagger"
+      ],
+      "right": [
+        "fool-token",
+        "friar-token"
+      ]
+    },
+    "hand": [
+      "hocus-pocus"
+    ],
+    "discard": [
+      "epiphany",
+      "interest",
+      "prayer"
+    ],
+    "notes": "Coins: you -7, left 2, upper 2, right -2. Your pile is empty.",
+    "confidence": "high"
+  },
+  "P-18": {
+    "title": "Blunder 2",
+    "url": "https://www.keepsgame.com/items/blunder-2",
+    "piles": {
+      "you": 3,
+      "left": 1,
+      "upper": 3,
+      "right": 0
+    },
+    "faceUpPileTops": {
+      "left": "blunder"
+    },
+    "keeps": {
+      "you": [
+        "sanction"
+      ],
+      "left": [
+        "tithes",
+        "interest",
+        "faberge-egg",
+        "medallion"
+      ],
+      "upper": [
+        "timepiece"
+      ],
+      "right": [
+        "shackles",
+        "acquisition"
+      ]
+    },
+    "hand": [
+      "count-token",
+      "scepter"
+    ],
+    "discard": [
+      "offering",
+      "fiat",
+      "pickpocket"
+    ],
+    "otherHands": {
+      "left": "1 card, deduced to be Hocus Pocus (flavor text)"
+    },
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Left pile (1 card) shows Blunder face-up. Flavor text: left player has exactly one card in hand, deduced to be Hocus Pocus. Right pile empty.",
+    "confidence": "high"
+  },
+  "P-19": {
+    "title": "Blunder 3",
+    "url": "https://www.keepsgame.com/items/blunder-3",
+    "piles": {
+      "you": 1,
+      "left": 2,
+      "upper": 4,
+      "right": 2
+    },
+    "faceUpPileTops": {
+      "you": "blunder"
+    },
+    "keeps": {
+      "you": [
+        "fool-token",
+        "tithes",
+        "last-laugh",
+        "interest"
+      ],
+      "left": [
+        "sanction",
+        "duplicity"
+      ],
+      "upper": [
+        "royal-favor",
+        "faberge-egg"
+      ],
+      "right": [
+        "timepiece",
+        "scepter",
+        "juggling"
+      ]
+    },
+    "hand": [
+      "shackles",
+      "purity",
+      "retribution"
+    ],
+    "discard": [
+      "legerdemain",
+      "revelation",
+      "pandemonium"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Your pile (1 card) shows Blunder face-up. Coins: you 3 (Tithes 4, Fool Token -1), upper 3.5, right 4, left 0.",
+    "confidence": "high"
+  },
+  "P-20": {
+    "title": "Resurrection 1",
+    "url": "https://www.keepsgame.com/items/resurrection-1",
+    "piles": {
+      "you": 3,
+      "left": 4,
+      "upper": 2,
+      "right": 0
+    },
+    "keeps": {
+      "you": [
+        "tithes",
+        "faberge-egg"
+      ],
+      "left": [
+        "purity",
+        "shackles"
+      ],
+      "upper": [
+        "medallion",
+        "count-token"
+      ],
+      "right": [
+        "sanction"
+      ]
+    },
+    "hand": [
+      "resurrection"
+    ],
+    "discard": [
+      "epiphany",
+      "last-laugh",
+      "pandemonium"
+    ],
+    "notes": "Coins: you 5, upper 1, left -3, right 0. Right pile empty.",
+    "confidence": "high"
+  },
+  "P-21": {
+    "title": "Resurrection 2",
+    "url": "https://www.keepsgame.com/items/resurrection-2",
+    "piles": {
+      "you": 5,
+      "left": 3,
+      "upper": 3,
+      "right": 1
+    },
+    "keeps": {
+      "you": [
+        "medallion",
+        "last-laugh",
+        "purity",
+        "count-token"
+      ],
+      "left": [
+        "acquisition",
+        "blunder",
+        "royal-favor"
+      ],
+      "upper": [
+        "interest",
+        "tithes",
+        "timepiece"
+      ],
+      "right": [
+        "faberge-egg",
+        "retribution"
+      ]
+    },
+    "hand": [
+      "friar-token",
+      "resurrection"
+    ],
+    "discard": [
+      "invocation",
+      "prayer",
+      "providence"
+    ],
+    "notes": "Coins: you 1, upper 5, right 3, left -9.5.",
+    "confidence": "high"
+  },
+  "P-22": {
+    "title": "Resurrection 3",
+    "url": "https://www.keepsgame.com/items/resurrection-3",
+    "piles": {
+      "you": 4,
+      "left": 0,
+      "upper": 3,
+      "right": 7
+    },
+    "faceUpPileTops": {
+      "right": "hocus-pocus"
+    },
+    "keeps": {
+      "you": [
+        "chalice"
+      ],
+      "left": [
+        "juggling",
+        "tithes",
+        "scepter"
+      ],
+      "upper": [
+        "faberge-egg"
+      ],
+      "right": [
+        "retribution",
+        "blunder"
+      ]
+    },
+    "hand": [
+      "medallion",
+      "shackles",
+      "joker",
+      "resurrection"
+    ],
+    "discard": [
+      "invocation",
+      "epiphany",
+      "dagger"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Right pile (7 cards) shows Hocus Pocus face-up (the solution Invokes it). Dagger is in the discard. Left pile empty.",
+    "confidence": "high"
+  },
+  "P-23": {
+    "title": "Tokens 1",
+    "url": "https://www.keepsgame.com/items/tokens-1",
+    "piles": {
+      "you": 3,
+      "left": 5,
+      "upper": 3,
+      "right": 2
+    },
+    "keeps": {
+      "you": [
+        "blunder"
+      ],
+      "left": [
+        "purity"
+      ],
+      "upper": [
+        "scepter",
+        "last-laugh"
+      ],
+      "right": [
+        "faberge-egg",
+        "tithes"
+      ]
+    },
+    "hand": [
+      "hocus-pocus",
+      "count-token",
+      "fool-token",
+      "friar-token"
+    ],
+    "discard": [
+      "pickpocket",
+      "pluck",
+      "fiat"
+    ],
+    "notes": "Your hand holds all three Tokens plus Hocus Pocus.",
+    "confidence": "high"
+  },
+  "P-24": {
+    "title": "Tokens 2",
+    "url": "https://www.keepsgame.com/items/tokens-2",
+    "piles": {
+      "you": 0,
+      "left": 2,
+      "upper": 1,
+      "right": 3
+    },
+    "faceUpPileTops": {
+      "left": "friar-token"
+    },
+    "keeps": {
+      "you": [
+        "acquisition",
+        "last-laugh",
+        "interest",
+        "fool-token"
+      ],
+      "left": [
+        "faberge-egg",
+        "juggling"
+      ],
+      "upper": [
+        "dagger",
+        "timepiece",
+        "sanction"
+      ],
+      "right": [
+        "shackles"
+      ]
+    },
+    "hand": [
+      "providence",
+      "count-token"
+    ],
+    "discard": [
+      "offering",
+      "revelation",
+      "chalice"
+    ],
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Left pile (2 cards) shows the Friar Token face-up (the solution draws it with Acquisition). Your pile is empty.",
+    "confidence": "high"
+  },
+  "P-25": {
+    "title": "Tokens 3",
+    "url": "https://www.keepsgame.com/items/tokens-3",
+    "piles": {
+      "you": 0,
+      "left": 2,
+      "upper": 3,
+      "right": 0
+    },
+    "faceUpPileTops": {
+      "upper": "count-token"
+    },
+    "keeps": {
+      "you": [
+        "fool-token",
+        "friar-token"
+      ],
+      "left": [
+        "dagger",
+        "faberge-egg",
+        "medallion",
+        "tithes"
+      ],
+      "upper": [
+        "juggling",
+        "scepter"
+      ],
+      "right": [
+        "interest",
+        "purity"
+      ]
+    },
+    "hand": [
+      "providence",
+      "hocus-pocus",
+      "joker",
+      "legerdemain"
+    ],
+    "discard": [
+      "requisition",
+      "pluck",
+      "prayer"
+    ],
+    "otherHands": {
+      "left": "empty (flavor text)",
+      "upper": "empty (flavor text)",
+      "right": "empty (flavor text)"
+    },
+    "notes": "Pile shows its top card face-up (count includes it); only the top card is known. Upper pile (3 cards) shows the Count Token face-up. Flavor text: all three other players are empty-handed. Your and the right piles are empty.",
+    "confidence": "high"
+  }
+}

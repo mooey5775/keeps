@@ -6,6 +6,7 @@ import { legalCommands } from './engine.ts';
 import { scores } from './scoring.ts';
 import {
   SEATS,
+  type ActionFrameOp,
   type GameState,
   type PerSeat,
   type Phase,
@@ -48,6 +49,8 @@ export interface PlayerView {
   turnNumber: number;
   phase: Phase;
   turn: { seat: Seat; actionsTaken: number } | null;
+  /** The action frame being played right now: whose actions, what kind, how many left. */
+  frame: { seat: Seat; kind: ActionFrameOp['kind']; remaining: number } | null;
   startingSeat: Seat | null;
   lastRoundWinner: Seat | null;
   roundEnd: RoundEnd | null;
@@ -77,6 +80,7 @@ export function viewFor(state: GameState, viewer: Viewer): PlayerView {
     turnNumber: state.turnNumber,
     phase: state.phase,
     turn: state.turn && { seat: state.turn.seat, actionsTaken: state.turn.actionsTaken },
+    frame: activeFrame(state),
     startingSeat: state.startingSeat,
     lastRoundWinner: state.lastRoundWinner,
     roundEnd: state.roundEnd,
@@ -106,4 +110,10 @@ export function viewFor(state: GameState, viewer: Viewer): PlayerView {
     duplicityHolder: duplicityHolder(state),
     legal: me === null ? [] : legalCommands(state, me),
   };
+}
+
+/** The topmost action frame with actions left, if any. */
+function activeFrame(state: GameState): PlayerView['frame'] {
+  const frame = state.stack.findLast((op) => op.op === 'action-frame' && op.remaining > 0);
+  return frame?.op === 'action-frame' ? { seat: frame.seat, kind: frame.kind, remaining: frame.remaining } : null;
 }

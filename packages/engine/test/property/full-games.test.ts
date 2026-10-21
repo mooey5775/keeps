@@ -55,7 +55,9 @@ function entitled(state: GameState, seat: Seat): Set<CardId> {
 }
 
 function leaks(state: GameState, seat: Seat): CardId[] {
-  const json = JSON.stringify(viewFor(state, seat));
+  // `frame.kind` can be 'hocus-pocus', which is a frame kind, not a card.
+  const { frame: _frame, ...view } = viewFor(state, seat);
+  const json = JSON.stringify(view);
   const allowed = entitled(state, seat);
   return CARD_IDS.filter((id) => json.includes(`"${id}"`) && !allowed.has(id));
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildPosition,
   CARD_IDS,
+  CARDS,
   cardLocations,
   checkInvariants,
   type PositionSpec,
@@ -44,6 +45,12 @@ describe('buildPosition', () => {
     expect(filled).not.toContain('joker');
     expect(new Set(filled).size).toBe(3);
     expect(a.box).toHaveLength(36 - 4);
+  });
+
+  it("'quiet' fill uses non-HOT cards first", () => {
+    const state = buildPosition({ piles: { 0: Array(27).fill('?') }, fill: 'quiet' });
+    expect(state.piles[state.pileAt[0]].cards.some((c) => CARDS[c.id].hot)).toBe(false);
+    expect(state.box.every((id) => CARDS[id].hot)).toBe(true);
   });
 
   it('puts every card somewhere exactly once', () => {

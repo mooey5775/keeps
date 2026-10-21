@@ -11,3 +11,4 @@ export * from './engine.ts';
 export * from './builders.ts';
 export * from './view.ts';
 export * from './replay.ts';
+export * from './puzzles.ts';

@@ -1,4 +1,4 @@
-import { CARD_IDS, type CardId } from './cards.ts';
+import { CARD_IDS, CARDS, type CardId } from './cards.ts';
 import { newCtx } from './context.ts';
 import { advance, beginTurn } from './engine.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
@@ -55,6 +55,11 @@ export interface PositionSpec {
   marksToWin?: number;
   /** Seeds both the '?' fill order and the game's RNG. Default 'position'. */
   seed?: string | number;
+  /**
+   * 'quiet' fills '?' with non-HOT cards first, so an unknown card that gets
+   * drawn doesn't set off an unrelated effect (used for puzzles). Default 'random'.
+   */
+  fill?: 'random' | 'quiet';
 }
 
 export function buildPosition(spec: PositionSpec): GameState {
@@ -80,6 +85,8 @@ export function buildPosition(spec: PositionSpec): GameState {
   if (duplicates.length > 0) throw new Error(`buildPosition: duplicate cards: ${duplicates.join(', ')}`);
 
   const pool = shuffle(rng, CARD_IDS.filter((id) => !named.includes(id)));
+  // pop() takes from the end, so put the cards to use first at the end.
+  if (spec.fill === 'quiet') pool.sort((a, b) => Number(CARDS[b].hot) - Number(CARDS[a].hot));
   const fill = (id: CardSpec): CardId => {
     if (id !== '?') return id;
     const next = pool.pop();

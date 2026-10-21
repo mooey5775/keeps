@@ -63,6 +63,7 @@ describe('player views', () => {
   it('lists the commands you may send, and none for spectators', () => {
     const { state } = newGame({ players: 2, seed: 'view', firstSeat: 0 });
     expect(viewFor(state, 0).legal).toHaveLength(1);
+    expect(viewFor(state, 2).frame).toEqual({ seat: 0, kind: 'turn', remaining: 2 });
     expect(viewFor(state, 2).legal).toEqual([]);
     expect(viewFor(state, 'spectator').legal).toEqual([]);
     const after = draw(state, 0).state;
