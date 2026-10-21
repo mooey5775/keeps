@@ -175,13 +175,24 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
           cards: [],
         };
       }
-      case 'choose-direction':
+      case 'choose-direction': {
+        // Say what each choice does for you, not which way it turns: "left" and
+        // "right" mean little when the seats aren't drawn around a table (phones).
+        // Passing left, every pile moves to the player on its left, so you get
+        // the pile of the player on your right, and yours goes to your left.
+        const seat = me ?? (0 as Seat);
+        const left = ((seat + 1) % 4) as Seat;
+        const right = ((seat + 3) % 4) as Seat;
+        const [from, to] = answer.direction === 'left' ? [right, left] : [left, right];
+        const size = view.piles[from]!.size;
+        const yours = me === null ? `${names.possessive(seat)} pile goes` : 'yours goes';
         return {
           command,
           refs: [],
-          label: answer.direction === 'left' ? 'Rotate every pile one seat to the left' : 'Rotate every pile one seat to the right',
+          label: `Pass every pile ${answer.direction}: ${me === null ? names.seat(seat) : 'you'} get${me === null ? 's' : ''} ${names.possessive(from)} pile (${size} card${size === 1 ? '' : 's'}), ${yours} to ${names.seat(to)}`,
           cards: [],
         };
+      }
       case 'order-pile':
         return { command, refs: [], label: 'Keep this order', cards: [] };
       case 'choose-player':

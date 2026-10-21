@@ -89,6 +89,29 @@ describe('options', () => {
   });
 });
 
+describe('Pandemonium directions', () => {
+  it('say which pile you get and where yours goes, not just left or right', () => {
+    const start = buildPosition({
+      piles: { 0: ['pandemonium'], 1: ['chalice', 'dagger'], 3: ['medallion', 'scepter', 'timepiece'] },
+      turn: 0,
+    });
+    const drawn = apply(start, 0, { type: 'answer', promptId: start.prompts[0]!.id, answer: { kind: 'action', choice: { action: 'draw' } } });
+    if (!drawn.ok) throw new Error(drawn.error.message);
+    const labels = optionsOf(viewFor(drawn.state, 0)).map((o) => o.label);
+    // Passing left, you receive the pile of the player on your right (Di), and yours goes to Bo.
+    expect(labels).toEqual([
+      "Pass every pile left: you get Di's pile (3 cards), yours goes to Bo",
+      "Pass every pile right: you get Bo's pile (2 cards), yours goes to Di",
+    ]);
+    // And the label tells the truth: after passing left, your pile is Di's three cards.
+    const left = optionsOf(viewFor(drawn.state, 0))[0]!.command;
+    const after = apply(drawn.state, 0, left);
+    if (!after.ok) throw new Error(after.error.message);
+    expect(viewFor(after.state, 0).piles[0]!.size).toBe(3);
+    expect(viewFor(after.state, 0).piles[1]!.size).toBe(0);
+  });
+});
+
 describe('log text', () => {
   it('turns seat labels into names', () => {
     const logNames = makeNames(['Ada', 'Bo', null, 'Di'], 'spectator');
