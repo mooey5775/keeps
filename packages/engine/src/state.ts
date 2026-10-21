@@ -107,13 +107,20 @@ export type OpBody =
   | { op: 'play-as-hot'; seat: Seat; card: CardId }
   /** After the round ends: give Last Laugh's owner their action. */
   | { op: 'last-laugh' }
-  /** Runs once a play's effect has fully resolved: collects and queues its triggers. */
-  | { op: 'after-play'; playId: number }
+  /**
+   * Runs once a play's effect has fully resolved: collects and queues its
+   * triggers. `windowed` marks the second pass, after a Duplicity reveal window.
+   */
+  | { op: 'after-play'; playId: number; windowed?: true }
+  /** A chance for the Duplicity holder to reveal the face-down card (see docs/ENGINE.md). */
+  | { op: 'window'; reason: WindowReason; playId: number | null }
   /** A triggered Keep card resolving for `seat`. `source` is the card whose play triggered it. */
   | { op: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
   | { op: 'score' };
 
 export type TriggerKind = 'retribution' | 'interest' | 'royal-favor';
+
+export type WindowReason = 'play' | 'before-last-laugh' | 'before-scoring';
 
 /** Every op remembers the trace event that caused it, its nesting depth, and its play. */
 export interface OpMeta {
@@ -141,6 +148,8 @@ export interface PlayRecord {
   changed: Seat[];
   /** Cards that entered a keep face-up during this play, in order. */
   entries: { seat: Seat; card: CardId; interest: boolean }[];
+  /** The Duplicity face-down card when the play started, if any. */
+  hidden: { seat: Seat; card: CardId } | null;
 }
 
 export type Op = OpBody & OpMeta;
@@ -190,6 +199,10 @@ export type Prompt =
   | (PromptBase & { kind: 'choose-direction' })
   /** Tithes: reorder your pile (top first). */
   | (PromptBase & { kind: 'order-pile'; pile: Seat; cards: CardId[] })
+  /** Duplicity: choose another Keep card from your hand to place face down into any keep. */
+  | (PromptBase & { kind: 'duplicity-hide'; options: CardId[] })
+  /** The Duplicity holder may reveal the face-down card now. */
+  | (PromptBase & { kind: 'reveal-window'; reason: WindowReason; playId: number | null })
   /** Legerdemain or Pickpocket: choose any player (yourself and ghosts included). */
   | (PromptBase & { kind: 'choose-player'; purpose: 'legerdemain' | 'pickpocket'; options: Seat[] })
   /** Pluck: choose one card from the other players' revealed hands. */

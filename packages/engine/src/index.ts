@@ -5,6 +5,7 @@ export * from './rng.ts';
 export * from './trace.ts';
 export * from './invariants.ts';
 export * from './scoring.ts';
+export { hasRules } from './effects.ts';
 export * from './setup.ts';
 export * from './engine.ts';
 export * from './builders.ts';

@@ -78,6 +78,7 @@ export const SPEC: readonly SpecItem[] = [
   { id: 'Q-12', text: 'The first player of the first round is chosen by the host, or at random.' },
   { id: 'Q-13', text: 'Retribution triggers only from played cards, not keep abilities like Juggling or Tithes.' },
   { id: 'Q-14', text: 'Royal Favor entering a keep via a Providence swap triggers its draw.' },
+  { id: 'Q-16', text: 'Duplicity can be played with no other Keep card in hand; nothing is placed face down.' },
   { id: 'Q-15', text: 'Retribution triggers only for a player who had it face-up when the play started; receiving it in that play (e.g. via Providence) does not trigger it.' },
 
   // Card behaviors

@@ -1,8 +1,10 @@
 import { CARDS, isCoinCard, type CardId } from './cards.ts';
-import { EngineFailure, type Answer } from './commands.ts';
+import type { Answer } from './commands.ts';
 import { push, pushAfterPlay, type Ctx } from './context.ts';
+import { reveal } from './duplicity.ts';
 import {
   cardEnteredHand,
+  enterKeep,
   hasFaceUp,
   keepRefs,
   nonEmptyPiles,
@@ -28,9 +30,7 @@ import {
 } from './state.ts';
 import { assertNever } from './trace.ts';
 
-// Card effects. Each build step adds cards here and removes them from
-// NOT_YET_IMPLEMENTED; playing a card that isn't implemented yet is rejected
-// rather than silently doing the wrong thing.
+// Card effects.
 //
 // An effect runs when its card is played (after a non-Keep card is
 // discarded). Effects that need decisions open prompts; the answers are
@@ -170,6 +170,14 @@ const NON_KEEP_EFFECTS: Partial<Record<CardId, Effect>> = {
 
 /** Keep cards that do something when played (beyond entering the keep). */
 const KEEP_ON_PLAY: Partial<Record<CardId, Effect>> = {
+  // "When playing this card, choose another Keep card from your hand to place
+  // face down into any keep." With no other Keep card, nothing is placed (Q-16).
+  duplicity: (ctx, seat, source) => {
+    const options = [...new Set(ctx.state.hands[seat].filter((c) => CARDS[c].keep))];
+    if (options.length === 0) return noEffect(ctx, seat, source, 'no other Keep card in hand to place face down');
+    openPrompt(ctx, { seat, kind: 'duplicity-hide', options });
+  },
+
   // "All players push their piles to the center. Then, in play order starting
   // with you, players claim a pile from the center." Only real players claim
   // (C-19); with two players, Fiat's player places the two ghost piles (C-20).
@@ -204,17 +212,9 @@ function nextPileClaim(ctx: Ctx, queue: PileClaim[], claims: { claimant: Seat; f
   for (const c of all) state.pileAt[c.claimant] = before[c.from];
 }
 
-/** Keep cards whose rules aren't built yet. */
-const KEEP_NOT_YET_IMPLEMENTED: ReadonlySet<CardId> = new Set<CardId>(['duplicity']);
-
-export function isImplemented(card: CardId): boolean {
-  return CARDS[card].keep ? !KEEP_NOT_YET_IMPLEMENTED.has(card) : card in NON_KEEP_EFFECTS;
-}
-
-export function assertImplemented(card: CardId): void {
-  if (!isImplemented(card)) {
-    throw new EngineFailure('not-implemented', `${CARDS[card].name} is not implemented yet`);
-  }
+/** Every non-Keep card has an effect; every Keep card works by entering a keep. */
+export function hasRules(card: CardId): boolean {
+  return CARDS[card].keep || card in NON_KEEP_EFFECTS;
 }
 
 /** Resolves a non-Keep card's effect. Joker with `copy` reveals that card and takes its effect. */
@@ -224,7 +224,7 @@ export function resolveNonKeepEffect(ctx: Ctx, card: CardId, seat: Seat, copy?: 
     return resolveNonKeepEffect(ctx, copy, seat);
   }
   const effect = NON_KEEP_EFFECTS[card];
-  if (!effect) throw new EngineFailure('not-implemented', `${CARDS[card].name} is not implemented yet`);
+  if (!effect) throw new Error(`${CARDS[card].name} has no effect implementation`);
   effect(ctx, seat, card);
 }
 
@@ -282,6 +282,15 @@ export function legalEffectAnswers(state: GameState, prompt: EffectPrompt): Effe
       return prompt.options.map((card) => ({ kind: 'joker-copy', card }));
     case 'claim-pile':
       return prompt.options.map((from) => ({ kind: 'claim-pile', from }));
+    case 'duplicity-hide':
+      return prompt.options.flatMap((card) =>
+        playerSeats(state).map((target) => ({ kind: 'duplicity-hide' as const, card, target })),
+      );
+    case 'reveal-window':
+      return [
+        { kind: 'reveal-window', reveal: true },
+        { kind: 'reveal-window', reveal: false },
+      ];
     case 'order-pile': {
       const reversed = [...prompt.cards].reverse();
       return prompt.cards.length < 2
@@ -425,6 +434,23 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
       tracer.emit({ type: 'pile-claim', seat, claimant: prompt.claimant, from: answer.from });
       return nextPileClaim(ctx, prompt.queue, [...prompt.claims, { claimant: prompt.claimant, from: answer.from }]);
     }
+    case 'duplicity-hide': {
+      const hand = state.hands[seat];
+      hand.splice(hand.indexOf(answer.card), 1);
+      recordChange(ctx, seat);
+      // Placing it face down never triggers Interest (C-17), but it can change a
+      // Retribution owner's keep (C-16: Duplicity or the card, not both).
+      enterKeep(ctx, answer.target, { id: answer.card, faceDown: { placedBy: seat } });
+      tracer.emit(
+        { type: 'place-face-down', seat, target: answer.target, card: answer.card },
+        { visibility: [seat], redacted: { type: 'place-face-down', seat, target: answer.target, card: null } },
+      );
+      return;
+    }
+    case 'reveal-window':
+      if (prompt.kind !== 'reveal-window') break;
+      if (answer.reveal) reveal(ctx, seat, prompt.playId);
+      return;
     case 'order-pile': {
       if (prompt.kind !== 'order-pile') break;
       const pile = state.piles[state.pileAt[prompt.pile]];

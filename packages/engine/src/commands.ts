@@ -46,19 +46,22 @@ export type Answer =
   | { kind: 'choose-hand-card'; seat: Seat; card: CardId }
   | { kind: 'give-card'; card: CardId }
   | { kind: 'joker-copy'; card: CardId }
-  | { kind: 'claim-pile'; from: Seat };
+  | { kind: 'claim-pile'; from: Seat }
+  | { kind: 'duplicity-hide'; card: CardId; target: Seat }
+  | { kind: 'reveal-window'; reveal: boolean };
 
 export type Command =
   | { type: 'answer'; promptId: string; answer: Answer }
   /** Any player may start the next round once the current one is scored. */
-  | { type: 'next-round' };
+  | { type: 'next-round' }
+  /** Whoever has Duplicity face-up reveals the face-down card. Free, at any time. */
+  | { type: 'reveal-duplicity' };
 
 export type EngineErrorCode =
   | 'unknown-prompt'
   | 'not-your-prompt'
   | 'illegal'
-  | 'not-a-player'
-  | 'not-implemented';
+  | 'not-a-player';
 
 export interface EngineError {
   code: EngineErrorCode;

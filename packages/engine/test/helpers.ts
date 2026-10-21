@@ -67,6 +67,11 @@ export function tryRespond(state: GameState, seat: Seat, answer: Answer): ApplyR
   return apply(state, seat, { type: 'answer', promptId: prompt.id, answer });
 }
 
+/** `seat` (the Duplicity holder) reveals the face-down card with the free command. */
+export function revealNow(state: GameState, seat: Seat): Step {
+  return ok(apply(state, seat, { type: 'reveal-duplicity' }));
+}
+
 /** The action choices currently legal for `seat`. */
 export function actionChoices(state: GameState, seat: Seat): ActionChoice[] {
   return legalCommands(state, seat).flatMap((c) =>

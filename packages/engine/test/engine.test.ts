@@ -71,12 +71,6 @@ describe('apply', () => {
     const start = buildPosition({ piles: { 0: ['chalice'] }, turn: 0 });
     expect(rejection(apply(start, 0, { type: 'next-round' }))).toBe('illegal');
   });
-
-  it('rejects cards whose rules are not implemented yet instead of misplaying them', () => {
-    const start = buildPosition({ hands: { 0: ['duplicity', 'chalice'] }, turn: 0 });
-    const result = apply(start, 0, actionCommand(start, 0, { action: 'play', card: 'duplicity', target: 0 }));
-    expect(rejection(result)).toBe('not-implemented');
-  });
 });
 
 describe('newGame', () => {

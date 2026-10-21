@@ -58,6 +58,12 @@ export type TracePayload =
   | { type: 'piles-to-center'; seat: Seat }
   | { type: 'pile-claim'; seat: Seat; claimant: Seat; from: Seat }
   | { type: 'last-laugh'; seat: Seat }
+  /** Duplicity: `seat` places a card face down in `target`'s keep (`card` null when redacted). */
+  | { type: 'place-face-down'; seat: Seat; target: Seat; card: CardId | null }
+  /** `seat` reveals the face-down card in `keep`'s keep. */
+  | { type: 'reveal'; seat: Seat; keep: Seat; card: CardId }
+  /** A revealed Shackles cuts the current turn to one action. */
+  | { type: 'shackled'; seat: Seat; remaining: number }
   /** After `card`'s play resolved, these triggers were queued (in resolution order). */
   | { type: 'triggers'; card: CardId; triggers: { kind: TriggerKind; seat: Seat }[] }
   | { type: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
@@ -281,6 +287,12 @@ export function describe(payload: TracePayload): string {
         : `${seatLabel(payload.seat)} places the pile from @${seatLabel(payload.from)} at ${seatLabel(payload.claimant)}`;
     case 'last-laugh':
       return `LAST LAUGH: ${seatLabel(payload.seat)} may take one action before scoring`;
+    case 'place-face-down':
+      return `${seatLabel(payload.seat)} places ${payload.card ? cardName(payload.card) : 'a card'} face down in keep(${seatLabel(payload.target)})`;
+    case 'reveal':
+      return `${seatLabel(payload.seat)} reveals the face-down card in keep(${seatLabel(payload.keep)}): ${cardName(payload.card)}`;
+    case 'shackled':
+      return `${seatLabel(payload.seat)} is Shackled: ${payload.remaining} action${payload.remaining === 1 ? '' : 's'} left this turn`;
     case 'triggers':
       return `after ${cardName(payload.card)}: triggers → [${payload.triggers.map((t) => `${t.kind}(${seatLabel(t.seat)})`).join(', ')}]`;
     case 'trigger':

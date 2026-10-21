@@ -9,13 +9,13 @@ import {
 import { abilityCost, legalAbilities, useAbility } from './abilities.ts';
 import { clone, newCtx, push, withPlay, type Ctx } from './context.ts';
 import {
-  assertImplemented,
   isLegalEffectAnswer,
   legalEffectAnswers,
   resolveEffectAnswer,
   resolveKeepOnPlay,
   resolveNonKeepEffect,
 } from './effects.ts';
+import { canReveal, faceDownCard, needsPlayWindow, reveal, runWindow } from './duplicity.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
 import {
   cardEnteredHand,
@@ -64,7 +64,7 @@ export function apply(state: GameState, seat: Seat, command: Command): ApplyResu
   const draft = clone(state);
   const ctx = newCtx(draft, new Tracer(draft));
   try {
-    execute(ctx, command);
+    execute(ctx, seat, command);
     advance(ctx);
   } catch (error) {
     if (error instanceof EngineFailure) return { ok: false, error: { code: error.code, message: error.message } };
@@ -79,9 +79,11 @@ export function apply(state: GameState, seat: Seat, command: Command): ApplyResu
 export function legalCommands(state: GameState, seat: Seat): Command[] {
   if (state.config.seats[seat] !== 'player') return [];
   if (state.phase === 'round-over') return [{ type: 'next-round' }];
-  return state.prompts
+  const commands = state.prompts
     .filter((p) => p.seat === seat)
     .flatMap((p) => legalAnswers(state, p).map((answer): Command => ({ type: 'answer', promptId: p.id, answer })));
+  if (canReveal(state, seat)) commands.push({ type: 'reveal-duplicity' });
+  return commands;
 }
 
 function legalAnswers(state: GameState, prompt: Prompt): Answer[] {
@@ -158,11 +160,14 @@ function validate(state: GameState, seat: Seat, command: Command): EngineError |
   return null;
 }
 
-function execute(ctx: Ctx, command: Command): void {
+function execute(ctx: Ctx, seat: Seat, command: Command): void {
   const { state, tracer } = ctx;
   switch (command.type) {
     case 'next-round':
       startRound(state, tracer);
+      return;
+    case 'reveal-duplicity':
+      reveal(ctx, seat, null);
       return;
     case 'answer': {
       const prompt = state.prompts.find((p) => p.id === command.promptId)!;
@@ -235,8 +240,8 @@ export function advance(ctx: Ctx): void {
   const { state } = ctx;
   for (let steps = 0; ; steps++) {
     if (steps > 10_000) throw new Error('advance: runaway resolution loop');
-    if (state.prompts.length > 0) return;
     if (checkTokenVictory(ctx)) continue;
+    if (state.prompts.length > 0) return;
     const top = state.stack.at(-1);
     if (!top) {
       if (state.phase !== 'playing') return;
@@ -272,7 +277,9 @@ function runOp(ctx: Ctx, op: Op): void {
     case 'last-laugh':
       return runLastLaugh(ctx);
     case 'after-play':
-      return runAfterPlay(ctx, op.playId);
+      return runAfterPlay(ctx, op.playId, op.windowed ?? false);
+    case 'window':
+      return runWindow(ctx, op.reason, op.playId);
     case 'trigger':
       return runTrigger(ctx, op.kind, op.seat, op.source);
     case 'score':
@@ -356,7 +363,6 @@ function runHotCheck(ctx: Ctx, seat: Seat): void {
  * keep (Blunder: always your own); Joker needs a card to reveal and copy.
  */
 function playAsHot(ctx: Ctx, seat: Seat, card: CardId): void {
-  assertImplemented(card);
   if (card === 'blunder') {
     push(ctx, { op: 'play', seat, card, target: seat, hot: true });
   } else if (CARDS[card].keep) {
@@ -379,7 +385,6 @@ function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: b
   const hand = state.hands[seat];
   const index = hand.indexOf(card);
   if (index < 0) throw new Error(`seat ${seat} cannot play ${card}: not in hand`);
-  assertImplemented(card);
   const keep = CARDS[card].keep;
   if (keep && (target === null || !keepTargets(state, seat, card).includes(target))) {
     throw new Error(`invalid keep target ${target} for ${card}`);
@@ -389,7 +394,16 @@ function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: b
   hand.splice(index, 1);
   if (!keep) state.discard.push(card);
   const id = tracer.emit({ type: 'play', seat, card, target: keep ? target : null, hot, ...(copy ? { copy } : {}) });
-  state.openPlays.push({ id, actor: seat, card, retribution, changed: [seat], entries: [] });
+  const hidden = faceDownCard(state);
+  state.openPlays.push({
+    id,
+    actor: seat,
+    card,
+    retribution,
+    changed: [seat],
+    entries: [],
+    hidden: hidden && { seat: hidden.seat, card: hidden.card },
+  });
 
   tracer.within(id, () => {
     withPlay(ctx, null, () => push(ctx, { op: 'after-play', playId: id }));
@@ -413,10 +427,16 @@ function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: b
  *   already was (and stayed).
  * - Royal Favor: each time it entered a keep face-up.
  */
-function runAfterPlay(ctx: Ctx, playId: number): void {
+function runAfterPlay(ctx: Ctx, playId: number, windowed: boolean): void {
   const { state, tracer } = ctx;
   const record = state.openPlays.find((p) => p.id === playId);
   if (!record) throw new Error(`after-play for unknown play ${playId}`);
+  if (!windowed && needsPlayWindow(state, record)) {
+    // Let the Duplicity holder reveal before this play's triggers are collected.
+    push(ctx, { op: 'after-play', playId, windowed: true });
+    push(ctx, { op: 'window', reason: 'play', playId });
+    return;
+  }
   state.openPlays = state.openPlays.filter((p) => p !== record);
 
   const triggers: { kind: TriggerKind; seat: Seat }[] = [
@@ -462,10 +482,13 @@ function endRoundByEmptyPile(ctx: Ctx, ender: Seat): void {
   state.openPlays = [];
   state.phase = 'post-round';
   const seq = tracer.emit({ type: 'round-end', reason: 'empty-pile', ender });
-  // Nothing else happens before scoring except Last Laugh (and what it triggers).
+  // Nothing else happens before scoring except Last Laugh (and what it
+  // triggers), with chances to reveal Duplicity's card before and after it.
   tracer.within(seq, () => {
     push(ctx, { op: 'score' });
+    push(ctx, { op: 'window', reason: 'before-scoring', playId: null });
     push(ctx, { op: 'last-laugh' });
+    push(ctx, { op: 'window', reason: 'before-last-laugh', playId: null });
   });
 }
 

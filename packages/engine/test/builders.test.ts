@@ -61,10 +61,6 @@ describe('buildPosition', () => {
     expect(() => buildPosition({ piles: { 0: Array(37).fill('?') } })).toThrow(/more '\?' cards/);
   });
 
-  it('rejects Keep cards whose rules are not implemented yet', () => {
-    expect(() => buildPosition({ keeps: { 0: ['duplicity'] } })).toThrow(/not implemented yet.*duplicity/);
-  });
-
   it('rejects invalid positions via the invariant checker', () => {
     expect(() =>
       buildPosition({ seats: ['player', 'ghost', 'player', 'ghost'], hands: { 1: ['joker'] } }),

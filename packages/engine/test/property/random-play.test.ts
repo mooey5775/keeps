@@ -24,7 +24,7 @@ const IMPLEMENTED: CardId[] = [
   'blunder', 'shackles', 'purity', 'tithes', 'requisition', 'epiphany', 'prayer',
   'resurrection', 'providence', 'pandemonium', 'revelation', 'royal-favor', 'interest',
   'retribution', 'joker', 'legerdemain', 'pickpocket', 'pluck', 'offering', 'invocation',
-  'fiat', 'last-laugh',
+  'fiat', 'last-laugh', 'duplicity',
 ];
 
 const SEATINGS: PerSeat<SeatKind>[] = [

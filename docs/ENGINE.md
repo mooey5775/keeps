@@ -192,7 +192,7 @@ Once queued, a trigger resolves even if its card has since moved (e.g. Retributi
   - (a) moved a Coin card into the keep holding the face-down card, or
   - (b) changed the hand or keep of that keep's owner (actor ≠ owner).
 
-  It also opens a window at round end (before Last Laugh and again before scoring). The holder answers reveal or pass. If revealed, trigger collection treats the card as having been face-up for this play. That's how "Interest can be revealed as soon as a coin card enters" and "Retribution can be revealed as soon as the card is played" work.
+  It also opens a window at round end (before Last Laugh and again before scoring). The holder answers reveal or pass. If revealed, trigger collection treats the card as having been face-up for this play, but only if it was already face-down when the play started. A card the play itself placed face-down can't respond to that same play. That's how "Interest can be revealed as soon as a coin card enters" and "Retribution can be revealed as soon as the card is played" work.
 - **The conditions use only public information**, so a window opening never leaks what the face-down card is. Clients may offer an auto-pass toggle; the engine doesn't care.
 - **Shackles reveal mid-turn:** no window is needed, since the turn player's second action is already a pause. If Shackles is revealed in the turn player's keep after they've taken ≥ 1 action, their `turn` frame's `remaining` is set to 0.
 - **Token victory** requires all three tokens face-up; revealing the last one wins instantly.
@@ -238,7 +238,7 @@ viewFor(state, seat | 'spectator'): PlayerView                        // step 7
 
 `next-round` is a command any player can send once a round is scored (`phase: 'round-over'`).
 
-Cards whose rules aren't built yet are rejected with `not-implemented` instead of being misplayed. The list lives in `effects.ts` and shrinks with each build step.
+`reveal-duplicity` is a free command for whoever has Duplicity face-up, whenever the engine is waiting for input (outside a reveal window, which has its own reveal-or-pass answer).
 
 `apply` never mutates its input. It works on a `structuredClone`, which is cheap for 36 cards.
 
@@ -327,6 +327,7 @@ These are defaults the engine will implement unless you overrule them. Each one 
 | Q13 | Does **Retribution** trigger from non-play changes (keep abilities like Juggling or Tithes)? | No: the card says "plays a card". |
 | Q14 | Royal Favor entering a keep via a **Providence swap**. | Triggers ("enters your keep"). |
 | Q15 | **Retribution** moved by Providence: does the player receiving it trigger too? | No. Retribution triggers only for a player who had it face-up when the play started (so swapping it *out* still triggers for the original owner, per C-30). Mirrors the official Interest ruling (C-21). |
+| Q16 | **Duplicity** with no other Keep card in hand. | Playable; nothing is placed face down. |
 
 ## Test plan
 

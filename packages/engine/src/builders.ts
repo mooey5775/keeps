@@ -1,6 +1,5 @@
-import { CARD_IDS, CARDS, type CardId } from './cards.ts';
+import { CARD_IDS, type CardId } from './cards.ts';
 import { newCtx } from './context.ts';
-import { isImplemented } from './effects.ts';
 import { advance, beginTurn } from './engine.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
 import { Tracer } from './trace.ts';
@@ -100,12 +99,6 @@ export function buildPosition(spec: PositionSpec): GameState {
   }
   state.discard = [...(spec.discard ?? [])];
   state.box = pool.sort((a, b) => CARD_IDS.indexOf(a) - CARD_IDS.indexOf(b));
-
-  // A Keep card whose triggers aren't built yet would silently do nothing.
-  const unready = state.keeps.flat().filter((c) => !c.faceDown && CARDS[c.id].keep && !isImplemented(c.id));
-  if (unready.length > 0) {
-    throw new Error(`buildPosition: not implemented yet, can't be in a keep: ${unready.map((c) => c.id).join(', ')}`);
-  }
 
   state.round = spec.round ?? 1;
   state.marks = spec.marks ?? [0, 0, 0, 0];

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { CARD_IDS, CARDS, CHARACTERS, isCoinCard, type CardId } from '../src/index.ts';
+import { CARD_IDS, CARDS, CHARACTERS, hasRules, isCoinCard, type CardId } from '../src/index.ts';
 
 const CARD_IMAGE_DIR = join(import.meta.dirname, '../../../cards');
 
@@ -67,6 +67,10 @@ describe('card data', () => {
 
   it('does not treat Purity as a Coin card', () => {
     expect(isCoinCard('purity')).toBe(false);
+  });
+
+  it('has rules implemented for every card', () => {
+    expect(CARD_IDS.filter((id) => !hasRules(id))).toEqual([]);
   });
 
   it('only gives coin values to Keep cards', () => {
