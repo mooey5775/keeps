@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // No Node or DOM types: the engine must stay pure (no I/O, timers, or globals).
+    "types": []
+  },
+  "include": ["src"]
+}

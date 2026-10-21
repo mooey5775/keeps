@@ -1,0 +1,11 @@
+{
+  "name": "keeps",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.5.2",
+  "scripts": {
+    "test": "pnpm -r test",
+    "test:strict": "pnpm -r test:strict",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
