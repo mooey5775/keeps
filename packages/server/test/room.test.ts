@@ -525,3 +525,24 @@ describe('analytics events', () => {
     expect(info.game).toMatchObject({ round: 1, phase: 'playing', commands: 0 });
   });
 });
+
+describe('closing', () => {
+  it('closing a room tells everyone connected that it is gone', () => {
+    const { room, clients } = startedGame(2);
+    room.disconnect(clients[1]!.id, clients[1]!.send);
+    const before = clients[1]!.messages.length;
+    room.close();
+    expect(clients[0]!.messages.at(-1)).toEqual({ t: 'gone' });
+    expect(clients[1]!.messages).toHaveLength(before);
+    expect(room.connectedCount).toBe(0);
+  });
+
+  it('knows when its running game started, which names the replay file', () => {
+    const { room } = makeRoom({ now: () => 4242 });
+    expect(room.gameStartedAt).toBeNull();
+    const a = join(room, 'A');
+    join(room, 'B');
+    room.handle(a.id, { t: 'start' });
+    expect(room.gameStartedAt).toBe(4242);
+  });
+});

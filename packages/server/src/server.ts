@@ -1,13 +1,13 @@
 import { randomBytes, randomInt } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { formatReplayLog } from '@keeps/engine';
 import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
 import { buildDispute, RateLimiter } from './dispute.ts';
+import { replayFileName, ReplayStore, type DiskSpace } from './replays.ts';
 import { Room, type RoomDeps, type Send } from './room.ts';
 
 export interface ServerOptions {
@@ -20,6 +20,10 @@ export interface ServerOptions {
   dataDir?: string;
   /** Rooms with nobody connected are deleted after this long. */
   idleRoomMs?: number;
+  /** Rooms where nobody has done anything are closed after this long, even with people connected (a forgotten tab). */
+  abandonedRoomMs?: number;
+  /** Free space on the replay disk (tests fake a full disk with this). */
+  diskSpace?: (dir: string) => DiskSpace | null;
   /** Product analytics (PostHog in production). */
   tracker?: Tracker;
   /** Password for /admin (HTTP basic auth). Without it, there is no admin page. */
@@ -31,6 +35,8 @@ export interface ServerOptions {
 export interface KeepsServer {
   http: Server;
   rooms: Map<string, Room>;
+  /** Runs the once-a-minute cleanup now (tests pass a future `now`). */
+  sweep(now?: number): void;
   close(): Promise<void>;
 }
 
@@ -57,6 +63,13 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const visitors = new VisitorLog();
   const disputeLimit = new RateLimiter(5, 10 * 60 * 1000);
   const startedAt = Date.now();
+  const replays = options.dataDir
+    ? new ReplayStore(join(options.dataDir, 'replays'), {
+        // A game's log is in use while its room is.
+        active: () => new Set([...rooms.values()].flatMap((r) => (r.gameStartedAt === null ? [] : [replayFileName(r.code, r.gameStartedAt)]))),
+        ...(options.diskSpace ? { diskSpace: options.diskSpace } : {}),
+      })
+    : null;
 
   const deps: RoomDeps = {
     tracker,
@@ -65,7 +78,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     seed: () => randomBytes(12).toString('hex'),
     random: () => randomInt(0, 2 ** 32) / 2 ** 32,
     now: () => Date.now(),
-    ...(options.dataDir ? { saveReplay: replaySaver(options.dataDir) } : {}),
+    ...(replays ? { saveReplay: (code, at, log) => replays.save(code, at, log) } : {}),
   };
 
   function newCode(): string {
@@ -83,6 +96,17 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   });
 
   const http = createServer((req, res) => {
+    try {
+      route(req, res);
+    } catch (error) {
+      // A bad request (e.g. a malformed URL) must not take down every room.
+      console.error(`error serving ${req.method} ${String(req.url).slice(0, 200)}`, error);
+      if (!res.headersSent) res.writeHead(400).end('Bad request');
+      else res.destroy();
+    }
+  });
+
+  function route(req: IncomingMessage, res: ServerResponse): void {
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
     if (path === '/dispute' && req.method === 'POST') {
@@ -98,6 +122,10 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
         // A backup in the server log, in case analytics is off or delayed.
         console.log(`[dispute] ${result.who.name} (${ip}) ${String(result.properties.mode)}: ${String(result.properties.text).slice(0, 300).replace(/\s+/g, ' ')}`);
         reply(200, { ok: true });
+      }).catch((error: unknown) => {
+        // Outside the request handler's try/catch: an unhandled rejection would crash the server.
+        console.error('error handling a dispute', error);
+        if (!res.headersSent) res.writeHead(500, { 'content-type': 'application/json' }).end(JSON.stringify({ error: 'Something went wrong. Please try again.' }));
       });
       return;
     }
@@ -106,8 +134,9 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       return;
     }
     serveStatic(req, res, options);
-  });
-  const wss = new WebSocketServer({ server: http, path: '/ws' });
+  }
+  // Client messages are small (the largest is a command); refuse anything bigger.
+  const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 64 * 1024 });
 
   wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
     const ip = clientIp(req);
@@ -116,9 +145,14 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     let alive = true;
     const send: Send = (message: ServerMessage) => {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
+      // This connection no longer has a seat (taken by another tab, or the room
+      // closed): end it, so it can't hold on to the room. Browsers don't reconnect after these.
+      if (message.t === 'replaced' || message.t === 'gone') socket.close();
     };
     const fail = (message: string) => send({ t: 'error', message });
 
+    // Without a listener, a socket error (e.g. an oversized message) would crash the server.
+    socket.on('error', () => socket.terminate());
     socket.on('pong', () => (alive = true));
     const heartbeat = setInterval(() => {
       if (!alive) return socket.terminate();
@@ -185,18 +219,26 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   });
 
   const idleMs = options.idleRoomMs ?? 2 * 60 * 60 * 1000;
-  const sweep = setInterval(() => {
-    const now = Date.now();
+  const abandonedMs = options.abandonedRoomMs ?? 6 * 60 * 60 * 1000;
+  const sweepNow = (now = Date.now()) => {
     for (const [code, room] of rooms) {
-      if (room.connectedCount === 0 && now - room.lastActivity > idleMs) rooms.delete(code);
+      const idle = now - room.lastActivity;
+      if ((room.connectedCount === 0 && idle > idleMs) || idle > abandonedMs) {
+        room.close();
+        rooms.delete(code);
+      }
     }
-  }, 60_000);
+    disputeLimit.prune(now);
+    replays?.cleanup();
+  };
+  const sweep = setInterval(() => sweepNow(), 60_000);
 
   return new Promise((resolvePromise) => {
     http.listen(options.port, () =>
       resolvePromise({
         http,
         rooms,
+        sweep: sweepNow,
         close: () =>
           new Promise<void>((done) => {
             clearInterval(sweep);
@@ -244,15 +286,6 @@ export function clientIp(req: IncomingMessage): string | null {
   const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim();
   if (first) return first;
   return req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? null;
-}
-
-function replaySaver(dataDir: string): NonNullable<RoomDeps['saveReplay']> {
-  const dir = join(dataDir, 'replays');
-  mkdirSync(dir, { recursive: true });
-  return (code, startedAt, log) => {
-    const stamp = new Date(startedAt).toISOString().replace(/[:.]/g, '-');
-    writeFileSync(join(dir, `${code}-${stamp}.jsonl`), formatReplayLog(log));
-  };
 }
 
 function serveStatic(req: IncomingMessage, res: ServerResponse, options: ServerOptions): void {

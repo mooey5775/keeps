@@ -21,17 +21,34 @@ export interface AdminSnapshot {
   visitors: Visitor[];
 }
 
-/** Counts connections per IP, with the names used from it. */
+/**
+ * Counts connections per IP, with the names used from it. Bounded: it keeps
+ * the `maxIps` most recently seen IPs, and up to `maxNames` names for each.
+ */
 export class VisitorLog {
   private readonly byIp = new Map<string, { connections: number; names: Set<string>; firstSeen: number; lastSeen: number }>();
+  private readonly maxIps: number;
+  private readonly maxNames: number;
+
+  constructor(maxIps = 5000, maxNames = 20) {
+    this.maxIps = maxIps;
+    this.maxNames = maxNames;
+  }
 
   record(ip: string | null, name: string, now: number): void {
     if (!ip) return;
     const entry = this.byIp.get(ip) ?? { connections: 0, names: new Set<string>(), firstSeen: now, lastSeen: now };
     entry.connections++;
-    entry.names.add(name);
+    if (entry.names.size < this.maxNames) entry.names.add(name);
     entry.lastSeen = now;
+    // Re-insert so the map stays ordered by when each IP was last seen.
+    this.byIp.delete(ip);
     this.byIp.set(ip, entry);
+    if (this.byIp.size > this.maxIps) this.byIp.delete(this.byIp.keys().next().value!);
+  }
+
+  get size(): number {
+    return this.byIp.size;
   }
 
   /** Most connections first. */

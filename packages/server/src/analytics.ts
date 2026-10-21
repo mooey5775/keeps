@@ -29,6 +29,8 @@ export function createTracker(env: { POSTHOG_KEY?: string; POSTHOG_HOST?: string
     host: env.POSTHOG_HOST ?? 'https://us.i.posthog.com',
     // Use the player's IP (sent as $ip) for location, not the server's.
     disableGeoip: false,
+    // If PostHog is unreachable, keep at most this many events in memory (then drop the oldest).
+    maxQueueSize: 1000,
   });
   return {
     capture(event, who, properties = {}) {

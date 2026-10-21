@@ -113,12 +113,18 @@ describe('server', () => {
     const client = new TestClient();
     await client.open();
     const gone = client.next('gone');
+    const closed = new Promise((resolve) => client.socket.once('close', resolve));
     client.send({ t: 'resume', code: 'ZZZZ', token: 'nope' });
     await gone;
-    const error = client.next('error');
-    client.send({ t: 'join', code: 'ZZZZ', name: 'x' });
+    // The server ends a connection that has nowhere to go.
+    await closed;
+
+    const other = new TestClient();
+    await other.open();
+    const error = other.next('error');
+    other.send({ t: 'join', code: 'ZZZZ', name: 'x' });
     expect((await error).message).toBe('No room called ZZZZ.');
-    await client.close();
+    await other.close();
   });
 });
 

@@ -120,6 +120,11 @@ export class Room {
     return this.players.length;
   }
 
+  /** When the running game started (it names the game's replay file), or null. */
+  get gameStartedAt(): number | null {
+    return this.game?.startedAt ?? null;
+  }
+
   /** Adds a player (a spectator, if a game is running) and connects them. */
   join(name: unknown, send: Send, from: ConnectionInfo = {}): Player {
     const player: Player = {
@@ -158,6 +163,14 @@ export class Room {
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
     return player;
+  }
+
+  /** Ends the room: tells everyone still connected it's gone. */
+  close(): void {
+    for (const p of this.players) {
+      p.send?.({ t: 'gone' });
+      p.send = null;
+    }
   }
 
   disconnect(playerId: string, send: Send): void {

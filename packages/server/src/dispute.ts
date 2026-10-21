@@ -150,7 +150,7 @@ function playerName(name: unknown): string {
   return (typeof name === 'string' && name.trim().slice(0, 40)) || 'Anonymous';
 }
 
-/** Allows `limit` reports per IP per `windowMs`. */
+/** Allows `limit` requests per key (an IP) per `windowMs`. */
 export class RateLimiter {
   private readonly hits = new Map<string, number[]>();
   private readonly limit: number;
@@ -159,6 +159,17 @@ export class RateLimiter {
   constructor(limit: number, windowMs: number) {
     this.limit = limit;
     this.windowMs = windowMs;
+  }
+
+  /** Forgets keys with no hits in the window, so the map doesn't grow forever. */
+  prune(now: number): void {
+    for (const [key, hits] of this.hits) {
+      if (!hits.some((t) => now - t < this.windowMs)) this.hits.delete(key);
+    }
+  }
+
+  get size(): number {
+    return this.hits.size;
   }
 
   allow(key: string, now: number): boolean {
