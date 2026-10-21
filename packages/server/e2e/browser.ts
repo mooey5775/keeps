@@ -90,20 +90,22 @@ export async function open(browser: Browser, url: string): Promise<Page> {
   const waitFor = async (expression: string, what: string, ms = 8000) => {
     const end = Date.now() + ms;
     while (Date.now() < end) {
-      if (await evaluate<boolean>(expression)) return;
+      // A half-loaded page can throw (no body yet); that just means "not yet".
+      if (await evaluate<boolean>(expression).catch(() => false)) return;
       await sleep(100);
     }
     throw new Error(`timed out waiting for ${what}`);
   };
 
-  await waitFor('document.readyState === "complete"', 'the page to load');
+  // A new tab starts as a blank page that already counts as loaded; wait for the real one.
+  await waitFor(`location.href !== 'about:blank' && document.readyState === 'complete' && !!document.body`, 'the page to load');
   // Collect uncaught errors so a broken page fails the check.
   await evaluate(`window.__errors = []; addEventListener('error', (e) => __errors.push(String(e.message)));`);
 
   return {
     evaluate,
     waitFor,
-    waitForText: (text, ms) => waitFor(`document.body.innerText.includes(${JSON.stringify(text)})`, `"${text}"`, ms),
+    waitForText: (text, ms) => waitFor(`!!document.body && document.body.innerText.includes(${JSON.stringify(text)})`, `"${text}"`, ms),
     text: () => evaluate<string>('document.body.innerText'),
     path: () => evaluate<string>('location.pathname'),
     async click(label) {

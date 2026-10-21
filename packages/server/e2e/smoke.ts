@@ -161,6 +161,10 @@ try {
     await host.type('input', 'Ada');
     await host.click('Create a room');
     await host.waitFor('location.pathname.startsWith("/r/")', 'the room page');
+    // The code is spelled out for reading aloud, e.g. "Mike · Tango · Uniform · Charlie".
+    const code = (await host.path()).slice(3);
+    await host.waitFor(`/^${code.split('').map((c) => `${c}[a-z-]+`).join(' · ')}$/m.test(document.body.innerText)`, 'the NATO spelling of the room code');
+    await host.screenshot(`${process.env.E2E_SHOTS ?? '/tmp'}/lobby.png`);
     const guest = await open(b, `${base}${await host.path()}`);
     await guest.type('input', 'Bo');
     await guest.click('Join');

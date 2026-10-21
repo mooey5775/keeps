@@ -1,6 +1,7 @@
 import { NAME_MAX, type RoomSummary } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
 import { GameTable } from '../game/GameTable.tsx';
+import { natoSpelling } from '../game/nato.ts';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';
@@ -139,6 +140,9 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
       <h2>
         Room <span className="room-code">{room.code}</span>
       </h2>
+      <p className="nato" aria-label={`Room code spelled out: ${natoSpelling(room.code)}`}>
+        {natoSpelling(room.code)}
+      </p>
       <p>
         Share this link:{' '}
         <button
@@ -275,7 +279,7 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
       header={
         <div className="table-header">
           <span>
-            Room <span className="room-code">{room.code}</span>
+            Room <span className="room-code">{room.code}</span> <span className="nato inline">({natoSpelling(room.code)})</span>
             {game.view.viewer === 'spectator' && ' · watching'}
           </span>
           <span className="players-inline">
