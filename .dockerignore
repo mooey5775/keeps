@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+data
+cards
+rules
+docs
+.git
+**/test
+**/e2e
+**/coverage
