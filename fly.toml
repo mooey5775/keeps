@@ -14,9 +14,11 @@ primary_region = "sjc"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Sleep when nobody is connected (open game connections keep it awake);
-  # the next visit wakes it in a second or two. Idle rooms are lost on sleep.
-  auto_stop_machines = "stop"
+  # Sleep when nobody is connected (open game connections keep it awake).
+  # "suspend" freezes the running server, memory and all, so empty rooms
+  # survive the sleep (until the server's own 2-hour cleanup), and the next
+  # visit resumes it in well under a second. Deploys still start fresh.
+  auto_stop_machines = "suspend"
   auto_start_machines = true
   min_machines_running = 0
 
