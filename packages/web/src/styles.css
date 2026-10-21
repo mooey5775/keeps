@@ -1,4 +1,11 @@
-/* Keeps: dark wood table, parchment and gold, to match the card art. */
+/* Keeps: dark wood table, parchment and gold, to match the card art.
+   Fonts match keepsgame.com: Libre Baskerville for text, HamletOrNot for headings. */
+
+@font-face {
+  font-family: 'HamletOrNot';
+  src: url('./assets/fonts/HamletOrNot.ttf') format('truetype');
+  font-display: swap;
+}
 
 :root {
   --bg: #16120d;
@@ -13,6 +20,8 @@
   --danger: #e07a62;
   --ok: #8fc27a;
   --radius: 8px;
+  --font-text: 'Libre Baskerville', Georgia, 'Iowan Old Style', serif;
+  --font-heading: 'HamletOrNot', 'Libre Baskerville', Georgia, serif;
   --card-ratio: 1.4;
   color-scheme: dark;
 }
@@ -28,8 +37,8 @@ body,
   min-height: 100%;
   background: var(--bg);
   color: var(--text);
-  font-family: Georgia, 'Iowan Old Style', 'Palatino Linotype', serif;
-  font-size: 15px;
+  font-family: var(--font-text);
+  font-size: 14px;
   line-height: 1.4;
 }
 
@@ -38,6 +47,14 @@ input,
 select {
   font: inherit;
   color: inherit;
+}
+
+h1,
+h2,
+h3,
+.headline {
+  font-family: var(--font-heading);
+  font-weight: normal;
 }
 
 button {
@@ -151,8 +168,8 @@ button:focus-visible {
 }
 
 .home h1 {
-  font-size: 3.2rem;
-  letter-spacing: 0.25em;
+  font-size: 4.2rem;
+  letter-spacing: 0.08em;
   margin: 0;
   color: var(--gold);
   font-weight: normal;
@@ -480,8 +497,8 @@ button:focus-visible {
 
 .headline {
   color: var(--gold-bright);
-  font-weight: bold;
-  font-size: 1.1em;
+  font-size: 1.5em;
+  line-height: 1.2;
 }
 
 .seat {
