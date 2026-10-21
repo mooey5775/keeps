@@ -108,6 +108,16 @@ textarea {
   padding: 0.45em 0.6em;
 }
 
+/* iOS Safari zooms the page into any text field smaller than 16px when it's
+   tapped. On touch screens, keep fields at 16px or more so it doesn't. */
+@media (pointer: coarse) {
+  input,
+  select,
+  textarea {
+    font-size: max(16px, 1em);
+  }
+}
+
 input:focus,
 select:focus,
 textarea:focus,

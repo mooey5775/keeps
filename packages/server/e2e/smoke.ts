@@ -65,6 +65,23 @@ try {
     return [page];
   });
 
+  await check("on a phone, text fields are 16px so Safari doesn't zoom in on them (desktop keeps 14px)", async () => {
+    const sizes = `[...document.querySelectorAll('input')].map((el) => getComputedStyle(el).fontSize)`;
+    const desktop = await open(a, base);
+    await desktop.waitForText('Create a room');
+    const onDesktop = await desktop.evaluate<string[]>(sizes);
+    if (onDesktop.length === 0 || onDesktop.some((s) => s !== '14px')) throw new Error(`desktop fields: ${onDesktop.join(', ')}`);
+
+    const phone = await open(a, base);
+    await phone.emulatePhone();
+    await phone.evaluate('location.reload()');
+    await sleep(800);
+    await phone.waitForText('Create a room');
+    const onPhone = await phone.evaluate<string[]>(sizes);
+    if (onPhone.length === 0 || onPhone.some((s) => parseFloat(s) < 16)) throw new Error(`phone fields: ${onPhone.join(', ')}`);
+    return [desktop, phone];
+  });
+
   await check('on a phone, taking an action does not scroll the page', async () => {
     const page = await open(a, `${base}/puzzles/P-01`);
     await page.emulatePhone();
