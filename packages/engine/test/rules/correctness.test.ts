@@ -166,9 +166,7 @@ describe('Blunder: any two consecutive actions (C-08)', () => {
     expect(actionChoices(drawn.state, 0)).toContainEqual({ action: 'ability', card: 'blunder', pile: 2 });
   });
 
-  it('but not when Retribution actions come in between', () => {
-    // Stealing Hocus Pocus from a Retribution owner: their two actions come
-    // after the stolen card's actions, so S0's next action isn't consecutive.
+  it('Q-17 stealing Hocus Pocus from a Retribution owner: their actions come first, then all of yours are consecutive', () => {
     const start = buildPosition({
       keeps: { 0: ['blunder'], 1: ['retribution'] },
       hands: { 0: ['legerdemain'], 1: ['hocus-pocus'] },
@@ -176,12 +174,16 @@ describe('Blunder: any two consecutive actions (C-08)', () => {
       turn: 0,
     });
     const stolen = respond(act(start, 0, { action: 'play', card: 'legerdemain' }).state, 0, { kind: 'choose-player', seat: 1 });
-    let state = draw(stolen.state, 0).state; // Hocus Pocus action 1
-    state = draw(state, 0).state; // Hocus Pocus action 2; then S1 retaliates
-    promptFor(state, 1, 'action');
-    state = draw(draw(state, 1).state, 1).state;
-    expect(actionsLeft(state)).toBe(1);
-    expect(abilityNames(state, 0)).toEqual([]);
+    // S1 retaliates before S0 gets the stolen card's two actions.
+    promptFor(stolen.state, 1, 'action');
+    const state = draw(draw(stolen.state, 1).state, 1).state;
+    // S0: 2 Hocus Pocus actions + 1 turn action, nothing between them.
+    expect(state.stack.flatMap((op) => (op.op === 'action-frame' ? [[op.seat, op.kind, op.remaining]] : []))).toEqual([
+      [0, 'turn', 1],
+      [0, 'hocus-pocus', 2],
+    ]);
+    const afterOne = draw(state, 0).state;
+    expect(abilityNames(afterOne, 0)).toEqual(['blunder']);
   });
 });
 

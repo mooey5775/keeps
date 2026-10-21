@@ -79,6 +79,7 @@ export const SPEC: readonly SpecItem[] = [
   { id: 'Q-13', text: 'Retribution triggers only from played cards, not keep abilities like Juggling or Tithes.' },
   { id: 'Q-14', text: 'Royal Favor entering a keep via a Providence swap triggers its draw.' },
   { id: 'Q-16', text: 'Duplicity can be played with no other Keep card in hand; nothing is placed face down.' },
+  { id: 'Q-17', text: 'Actions granted by a card played inside another play (e.g. Hocus Pocus stolen with Legerdemain) are taken after the enclosing play resolves, so the Retribution its theft triggers comes first.' },
   { id: 'Q-15', text: 'Retribution triggers only for a player who had it face-up when the play started; receiving it in that play (e.g. via Providence) does not trigger it.' },
 
   // Card behaviors

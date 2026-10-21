@@ -178,7 +178,7 @@ The batch is pushed so that it pops in clarification order: **Legerdemain's HOT 
 
 Keep cards only enter keeps through plays (direct, HOT, or Providence swaps), so "per play" covers every keep entry.
 
-**Which changes count toward a play.** Every op and prompt records the play whose resolution it belongs to. Only changes made while resolving that play count toward it. Actions (including those Hocus Pocus grants) and trigger results never belong to a play, so an Interest draw during someone's Retribution actions can't be credited to an earlier play. Hocus Pocus's extra-actions frame is scheduled *after* its play closes.
+**Which changes count toward a play.** Every op and prompt records the play whose resolution it belongs to. Only changes made while resolving that play count toward it. Actions (including those Hocus Pocus grants) and trigger results never belong to a play, so an Interest draw during someone's Retribution actions can't be credited to an earlier play. Hocus Pocus's extra-actions frame is scheduled *after* its play, and any play it happened inside (e.g. the Legerdemain that stole it), has closed and queued its triggers (Q17).
 
 Once queued, a trigger resolves even if its card has since moved (e.g. Retribution actions swap Interest away before Interest's draw).
 
@@ -327,6 +327,7 @@ These are defaults the engine will implement unless you overrule them. Each one 
 | Q14 | Royal Favor entering a keep via a **Providence swap**. | Triggers ("enters your keep"). |
 | Q15 | **Retribution** moved by Providence: does the player receiving it trigger too? | No. Retribution triggers only for a player who had it face-up when the play started (so swapping it *out* still triggers for the original owner, per C-30). Mirrors the official Interest ruling (C-21). |
 | Q16 | **Duplicity** with no other Keep card in hand. | Playable; nothing is placed face down. |
+| Q17 | **Hocus Pocus stolen with Legerdemain** from a Retribution owner: whose actions come first? | The Retribution owner's. Actions a card grants are taken after the enclosing play (here, Legerdemain) has resolved and queued its triggers, the same as for a Hocus Pocus played from hand. (Ruling from a human player, 2026-10-21.) |
 
 ## Test plan
 
