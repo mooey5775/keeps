@@ -58,6 +58,10 @@ class TestClient {
 }
 
 describe('server', () => {
+  it('serves no PostHog key to browsers unless one is configured', async () => {
+    expect(await (await fetch(`http://${base}/config.json`)).json()).toEqual({});
+  });
+
   it('serves card images, refuses path tricks, and reports health', async () => {
     const card = await fetch(`http://${base}/cards/01CountToken.png`);
     expect(card.status).toBe(200);

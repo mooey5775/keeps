@@ -23,6 +23,8 @@ export interface ServerOptions {
   tracker?: Tracker;
   /** Password for /admin (HTTP basic auth). Without it, there is no admin page. */
   adminToken?: string;
+  /** Settings the browser may read from /config.json (the public PostHog project key). */
+  publicConfig?: { posthogKey?: string; posthogHost?: string };
 }
 
 export interface KeepsServer {
@@ -81,6 +83,10 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const http = createServer((req, res) => {
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
     if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
+    if (path === '/config.json') {
+      res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' }).end(JSON.stringify(options.publicConfig ?? {}));
+      return;
+    }
     serveStatic(req, res, options);
   });
   const wss = new WebSocketServer({ server: http, path: '/ws' });

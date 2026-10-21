@@ -12,6 +12,11 @@ const server = await createKeepsServer({
   cardsDir: join(root, 'cards'),
   dataDir: process.env.KEEPS_DATA_DIR ?? join(root, 'data'),
   tracker: createTracker(process.env),
+  // The PostHog project key is meant to be public (browsers send it); the browser uses it for session replay.
+  publicConfig: {
+    ...(process.env.POSTHOG_KEY ? { posthogKey: process.env.POSTHOG_KEY } : {}),
+    ...(process.env.POSTHOG_HOST ? { posthogHost: process.env.POSTHOG_HOST } : {}),
+  },
   ...(process.env.ADMIN_TOKEN ? { adminToken: process.env.ADMIN_TOKEN } : {}),
   ...(existsSync(webDir) ? { webDir } : {}),
 });

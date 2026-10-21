@@ -1,2 +1,5 @@
 packages:
   - packages/*
+allowBuilds:
+  # core-js (via posthog-js) only prints a donation message on install.
+  core-js: false

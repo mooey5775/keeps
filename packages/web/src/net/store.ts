@@ -72,7 +72,7 @@ function forgetToken(code: string): void {
  * A random, anonymous id for this browser, so analytics can count returning
  * players across rooms. It identifies nothing but this browser's storage.
  */
-function clientId(): string {
+export function clientId(): string {
   try {
     const existing = localStorage.getItem('keeps:client');
     if (existing) return existing;
