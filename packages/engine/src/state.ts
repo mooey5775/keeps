@@ -15,6 +15,10 @@ export function leftOf(seat: Seat): Seat {
   return ((seat + 1) % 4) as Seat;
 }
 
+export function rightOf(seat: Seat): Seat {
+  return ((seat + 3) % 4) as Seat;
+}
+
 /** Ghosts have a pile but no hand, keep, or actions. */
 export type SeatKind = 'player' | 'ghost';
 
@@ -111,11 +115,35 @@ interface PromptBase {
   depth: number;
 }
 
+/** A card in a keep, by position (face-down cards can't be named by id). */
+export interface KeepRef {
+  seat: Seat;
+  index: number;
+}
+
+export type PilePurpose = 'requisition' | 'prayer' | 'revelation';
+
 export type Prompt =
   /** Choose an action for the top action frame. */
   | (PromptBase & { kind: 'action' })
   /** Choose which keep receives a HOT Keep card (the card stays in hand until then). */
-  | (PromptBase & { kind: 'hot-target'; card: CardId });
+  | (PromptBase & { kind: 'hot-target'; card: CardId })
+  /** Choose a pile position for a card effect. */
+  | (PromptBase & { kind: 'choose-pile'; purpose: PilePurpose; options: Seat[] })
+  /** Requisition: pick any card from a pile you are looking through (top first). */
+  | (PromptBase & { kind: 'choose-pile-card'; pile: Seat; cards: CardId[] })
+  /** Epiphany: pick one of the top cards you are looking at. */
+  | (PromptBase & { kind: 'choose-top-card'; options: { pile: Seat; card: CardId }[] })
+  /** Prayer: take the top card you are looking at, or discard it and draw. */
+  | (PromptBase & { kind: 'take-or-discard'; pile: Seat; card: CardId })
+  /** Resurrection: pick a card from the discard. */
+  | (PromptBase & { kind: 'choose-discard-card' })
+  /** Providence: pick two played Keep cards to swap. */
+  | (PromptBase & { kind: 'choose-keep-pair' })
+  /** Pandemonium: rotate the piles left or right. */
+  | (PromptBase & { kind: 'choose-direction' })
+  /** Tithes: reorder your pile (top first). */
+  | (PromptBase & { kind: 'order-pile'; pile: Seat; cards: CardId[] });
 
 export type PromptKind = Prompt['kind'];
 

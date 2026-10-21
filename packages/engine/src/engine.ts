@@ -6,15 +6,22 @@ import {
   type Command,
   type EngineError,
 } from './commands.ts';
+import { abilityCost, legalAbilities, useAbility } from './abilities.ts';
 import { clone, push, type Ctx } from './context.ts';
-import { assertImplemented, resolveNonKeepEffect } from './effects.ts';
+import {
+  assertImplemented,
+  isLegalEffectAnswer,
+  legalEffectAnswers,
+  resolveEffectAnswer,
+  resolveNonKeepEffect,
+} from './effects.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
+import { cardEnteredHand, keepTargets, openPrompt, spendActions } from './moves.ts';
 import { roundWinner, tokenWinner } from './scoring.ts';
 import { dealGame, startRound, type NewGameOptions } from './setup.ts';
 import {
   leftOf,
   pileAtSeat,
-  playerSeats,
   type GameState,
   type Op,
   type Prompt,
@@ -74,11 +81,13 @@ function legalAnswers(state: GameState, prompt: Prompt): Answer[] {
     case 'hot-target':
       return keepTargets(state, prompt.seat, prompt.card).map((target) => ({ kind: 'hot-target', target }));
     default:
-      return assertNever(prompt);
+      return legalEffectAnswers(state, prompt);
   }
 }
 
 function legalActions(state: GameState, seat: Seat): ActionChoice[] {
+  const frame = state.stack.at(-1);
+  if (frame?.op !== 'action-frame') throw new Error('action prompt without an action frame on top');
   const choices: ActionChoice[] = [{ action: 'draw' }];
   for (const card of state.hands[seat]) {
     if (CARDS[card].keep) {
@@ -87,12 +96,8 @@ function legalActions(state: GameState, seat: Seat): ActionChoice[] {
       choices.push({ action: 'play', card });
     }
   }
+  choices.push(...legalAbilities(state, seat, frame));
   return choices;
-}
-
-/** Keep cards go into any player's keep (never a ghost's); Blunder only into your own. */
-function keepTargets(state: GameState, seat: Seat, card: CardId): Seat[] {
-  return card === 'blunder' ? [seat] : playerSeats(state);
 }
 
 /** Stable JSON for comparing commands regardless of key order. */
@@ -113,6 +118,16 @@ function validate(state: GameState, seat: Seat, command: Command): EngineError |
     if (!prompt) return { code: 'unknown-prompt', message: `no open prompt ${command.promptId}` };
     if (prompt.seat !== seat) {
       return { code: 'not-your-prompt', message: `prompt ${prompt.id} is for seat ${prompt.seat}` };
+    }
+    const { answer } = command;
+    if (answer.kind !== prompt.kind) {
+      return { code: 'illegal', message: `prompt ${prompt.id} is a ${prompt.kind} prompt, not ${answer.kind}` };
+    }
+    if (answer.kind !== 'action' && answer.kind !== 'hot-target' && prompt.kind !== 'action' && prompt.kind !== 'hot-target') {
+      const special = isLegalEffectAnswer(state, prompt, answer);
+      if (special !== null) {
+        return special ? null : { code: 'illegal', message: `illegal answer: ${canonical(answer)}` };
+      }
     }
   }
   const wanted = canonical(command);
@@ -150,7 +165,8 @@ function answer(ctx: Ctx, prompt: Prompt, given: Answer): void {
       return;
     }
     default:
-      assertNever(given);
+      if (prompt.kind === 'action' || prompt.kind === 'hot-target') throw new Error('answer kind does not match prompt');
+      resolveEffectAnswer(ctx, prompt, given);
   }
 }
 
@@ -160,8 +176,9 @@ function takeAction(ctx: Ctx, seat: Seat, choice: ActionChoice): void {
   if (frame?.op !== 'action-frame' || frame.seat !== seat || frame.remaining <= 0) {
     throw new Error(`no action frame for seat ${seat} on top of the stack`);
   }
-  frame.remaining--;
-  if (state.turn?.seat === seat) state.turn.actionsTaken++;
+  const cost = choice.action === 'ability' ? abilityCost(choice) : 1;
+  spendActions(state, seat, cost);
+  if (state.turn?.seat === seat) state.turn.actionsTaken += cost;
   const seq = tracer.emit({ type: 'action', seat, frame: frame.kind, remaining: frame.remaining, choice });
   tracer.within(seq, () => {
     switch (choice.action) {
@@ -170,6 +187,9 @@ function takeAction(ctx: Ctx, seat: Seat, choice: ActionChoice): void {
         return;
       case 'play':
         push(ctx, { op: 'play', seat, card: choice.card, target: choice.target ?? null, hot: false });
+        return;
+      case 'ability':
+        useAbility(ctx, seat, choice);
         return;
       default:
         assertNever(choice);
@@ -201,16 +221,6 @@ export function advance(ctx: Ctx): void {
     state.stack.pop();
     ctx.tracer.at(top.cause, top.depth, () => runOp(ctx, top));
   }
-}
-
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-type NewPrompt = DistributiveOmit<Prompt, 'id' | 'event' | 'depth'>;
-
-function openPrompt(ctx: Ctx, prompt: NewPrompt): void {
-  const card = 'card' in prompt ? prompt.card : undefined;
-  const event = ctx.tracer.emit({ type: 'prompt', seat: prompt.seat, kind: prompt.kind, ...(card ? { card } : {}) });
-  const { depth } = ctx.tracer.context();
-  ctx.state.prompts.push({ ...prompt, id: `p${event}`, event, depth } as Prompt);
 }
 
 function runOp(ctx: Ctx, op: Op): void {
@@ -276,7 +286,7 @@ function runDraw(ctx: Ctx, seat: Seat, from: Seat): void {
         { type: 'draw', seat, from, card: top.id },
         { visibility: [seat], redacted: { type: 'draw', seat, from, card: null } },
       );
-  if (CARDS[top.id].hot) tracer.within(seq, () => push(ctx, { op: 'hot-check', seat }));
+  cardEnteredHand(ctx, seat, top.id, seq);
 }
 
 /**

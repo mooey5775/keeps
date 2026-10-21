@@ -13,7 +13,7 @@ describe('buildPosition', () => {
       seats: ['player', 'ghost', 'player', 'ghost'],
       piles: { 0: ['dagger', { id: 'blunder', faceUp: true }], 3: ['chalice'] },
       hands: { 2: ['hocus-pocus', 'joker'] },
-      keeps: { 0: ['interest', { id: 'shackles', faceDown: { placedBy: 2 } }] },
+      keeps: { 0: ['juggling', { id: 'shackles', faceDown: { placedBy: 2 } }] },
       discard: ['prayer', 'pluck'],
       turn: 2,
     });
@@ -23,7 +23,7 @@ describe('buildPosition', () => {
     ]);
     expect(state.piles[state.pileAt[3]].cards).toEqual([{ id: 'chalice', faceUp: false }]);
     expect(state.hands[2]).toEqual(['hocus-pocus', 'joker']);
-    expect(state.keeps[0]).toEqual([{ id: 'interest' }, { id: 'shackles', faceDown: { placedBy: 2 } }]);
+    expect(state.keeps[0]).toEqual([{ id: 'juggling' }, { id: 'shackles', faceDown: { placedBy: 2 } }]);
     expect(state.discard).toEqual(['prayer', 'pluck']);
     expect(state.turn).toEqual({ seat: 2, actionsTaken: 0, usedOncePerTurn: [] });
     expect(state.box).toHaveLength(36 - 9);
@@ -59,6 +59,10 @@ describe('buildPosition', () => {
 
   it("rejects more '?' cards than there are unnamed cards", () => {
     expect(() => buildPosition({ piles: { 0: Array(37).fill('?') } })).toThrow(/more '\?' cards/);
+  });
+
+  it('rejects Keep cards whose rules are not implemented yet', () => {
+    expect(() => buildPosition({ keeps: { 0: ['interest'] } })).toThrow(/not implemented yet.*interest/);
   });
 
   it('rejects invalid positions via the invariant checker', () => {

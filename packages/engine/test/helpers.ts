@@ -2,8 +2,11 @@ import { expect } from 'vitest';
 import {
   apply,
   formatTrace,
+  legalCommands,
   type ActionChoice,
+  type Answer,
   type ApplyResult,
+  type CardId,
   type Command,
   type GameState,
   type Prompt,
@@ -50,6 +53,39 @@ export const draw = (state: GameState, seat: Seat): Step => act(state, seat, { a
 export function hotTarget(state: GameState, seat: Seat, target: Seat): Step {
   const prompt = promptFor(state, seat, 'hot-target');
   return ok(apply(state, seat, { type: 'answer', promptId: prompt.id, answer: { kind: 'hot-target', target } }));
+}
+
+/** Answers `seat`'s open prompt of the answer's kind, which must succeed. */
+export function respond(state: GameState, seat: Seat, answer: Answer): Step {
+  const prompt = promptFor(state, seat, answer.kind);
+  return ok(apply(state, seat, { type: 'answer', promptId: prompt.id, answer }));
+}
+
+/** Like respond(), but returns the raw result (for testing rejections). */
+export function tryRespond(state: GameState, seat: Seat, answer: Answer): ApplyResult {
+  const prompt = promptFor(state, seat, answer.kind);
+  return apply(state, seat, { type: 'answer', promptId: prompt.id, answer });
+}
+
+/** The action choices currently legal for `seat`. */
+export function actionChoices(state: GameState, seat: Seat): ActionChoice[] {
+  return legalCommands(state, seat).flatMap((c) =>
+    c.type === 'answer' && c.answer.kind === 'action' ? [c.answer.choice] : [],
+  );
+}
+
+/** Abilities currently legal for `seat`, as "card" or "card:detail" strings. */
+export function abilityNames(state: GameState, seat: Seat): string[] {
+  return [...new Set(actionChoices(state, seat).flatMap((c) => (c.action === 'ability' ? [c.card] : [])))];
+}
+
+export function pileIds(state: GameState, position: Seat): CardId[] {
+  return state.piles[state.pileAt[position]].cards.map((c) => c.id);
+}
+
+/** Concatenates the events of several steps. */
+export function allEvents(...steps: Step[]): TraceEvent[] {
+  return steps.flatMap((s) => s.events);
 }
 
 /** Payload types, in order. */

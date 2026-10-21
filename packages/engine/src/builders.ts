@@ -1,5 +1,6 @@
-import { CARD_IDS, type CardId } from './cards.ts';
+import { CARD_IDS, CARDS, type CardId } from './cards.ts';
 import type { Ctx } from './context.ts';
+import { isImplemented } from './effects.ts';
 import { advance, beginTurn } from './engine.ts';
 import { assertInvariants, assertRestInvariants } from './invariants.ts';
 import { Tracer } from './trace.ts';
@@ -45,6 +46,11 @@ export interface PositionSpec {
   turn?: Seat;
   /** Overrides the number of actions the turn starts with (default: 2, or 1 if Shackled). */
   actions?: number;
+  /**
+   * Extra action frames stacked above the turn frame, bottom first, as if
+   * granted mid-turn (e.g. a Retribution owner's two actions). Requires `turn`.
+   */
+  frames?: { seat: Seat; kind: 'hocus-pocus' | 'retribution'; remaining: number }[];
   marks?: PerSeat<number>;
   round?: number;
   marksToWin?: number;
@@ -95,15 +101,27 @@ export function buildPosition(spec: PositionSpec): GameState {
   state.discard = [...(spec.discard ?? [])];
   state.box = pool.sort((a, b) => CARD_IDS.indexOf(a) - CARD_IDS.indexOf(b));
 
+  // A Keep card whose triggers aren't built yet would silently do nothing.
+  const unready = state.keeps.flat().filter((c) => !c.faceDown && CARDS[c.id].keep && !isImplemented(c.id));
+  if (unready.length > 0) {
+    throw new Error(`buildPosition: not implemented yet, can't be in a keep: ${unready.map((c) => c.id).join(', ')}`);
+  }
+
   state.round = spec.round ?? 1;
   state.marks = spec.marks ?? [0, 0, 0, 0];
   assertInvariants(state);
+  if (spec.frames && spec.turn === undefined) throw new Error('buildPosition: frames require turn');
   if (spec.turn !== undefined) {
     state.startingSeat = spec.turn;
     const ctx: Ctx = { state, tracer: new Tracer(state) };
     beginTurn(ctx, spec.turn);
     const frame = state.stack.at(-1);
     if (spec.actions !== undefined && frame?.op === 'action-frame') frame.remaining = spec.actions;
+    let restricted = false;
+    for (const extra of spec.frames ?? []) {
+      restricted ||= extra.kind === 'retribution';
+      state.stack.push({ op: 'action-frame', ...extra, restricted, cause: null, depth: 0 });
+    }
     advance(ctx);
     assertInvariants(state);
     assertRestInvariants(state);

@@ -1,6 +1,6 @@
 import { cardName, type CardId } from './cards.ts';
 import type { ActionChoice } from './commands.ts';
-import type { ActionFrameOp, GameState, PileId, PromptKind, Seat, SeatKind } from './state.ts';
+import type { ActionFrameOp, GameState, KeepRef, PileId, PromptKind, Seat, SeatKind } from './state.ts';
 
 // Every state change emits a TraceEvent. Events record what caused them
 // (`cause`), how deep in the resolution they happened (`depth`), and who may
@@ -24,6 +24,20 @@ export type TracePayload =
   | { type: 'empty-draw'; seat: Seat; from: Seat; afterRoundEnd: boolean }
   | { type: 'play'; seat: Seat; card: CardId; target: Seat | null; hot: boolean }
   | { type: 'extra-actions'; seat: Seat; count: number; source: CardId }
+  | { type: 'pile-swap'; seat: Seat; a: Seat; b: Seat }
+  | { type: 'pile-rotate'; seat: Seat; direction: 'left' | 'right' }
+  | { type: 'pile-flip'; seat: Seat; pile: Seat }
+  /** `seat` privately looks at cards; `cards` is null in the redacted copy. */
+  | { type: 'look'; seat: Seat; piles: Seat[]; cards: CardId[] | null }
+  /** A card moves into `seat`'s hand from a pile or the discard (not a draw). */
+  | { type: 'take'; seat: Seat; card: CardId | null; from: { pile: Seat } | 'discard' }
+  | { type: 'discard'; seat: Seat; cards: CardId[]; from: 'hand' | 'keep' | 'pile' }
+  /** Card ids are null for face-down cards in the public copy. */
+  | { type: 'keep-swap'; seat: Seat; a: KeepRef & { card: CardId | null }; b: KeepRef & { card: CardId | null } }
+  /** `order` is null in the redacted copy. */
+  | { type: 'pile-reorder'; seat: Seat; pile: Seat; order: CardId[] | null }
+  | { type: 'place-on-pile'; seat: Seat; card: CardId; pile: Seat }
+  | { type: 'no-effect'; seat: Seat; card: CardId; reason: string }
   | { type: 'round-end'; reason: 'empty-pile'; ender: Seat }
   | { type: 'round-end'; reason: 'tokens'; winner: Seat }
   /** Scores in half-coins; null for ghost seats. */
@@ -153,9 +167,30 @@ function describeChoice(choice: ActionChoice): string {
       return choice.target === undefined
         ? `play ${cardName(choice.card)}`
         : `play ${cardName(choice.card)} → keep(${seatLabel(choice.target)})`;
+    case 'ability':
+      switch (choice.card) {
+        case 'juggling':
+          return `use Juggling: swap piles @${seatLabel(choice.piles[0])} and @${seatLabel(choice.piles[1])}`;
+        case 'sanction':
+          return `use Sanction: draw from pile@${seatLabel(choice.from)}`;
+        case 'acquisition':
+          return `use Acquisition: discard ${cardName(choice.discard)}, draw ${choice.first} pile first`;
+        case 'shackles':
+          return 'use Shackles: discard it';
+        case 'tithes':
+          return 'use Tithes: discard all Coin cards, reorder pile';
+        case 'blunder':
+          return `use Blunder (2 actions): place it on pile@${seatLabel(choice.pile)}`;
+        default:
+          return assertNever(choice);
+      }
     default:
       return assertNever(choice);
   }
+}
+
+function keepRefLabel(ref: KeepRef & { card: CardId | null }): string {
+  return `${ref.card ? cardName(ref.card) : 'a face-down card'} (keep ${seatLabel(ref.seat)})`;
 }
 
 export function describe(payload: TracePayload): string {
@@ -184,6 +219,26 @@ export function describe(payload: TracePayload): string {
       return `${seatLabel(payload.seat)} plays ${cardName(payload.card)}${payload.hot ? ' (HOT!)' : ''}${payload.target !== null ? ` → keep(${seatLabel(payload.target)})` : ' → discard'}`;
     case 'extra-actions':
       return `${seatLabel(payload.seat)} gets ${payload.count} actions from ${cardName(payload.source)}`;
+    case 'pile-swap':
+      return `piles @${seatLabel(payload.a)} and @${seatLabel(payload.b)} swap places`;
+    case 'pile-rotate':
+      return `all piles rotate one position to the ${payload.direction}`;
+    case 'pile-flip':
+      return `pile@${seatLabel(payload.pile)} is flipped upside down`;
+    case 'look':
+      return `${seatLabel(payload.seat)} looks at ${payload.cards ? cardList(payload.cards) : 'cards'} (pile${payload.piles.length === 1 ? '' : 's'} ${payload.piles.map((p) => `@${seatLabel(p)}`).join(', ')})`;
+    case 'take':
+      return `${seatLabel(payload.seat)} takes ${payload.card ? cardName(payload.card) : 'a card'} from ${payload.from === 'discard' ? 'the discard' : `pile@${seatLabel(payload.from.pile)}`}`;
+    case 'discard':
+      return `${seatLabel(payload.seat)} discards ${cardList(payload.cards)} from ${payload.from}`;
+    case 'keep-swap':
+      return `swap ${keepRefLabel(payload.a)} ⇄ ${keepRefLabel(payload.b)}`;
+    case 'pile-reorder':
+      return `${seatLabel(payload.seat)} reorders pile@${seatLabel(payload.pile)}${payload.order ? ` (top first): ${cardList(payload.order)}` : ''}`;
+    case 'place-on-pile':
+      return `${seatLabel(payload.seat)} places ${cardName(payload.card)} face-up on pile@${seatLabel(payload.pile)}`;
+    case 'no-effect':
+      return `${cardName(payload.card)} has no effect: ${payload.reason}`;
     case 'round-end':
       return payload.reason === 'empty-pile'
         ? `ROUND END: ${seatLabel(payload.ender)} drew from an empty pile`

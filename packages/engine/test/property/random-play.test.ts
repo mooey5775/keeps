@@ -21,7 +21,8 @@ import {
 const IMPLEMENTED: CardId[] = [
   'count-token', 'chalice', 'dagger', 'medallion', 'scepter', 'timepiece', 'faberge-egg',
   'fool-token', 'friar-token', 'hocus-pocus', 'juggling', 'sanction', 'acquisition',
-  'blunder', 'shackles', 'purity', 'tithes',
+  'blunder', 'shackles', 'purity', 'tithes', 'requisition', 'epiphany', 'prayer',
+  'resurrection', 'providence', 'pandemonium', 'revelation',
 ];
 
 const SEATINGS: PerSeat<SeatKind>[] = [
