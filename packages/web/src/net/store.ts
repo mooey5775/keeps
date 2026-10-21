@@ -13,7 +13,8 @@ export interface NetGame {
 }
 
 export interface RoomState {
-  status: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'gone';
+  /** 'replaced': this seat was taken over by another tab or device. */
+  status: 'idle' | 'connecting' | 'open' | 'reconnecting' | 'gone' | 'replaced';
   code: string | null;
   playerId: string | null;
   room: RoomSummary | null;
@@ -23,30 +24,71 @@ export interface RoomState {
 
 const initial: RoomState = { status: 'idle', code: null, playerId: null, room: null, game: null, error: null };
 
+// Seat tokens. Each tab keeps its own (sessionStorage survives a reload), so
+// a second tab in the same browser can join as a different player. The
+// browser also remembers the latest one (localStorage), to come back after
+// the browser was closed.
 const tokenKey = (code: string) => `keeps:token:${code}`;
 
-export function savedToken(code: string): string | null {
+function read(storage: () => Storage, key: string): string | null {
   try {
-    return localStorage.getItem(tokenKey(code));
+    return storage().getItem(key);
   } catch {
     return null;
   }
 }
 
+/** This tab's seat in the room, if it has one. */
+export function tabToken(code: string): string | null {
+  return read(() => sessionStorage, tokenKey(code));
+}
+
+/** The seat this browser last had in the room, from any tab. */
+export function browserToken(code: string): string | null {
+  return read(() => localStorage, tokenKey(code));
+}
+
 function saveToken(code: string, token: string): void {
-  try {
-    localStorage.setItem(tokenKey(code), token);
-  } catch {
-    // Private mode: the seat just can't be resumed after a reload.
+  for (const storage of [() => sessionStorage, () => localStorage]) {
+    try {
+      storage().setItem(tokenKey(code), token);
+    } catch {
+      // Private mode: the seat just can't be resumed after a reload.
+    }
   }
 }
 
 function forgetToken(code: string): void {
-  try {
-    localStorage.removeItem(tokenKey(code));
-  } catch {
-    // ignore
+  for (const storage of [() => sessionStorage, () => localStorage]) {
+    try {
+      storage().removeItem(tokenKey(code));
+    } catch {
+      // ignore
+    }
   }
+}
+
+// Tabs of this browser tell each other which room they are in, so a new tab
+// can ask before taking over a seat another tab is using.
+const tabs = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('keeps-tabs');
+
+/** Whether another open tab of this browser is in room `code` right now. */
+export function otherTabInRoom(code: string): Promise<boolean> {
+  if (!tabs) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    const onMessage = (event: MessageEvent<{ here?: string }>) => {
+      if (event.data.here === code) {
+        tabs.removeEventListener('message', onMessage);
+        resolve(true);
+      }
+    };
+    tabs.addEventListener('message', onMessage);
+    tabs.postMessage({ who: code });
+    setTimeout(() => {
+      tabs.removeEventListener('message', onMessage);
+      resolve(false);
+    }, 250);
+  });
 }
 
 class RoomStore {
@@ -79,8 +121,8 @@ class RoomStore {
     this.connect({ t: 'join', code, name });
   }
 
-  resume(code: string): boolean {
-    const token = savedToken(code);
+  /** Resumes a seat by token (default: this tab's, then this browser's). */
+  resume(code: string, token = tabToken(code) ?? browserToken(code)): boolean {
     if (!token) return false;
     this.connect({ t: 'resume', code, token });
     return true;
@@ -137,7 +179,10 @@ class RoomStore {
       this.retry = 0;
       if (this.hello) socket.send(JSON.stringify(this.hello));
     };
-    socket.onmessage = (event) => this.receive(JSON.parse(String(event.data)) as ServerMessage);
+    socket.onmessage = (event) => {
+      // Ignore a socket this tab already replaced with a newer one.
+      if (this.socket === socket) this.receive(JSON.parse(String(event.data)) as ServerMessage);
+    };
     socket.onclose = () => {
       if (this.socket !== socket || !this.hello) return;
       // Unexpected drop: come back and resume the same seat.
@@ -177,6 +222,11 @@ class RoomStore {
         this.close();
         this.set({ ...initial, status: 'gone' });
         return;
+      case 'replaced':
+        // Another tab or device took this seat. Don't reconnect and fight over it.
+        this.close();
+        this.set({ status: 'replaced' });
+        return;
       default:
         return message satisfies never;
     }
@@ -184,6 +234,13 @@ class RoomStore {
 }
 
 export const roomStore = new RoomStore();
+
+tabs?.addEventListener('message', (event: MessageEvent<{ who?: string }>) => {
+  const { code, status } = roomStore.get();
+  if (event.data.who && event.data.who === code && (status === 'open' || status === 'reconnecting')) {
+    tabs.postMessage({ here: code });
+  }
+});
 
 export function useRoomState(): RoomState {
   return useSyncExternalStore(roomStore.subscribe, roomStore.get);

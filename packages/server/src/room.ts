@@ -104,6 +104,8 @@ export class Room {
   resume(token: string, send: Send): Player | null {
     const player = this.players.find((p) => p.token === token);
     if (!player) return null;
+    // The seat moves to the new connection; tell the old one so it doesn't sit there stale.
+    if (player.send && player.send !== send) player.send({ t: 'replaced' });
     player.send = send;
     this.touch();
     send({ t: 'welcome', code: this.code, token: player.token, playerId: player.id });

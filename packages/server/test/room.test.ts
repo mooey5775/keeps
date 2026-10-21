@@ -414,3 +414,17 @@ describe('malformed input', () => {
     expect(client.last('room').room.players[0]!.name).toBe('42');
   });
 });
+
+describe('one seat, two connections', () => {
+  it('tells the old connection when the seat is resumed elsewhere, and stops updating it', () => {
+    const { room, clients } = startedGame(2);
+    const [a, b] = clients;
+    const tab2 = new Client();
+    room.resume(a!.token, tab2.send);
+    expect(a!.messages.at(-1)).toEqual({ t: 'replaced' });
+    const before = a!.messages.length;
+    step(room, [tab2, b!].map((c, i) => (i === 0 ? Object.assign(c, { id: a!.id }) : c)));
+    expect(a!.messages.length).toBe(before);
+    expect(tab2.messages.some((m) => m.t === 'game')).toBe(true);
+  });
+});

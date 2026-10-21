@@ -142,6 +142,36 @@ try {
     await guest.waitForText('Round 1');
     return [host, guest];
   });
+  await check('same browser: a second tab joins as a new player; tabs never steal a seat silently', async () => {
+    const host = await open(a, base);
+    await host.type('input', 'Ada');
+    await host.click('Create a room');
+    await host.waitFor('location.pathname.startsWith("/r/")', 'the room page');
+    const room = `${base}${await host.path()}`;
+
+    // A second tab of the same browser is asked, and can join as someone else.
+    const second = await open(a, room);
+    await second.waitForText('open in another tab');
+    await second.click('Join as a new player');
+    await second.type('input', 'Bo');
+    await second.click('Join');
+    await host.waitForText('Players (2/4)');
+    await second.waitForText('Players (2/4)');
+
+    // Reloading the second tab keeps its own seat (Bo), not Ada's.
+    await second.evaluate('location.reload()');
+    await sleep(1000);
+    await second.waitFor('/Bo\\s*you/.test(document.body.innerText)', 'Bo marked as you after reload');
+
+    // A third tab can take over a seat on purpose; the old tab says so instead of going stale.
+    const third = await open(a, room);
+    await third.waitForText('open in another tab');
+    await third.click('Play here instead');
+    await third.waitForText('Players (2/4)');
+    await second.waitForText('playing in another tab');
+    await host.waitForText('Players (2/4)');
+    return [host, second, third];
+  });
 } finally {
   console.log(results.join('\n'));
   for (const browser of browsers) browser.close();

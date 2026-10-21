@@ -68,7 +68,9 @@ export type ServerMessage =
     }
   | { t: 'error'; message: string }
   /** The room no longer exists (e.g. a stale resume). */
-  | { t: 'gone' };
+  | { t: 'gone' }
+  /** Your seat was resumed on another connection (another tab or device); this one is dropped. */
+  | { t: 'replaced' };
 
 export const NAME_MAX = 20;
 export const ROOM_CODE = /^[A-Z]{4}$/;

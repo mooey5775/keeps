@@ -1,18 +1,40 @@
 import { NAME_MAX, type RoomSummary } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
 import { GameTable } from '../game/GameTable.tsx';
-import { roomStore, savedToken, useRoomState, type NetGame } from '../net/store.ts';
+import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';
 
 export function RoomScreen({ code }: { code: string }) {
   const state = useRoomState();
-  const here = state.code === code && state.status !== 'idle' && state.status !== 'gone';
+  const here = state.code === code && (state.status === 'connecting' || state.status === 'open' || state.status === 'reconnecting');
+  // How this tab gets into the room when it isn't in it yet.
+  const [entry, setEntry] = useState<'checking' | 'other-tab' | 'join' | null>(null);
 
-  // Coming back to a room this browser has a seat in: resume it.
   useEffect(() => {
-    if (!here && state.status !== 'gone' && savedToken(code)) roomStore.resume(code);
-  }, [code, here, state.status]);
+    if (here || state.status === 'gone' || state.status === 'replaced' || entry === 'join' || entry === 'other-tab') return;
+    // This tab's own seat (e.g. after a reload): take it back.
+    if (tabToken(code)) {
+      roomStore.resume(code);
+      return;
+    }
+    // No seat in this browser: join as a new player.
+    if (!browserToken(code)) {
+      setEntry('join');
+      return;
+    }
+    // A seat from another tab: ask first if that tab is still using it.
+    let cancelled = false;
+    setEntry('checking');
+    void otherTabInRoom(code).then((busy) => {
+      if (cancelled) return;
+      if (busy) setEntry('other-tab');
+      else roomStore.resume(code);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [code, here, state.status, entry]);
 
   if (state.status === 'gone') {
     return (
@@ -25,7 +47,42 @@ export function RoomScreen({ code }: { code: string }) {
       </main>
     );
   }
-  if (!here) return <JoinForm code={code} error={state.error?.message ?? null} />;
+  if (state.status === 'replaced' && state.code === code) {
+    return (
+      <main className="home">
+        <h2>You’re playing in another tab</h2>
+        <p>Your seat in room {code} was opened in another tab or on another device, so this one stopped updating.</p>
+        <div className="row">
+          <button type="button" className="primary" onClick={() => roomStore.resume(code)}>
+            Play in this tab instead
+          </button>
+          <button type="button" className="link" onClick={() => navigate('/')}>
+            Back home
+          </button>
+        </div>
+      </main>
+    );
+  }
+  if (!here) {
+    if (entry === 'other-tab') {
+      return (
+        <main className="home">
+          <h2>Room {code} is open in another tab</h2>
+          <p>This browser is already playing in this room in another tab.</p>
+          <div className="row">
+            <button type="button" className="primary" onClick={() => roomStore.resume(code)}>
+              Play here instead
+            </button>
+            <button type="button" onClick={() => setEntry('join')}>
+              Join as a new player
+            </button>
+          </div>
+        </main>
+      );
+    }
+    if (entry === 'join') return <JoinForm code={code} error={state.error?.message ?? null} />;
+    return <main className="home">Connecting…</main>;
+  }
   if (!state.room) return <main className="home">Connecting…</main>;
 
   return (
