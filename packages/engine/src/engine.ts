@@ -407,6 +407,7 @@ function runPlay(ctx: Ctx, seat: Seat, card: CardId, target: Seat | null, hot: b
   const hidden = faceDownCard(state);
   state.openPlays.push({
     id,
+    parent: ctx.play,
     actor: seat,
     card,
     retribution,

@@ -34,15 +34,24 @@ export function push(ctx: Ctx, op: OpBody, meta: OpMeta = { ...ctx.tracer.contex
 }
 
 /**
- * Schedules an op to run right after the current play finishes resolving
- * (just below its after-play op), outside that play. Used for things a card
- * grants rather than does, like Hocus Pocus's two extra actions.
+ * Schedules an op to run once the current play, and every play it happened
+ * inside, has fully resolved and queued its triggers: just below the
+ * outermost enclosing play's after-play op. Used for what a card grants
+ * rather than does, like Hocus Pocus's two extra actions. So when Legerdemain
+ * steals Hocus Pocus from a Retribution owner, their Retribution actions come
+ * before the thief's two actions (ruling Q-17).
  */
 export function pushAfterPlay(ctx: Ctx, op: OpBody): void {
-  const { stack } = ctx.state;
-  const index = stack.findLastIndex((o) => o.op === 'after-play' && o.playId === ctx.play);
-  if (index < 0) throw new Error(`no after-play op for play ${ctx.play}`);
-  stack.splice(index, 0, { ...op, ...ctx.tracer.context(), play: null });
+  const { state } = ctx;
+  let outermost = ctx.play;
+  for (;;) {
+    const parent = state.openPlays.find((p) => p.id === outermost)?.parent ?? null;
+    if (parent === null || !state.openPlays.some((p) => p.id === parent)) break;
+    outermost = parent;
+  }
+  const index = state.stack.findLastIndex((o) => o.op === 'after-play' && o.playId === outermost);
+  if (index < 0) throw new Error(`no after-play op for play ${outermost}`);
+  state.stack.splice(index, 0, { ...op, ...ctx.tracer.context(), play: null });
 }
 
 /** Deep copy of plain-data engine state. */

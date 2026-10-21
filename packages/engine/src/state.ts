@@ -140,6 +140,8 @@ export interface OpMeta {
  */
 export interface PlayRecord {
   id: number;
+  /** The play this one happened inside (e.g. Legerdemain for the card it stole), or null. */
+  parent: number | null;
   actor: Seat;
   card: CardId;
   /** Seats with Retribution face-up in their keep when the play started. */
