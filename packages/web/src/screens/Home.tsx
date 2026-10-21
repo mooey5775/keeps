@@ -1,6 +1,6 @@
 import { NAME_MAX } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
-import { roomStore, useRoomState } from '../net/store.ts';
+import { browserToken, roomStore, tabToken, useRoomState } from '../net/store.ts';
 import { navigate } from '../router.ts';
 
 const NAME_KEY = 'keeps:name';
@@ -46,8 +46,16 @@ export function Home() {
     roomStore.create(trimmed);
   };
   const join = () => {
+    const room = code.trim().toUpperCase();
     rememberName(trimmed);
-    navigate(`/r/${code.trim().toUpperCase()}`);
+    // Already have a seat there (e.g. in another tab): the room page decides
+    // whether to resume it, so we don't silently become a second player.
+    if (tabToken(room) || browserToken(room)) {
+      navigate(`/r/${room}`);
+      return;
+    }
+    setBusy(true);
+    roomStore.join(room, trimmed);
   };
 
   return (
@@ -69,14 +77,18 @@ export function Home() {
       </label>
 
       <div className="home-actions">
-        <button type="button" className="primary" disabled={!trimmed || busy} onClick={create}>
-          {busy ? 'Creating…' : 'Create a room'}
-        </button>
+        <span className="home-action-label">New game</span>
+        <div>
+          <button type="button" className="primary" disabled={!trimmed || busy} onClick={create}>
+            Create a room
+          </button>
+        </div>
+        <span className="home-action-label">Have a code?</span>
         <form
           className="join"
           onSubmit={(e) => {
             e.preventDefault();
-            if (trimmed && code.trim().length === 4) join();
+            if (trimmed && code.trim().length === 4 && !busy) join();
           }}
         >
           <input
@@ -87,11 +99,13 @@ export function Home() {
             aria-label="Room code"
             className="code-input"
           />
-          <button type="submit" disabled={!trimmed || code.length !== 4}>
+          <button type="submit" disabled={!trimmed || code.length !== 4 || busy}>
             Join
           </button>
         </form>
       </div>
+      {!trimmed && <p className="hint">Enter your name to create or join a room.</p>}
+      {busy && <p className="hint">Connecting…</p>}
       {state.error && <p className="error">{state.error.message}</p>}
 
       <nav className="home-links">

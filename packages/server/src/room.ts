@@ -199,8 +199,13 @@ export class Room {
         if (!Number.isInteger(message.settings.marksToWin) || message.settings.marksToWin < 1 || message.settings.marksToWin > 10) {
           return 'Marks to win must be between 1 and 10.';
         }
-        if (message.settings.firstPlayer !== 'random' && message.settings.firstPlayer !== 'host') return 'Invalid first player.';
-        this.settings = { marksToWin: message.settings.marksToWin, firstPlayer: message.settings.firstPlayer };
+        {
+          const first: unknown = message.settings.firstPlayer;
+          const chosen =
+            typeof first === 'object' && first !== null && 'player' in first && typeof first.player === 'string' ? this.find(first.player) : undefined;
+          if (first !== 'random' && !chosen) return 'Invalid first player.';
+          this.settings = { marksToWin: message.settings.marksToWin, firstPlayer: chosen ? { player: chosen.id } : 'random' };
+        }
         this.broadcastRoom();
         return null;
       case 'start':
@@ -247,15 +252,17 @@ export class Room {
     }
     shuffled.forEach((p, i) => (p.seat = seats[i]!));
 
-    // With "host goes first", deal again with the host's seat as the first player.
+    // With a chosen first player, deal again with their seat going first.
     // Seating comes from the same seed, so the seats don't change.
+    const first = this.settings.firstPlayer;
+    const chosen = first === 'random' ? undefined : this.find(first.player);
     const options = {
       players: count as 2 | 3 | 4,
       seed,
       marksToWin: this.settings.marksToWin,
-      ...(this.settings.firstPlayer === 'host' ? { firstSeat: player.seat! } : {}),
+      ...(chosen ? { firstSeat: chosen.seat! } : {}),
     };
-    const { state, events } = this.settings.firstPlayer === 'host' ? newGame(options) : preview;
+    const { state, events } = chosen ? newGame(options) : preview;
     const startedAt = this.deps.now();
     this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt };
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
@@ -263,7 +270,8 @@ export class Room {
     this.track('game_started', player, {
       players: count,
       marks_to_win: this.settings.marksToWin,
-      first_player: this.settings.firstPlayer,
+      first_player: chosen ? 'chosen' : 'random',
+      ...(chosen ? { first_player_name: chosen.name } : {}),
       player_names: seated.map((p) => p.name),
       player_ips: seated.map((p) => p.ip),
     });
@@ -406,6 +414,10 @@ export class Room {
     } else {
       this.players = this.players.filter((p) => p !== player);
       if (player.host && this.players[0]) this.players[0].host = true;
+      // The chosen first player is gone: back to a random one.
+      if (this.settings.firstPlayer !== 'random' && this.settings.firstPlayer.player === player.id) {
+        this.settings = { ...this.settings, firstPlayer: 'random' };
+      }
     }
     this.broadcastRoom();
     if (this.game?.undo) this.settleUndo();

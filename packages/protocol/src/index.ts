@@ -5,8 +5,11 @@ import type { Command, PlayerView, Seat, TraceEvent } from '@keeps/engine';
 export interface Settings {
   /** Victory marks needed to win the game. */
   marksToWin: number;
-  /** Who takes the first turn of round 1: the host, or a random player. */
-  firstPlayer: 'random' | 'host';
+  /**
+   * Who takes the first turn of round 1: a random player, or one chosen by the
+   * host (by player id). Back to random if the chosen player leaves.
+   */
+  firstPlayer: 'random' | { player: string };
 }
 
 export const DEFAULT_SETTINGS: Settings = { marksToWin: 3, firstPlayer: 'random' };

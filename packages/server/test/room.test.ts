@@ -1,5 +1,5 @@
 import type { ActionChoice, Command, ReplayLog, Seat } from '@keeps/engine';
-import type { ClientMessage, ServerMessage } from '@keeps/protocol';
+import type { ClientMessage, ServerMessage, Settings } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type RoomDeps, type Send } from '../src/room.ts';
 
@@ -119,12 +119,22 @@ describe('settings and starting', () => {
     const { room } = makeRoom();
     const host = join(room, 'H');
     const guest = join(room, 'G');
-    send(room, guest, { t: 'settings', settings: { marksToWin: 5, firstPlayer: 'host' } });
+    send(room, guest, { t: 'settings', settings: { marksToWin: 5, firstPlayer: 'random' } });
     expect(guest.errors()).toEqual(['Only the host can change settings.']);
-    send(room, host, { t: 'settings', settings: { marksToWin: 0, firstPlayer: 'host' } });
+    send(room, host, { t: 'settings', settings: { marksToWin: 0, firstPlayer: 'random' } });
     expect(host.errors()).toEqual(['Marks to win must be between 1 and 10.']);
-    send(room, host, { t: 'settings', settings: { marksToWin: 5, firstPlayer: 'host' } });
-    expect(guest.last('room').room.settings).toEqual({ marksToWin: 5, firstPlayer: 'host' });
+    send(room, host, { t: 'settings', settings: { marksToWin: 5, firstPlayer: { player: guest.id } } });
+    expect(guest.last('room').room.settings).toEqual({ marksToWin: 5, firstPlayer: { player: guest.id } });
+  });
+
+  it('the first player must be random or someone in the room', () => {
+    const { room } = makeRoom();
+    const host = join(room, 'H');
+    for (const firstPlayer of ['host', { player: 'nobody' }, { player: 5 }, null] as unknown as Settings['firstPlayer'][]) {
+      send(room, host, { t: 'settings', settings: { marksToWin: 3, firstPlayer } });
+    }
+    expect(host.errors()).toEqual(Array(4).fill('Invalid first player.'));
+    expect(host.last('room').room.settings.firstPlayer).toBe('random');
   });
 
   it('needs the host and 2 to 4 players', () => {
@@ -151,14 +161,29 @@ describe('settings and starting', () => {
     expect(clients.filter((c) => c.game().view.legal.length > 0)).toHaveLength(1);
   });
 
-  it('with "host goes first", the host takes the first turn', () => {
-    const { room } = makeRoom({ random: () => 0.99 });
+  it('a chosen first player takes the first turn, whoever they are', () => {
+    for (const pick of [0, 1, 2]) {
+      const { room } = makeRoom({ random: () => 0.99 });
+      const clients = [join(room, 'H'), join(room, 'G'), join(room, 'G2')];
+      send(room, clients[0]!, { t: 'settings', settings: { marksToWin: 3, firstPlayer: { player: clients[pick]!.id } } });
+      send(room, clients[0]!, { t: 'start' });
+      expect(clients[0]!.game().view.turn?.seat).toBe(clients[pick]!.seat);
+    }
+  });
+
+  it('falls back to a random first player if the chosen one leaves', () => {
+    const { room } = makeRoom();
     const host = join(room, 'H');
-    join(room, 'G');
+    const guest = join(room, 'G');
     join(room, 'G2');
-    send(room, host, { t: 'settings', settings: { marksToWin: 3, firstPlayer: 'host' } });
-    send(room, host, { t: 'start' });
-    expect(host.game().view.turn?.seat).toBe(host.seat);
+    send(room, host, { t: 'settings', settings: { marksToWin: 4, firstPlayer: { player: guest.id } } });
+    send(room, guest, { t: 'leave' });
+    expect(host.last('room').room.settings).toEqual({ marksToWin: 4, firstPlayer: 'random' });
+    // Someone else leaving doesn't change it.
+    const g3 = join(room, 'G3');
+    send(room, host, { t: 'settings', settings: { marksToWin: 4, firstPlayer: { player: host.id } } });
+    send(room, g3, { t: 'leave' });
+    expect(host.last('room').room.settings.firstPlayer).toEqual({ player: host.id });
   });
 
   it('saves a replay log from the start', () => {

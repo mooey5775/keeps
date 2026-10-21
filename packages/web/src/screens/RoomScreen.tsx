@@ -133,84 +133,117 @@ function JoinForm({ code, error }: { code: string; error: string | null }) {
 function Lobby({ room, error }: { room: RoomSummary; error: { message: string } | null }) {
   const me = room.players.find((p) => p.id === room.you);
   const host = me?.host ?? false;
+  const hostName = room.players.find((p) => p.host)?.name ?? 'the host';
   const link = `${location.origin}/r/${room.code}`;
   const [copied, setCopied] = useState(false);
   const count = room.players.length;
+  const emptySeats = Math.max(0, 4 - count);
+  const { marksToWin, firstPlayer } = room.settings;
+  const firstName = firstPlayer === 'random' ? null : (room.players.find((p) => p.id === firstPlayer.player)?.name ?? null);
+
+  const copy = () => {
+    void navigator.clipboard?.writeText(link).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
 
   return (
     <main className="lobby">
-      <h2>
-        Room <span className="room-code">{room.code}</span>
-      </h2>
-      <p className="nato" aria-label={`Room code spelled out: ${natoSpelling(room.code)}`}>
-        {natoSpelling(room.code)}
-      </p>
-      <p>
-        Share this link:{' '}
-        <button
-          type="button"
-          className="link"
-          onClick={() => {
-            void navigator.clipboard?.writeText(link).then(() => setCopied(true));
-          }}
-        >
-          {link} {copied ? '✓ copied' : '(copy)'}
-        </button>
-      </p>
+      <section className="invite" aria-label="Invite friends">
+        <div className="invite-code">
+          <span className="invite-label">Room</span>
+          <span className="room-code">{room.code}</span>
+        </div>
+        <p className="nato" aria-label={`Room code spelled out: ${natoSpelling(room.code)}`}>
+          {natoSpelling(room.code)}
+        </p>
+        <div className="invite-link">
+          <button type="button" onClick={copy}>
+            {copied ? 'Copied ✓' : 'Copy invite link'}
+          </button>
+          <span className="invite-url">{link.replace(/^https?:\/\//, '')}</span>
+        </div>
+      </section>
 
-      <h3>Players ({count}/4)</h3>
-      <ul className="players">
-        {room.players.map((p) => (
-          <li key={p.id}>
-            <span className={`dot ${p.connected ? 'on' : 'off'}`} />
-            {p.name}
-            {p.host && <span className="badge">host</span>}
-            {p.id === room.you && <span className="badge">you</span>}
-          </li>
-        ))}
-      </ul>
+      <section>
+        <h3>
+          Players <span className="count">{count} of 4</span>
+        </h3>
+        <ul className="players">
+          {room.players.map((p) => (
+            <li key={p.id}>
+              <span className={`dot ${p.connected ? 'on' : 'off'}`} title={p.connected ? 'connected' : 'disconnected'} />
+              {p.name}
+              {p.host && <span className="badge">host</span>}
+              {p.id === room.you && <span className="badge">you</span>}
+            </li>
+          ))}
+          {Array.from({ length: emptySeats }, (_, i) => (
+            <li key={`empty-${i}`} className="empty-seat">
+              <span className="dot" />
+              Open seat
+            </li>
+          ))}
+        </ul>
+      </section>
 
-      <h3>Settings</h3>
-      <div className="settings">
-        <label>
-          Marks to win{' '}
-          <select
-            value={room.settings.marksToWin}
-            disabled={!host}
-            onChange={(e) => roomStore.settings({ ...room.settings, marksToWin: Number(e.target.value) })}
-          >
-            {[1, 2, 3, 4, 5].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          First player{' '}
-          <select
-            value={room.settings.firstPlayer}
-            disabled={!host}
-            onChange={(e) => roomStore.settings({ ...room.settings, firstPlayer: e.target.value as 'random' | 'host' })}
-          >
-            <option value="random">Random</option>
-            <option value="host">The host</option>
-          </select>
-        </label>
-      </div>
+      <section>
+        <h3>Game</h3>
+        {host ? (
+          <div className="settings">
+            <label>
+              Marks to win{' '}
+              <select value={marksToWin} onChange={(e) => roomStore.settings({ ...room.settings, marksToWin: Number(e.target.value) })}>
+                {[1, 2, 3, 4, 5].map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              First player{' '}
+              <select
+                value={firstPlayer === 'random' ? 'random' : firstPlayer.player}
+                onChange={(e) => roomStore.settings({ ...room.settings, firstPlayer: e.target.value === 'random' ? 'random' : { player: e.target.value } })}
+              >
+                <option value="random">Random</option>
+                {room.players.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.id === room.you ? ' (you)' : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        ) : (
+          <p className="settings-summary">
+            First to {marksToWin} {marksToWin === 1 ? 'mark' : 'marks'} wins · {firstName ? `${firstName} goes first` : 'random first player'}
+          </p>
+        )}
+        <p className="hint">Seats are random. With fewer than four players, the empty seats keep their piles as “ghosts”.</p>
+      </section>
 
-      {host ? (
-        <button type="button" className="primary" disabled={count < 2 || count > 4} onClick={() => roomStore.send({ t: 'start' })}>
-          {count < 2 ? 'Waiting for players…' : 'Start the game'}
-        </button>
-      ) : (
-        <p>Waiting for the host to start the game.</p>
-      )}
-      {error && <p className="error">{error.message}</p>}
-      <p className="hint">Seats are random. With fewer than four players, the empty seats keep their piles as “ghosts”.</p>
+      <section className="lobby-start">
+        {host ? (
+          <>
+            <button type="button" className="primary" disabled={count < 2 || count > 4} onClick={() => roomStore.send({ t: 'start' })}>
+              Start the game
+            </button>
+            {count < 2 && <p className="hint">Waiting for at least one more player to join.</p>}
+            {count > 4 && <p className="hint">Keeps is for at most four players.</p>}
+          </>
+        ) : (
+          <p>Waiting for {hostName} to start the game.</p>
+        )}
+        {error && <p className="error">{error.message}</p>}
+      </section>
+
       <button
         type="button"
-        className="link"
+        className="link leave"
         onClick={() => {
           roomStore.leave();
           navigate('/');

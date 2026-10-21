@@ -230,12 +230,16 @@ a.buy:hover {
   font-size: 0.9em;
 }
 
+/* Two labelled ways in: "New game [Create a room]" and "Have a code? [CODE] [Join]". */
 .home-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  /* Buttons match the height of the (16px) code field beside them. */
-  align-items: stretch;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.75rem 1rem;
+  align-items: center;
+}
+
+.home-action-label {
+  color: var(--muted);
 }
 
 .join-form > button {
@@ -245,6 +249,7 @@ a.buy:hover {
 .join {
   display: flex;
   gap: 0.4rem;
+  margin: 0;
 }
 
 .code-input,
@@ -919,4 +924,99 @@ a.buy:hover {
   width: 100%;
   box-sizing: border-box;
   resize: vertical;
+}
+
+/* ---------- Room lobby ---------- */
+
+.lobby {
+  gap: 1.75rem;
+}
+
+.lobby section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.lobby h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.lobby h3 .count {
+  margin-left: 0.4em;
+  font-family: var(--font-text);
+  font-size: 0.75em;
+  color: var(--muted);
+}
+
+/* The invite: the code big enough to read across a room, its spelling, and the link. */
+.invite {
+  padding: 1rem 1.25rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.invite-code {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+}
+
+.invite-label {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+}
+
+.invite .room-code {
+  font-size: 2rem;
+}
+
+.invite .nato {
+  margin: -0.4rem 0 0;
+}
+
+.invite-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.9rem;
+}
+
+.invite-url {
+  color: var(--muted);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.empty-seat {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.empty-seat .dot {
+  border: 1px dashed var(--line);
+  box-sizing: border-box;
+}
+
+.settings-summary {
+  margin: 0;
+}
+
+.lobby .hint {
+  margin: 0;
+}
+
+.lobby-start .primary {
+  width: 100%;
+  padding: 0.7em;
+}
+
+.lobby-start p {
+  margin: 0;
+}
+
+.lobby .leave {
+  align-self: center;
 }

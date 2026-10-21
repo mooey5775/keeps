@@ -77,7 +77,7 @@ async function shootAll(device: 'desktop' | 'phone', port: number): Promise<void
     const host = await visit(me, '/', 'Create a room');
     await host.type('input[placeholder="Name"]', 'Edward');
     await host.click('Create a room');
-    await host.waitForText('Players (1/4)');
+    await host.waitForText('1 of 4');
     await shot(host, 'lobby-host');
     const code = await host.evaluate<string>(`document.querySelector('.room-code').textContent`);
 
@@ -85,10 +85,10 @@ async function shootAll(device: 'desktop' | 'phone', port: number): Promise<void
     await shot(guest, 'join-form');
     await guest.type('input', 'Friend');
     await guest.click('Join');
-    await guest.waitForText('Waiting for the host');
+    await guest.waitForText('to start the game');
     await shot(guest, 'lobby-guest');
 
-    await host.waitForText('Players (2/4)');
+    await host.waitForText('2 of 4');
     await host.click('Start the game');
     await host.waitFor(`document.querySelector('.game') !== null`, 'the game table');
     await shot(host, 'game-start');

@@ -205,6 +205,35 @@ try {
     await guest.waitForText('Round 1');
     return [host, guest];
   });
+  await check('joining with a code from the home page goes straight into the lobby', async () => {
+    const host = await open(a, base);
+    await host.type('input[placeholder="Name"]', 'Ada');
+    await host.click('Create a room');
+    await host.waitFor('location.pathname.startsWith("/r/")', 'the room page');
+    const code = (await host.path()).slice(3);
+
+    const guest = await open(b, base);
+    // This browser may remember a name from an earlier check; with none, the page says it's needed.
+    await guest.waitForText('Create a room');
+    await guest.type('input[placeholder="Name"]', '');
+    await guest.waitForText('Enter your name to create or join a room');
+    // An unknown code: the error shows right on the home page.
+    await guest.type('input[placeholder="Name"]', 'Bo');
+    await guest.type('input[aria-label="Room code"]', 'ZZZZ');
+    await guest.click('Join');
+    await guest.waitForText('No room called ZZZZ');
+    if ((await guest.path()) !== '/') throw new Error(`left the home page for ${await guest.path()}`);
+
+    await guest.type('input[aria-label="Room code"]', code);
+    await guest.click('Join');
+    await guest.waitFor(`location.pathname === '/r/${code}'`, 'the room page');
+    await guest.waitForText('2 of 4');
+    // One click: no second "Join room" form on the way.
+    if ((await guest.text()).includes('Your name')) throw new Error('asked for the name again');
+    await host.waitForText('Bo');
+    return [host, guest];
+  });
+
   await check('same browser: a second tab joins as a new player; tabs never steal a seat silently', async () => {
     const host = await open(a, base);
     await host.type('input', 'Ada');
@@ -218,8 +247,8 @@ try {
     await second.click('Join as a new player');
     await second.type('input', 'Bo');
     await second.click('Join');
-    await host.waitForText('Players (2/4)');
-    await second.waitForText('Players (2/4)');
+    await host.waitForText('2 of 4');
+    await second.waitForText('2 of 4');
 
     // Reloading the second tab keeps its own seat (Bo), not Ada's.
     await second.evaluate('location.reload()');
@@ -230,9 +259,9 @@ try {
     const third = await open(a, room);
     await third.waitForText('open in another tab');
     await third.click('Play here instead');
-    await third.waitForText('Players (2/4)');
+    await third.waitForText('2 of 4');
     await second.waitForText('playing in another tab');
-    await host.waitForText('Players (2/4)');
+    await host.waitForText('2 of 4');
     return [host, second, third];
   });
 } finally {
