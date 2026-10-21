@@ -19,7 +19,12 @@ export type NewPrompt = DistributiveOmit<Prompt, 'id' | 'event' | 'depth' | 'pla
 /** Opens a prompt; the engine stops and waits for its answer. */
 export function openPrompt(ctx: Ctx, prompt: NewPrompt): void {
   const card = prompt.kind === 'hot-target' ? prompt.card : undefined;
-  const event = ctx.tracer.emit({ type: 'prompt', seat: prompt.seat, kind: prompt.kind, ...(card ? { card } : {}) });
+  const base = { type: 'prompt' as const, seat: prompt.seat, kind: prompt.kind };
+  // A HOT card waiting for its keep was drawn privately: only its owner learns
+  // which card it is before it's played.
+  const event = card
+    ? ctx.tracer.emit({ ...base, card }, { visibility: [prompt.seat], redacted: base })
+    : ctx.tracer.emit(base);
   const { depth } = ctx.tracer.context();
   ctx.state.prompts.push({ ...prompt, id: `p${event}`, event, depth, play: ctx.play } as Prompt);
 }
