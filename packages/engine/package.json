@@ -11,10 +11,12 @@
     "test:watch": "vitest",
     "test:strict": "SPEC_STRICT=1 vitest run",
     "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json",
-    "replay": "node scripts/replay.ts"
+    "replay": "node scripts/replay.ts",
+    "coverage": "vitest run --coverage --coverage.include='src/**' --coverage.reporter=text"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "5.0.5",
     "fast-check": "^4.10.2",
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
