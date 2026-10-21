@@ -34,7 +34,8 @@ export async function launch(port: number): Promise<Browser> {
     profile,
     close() {
       child.kill();
-      rmSync(profile, { recursive: true, force: true });
+      // Chrome may still be writing its profile as it exits; retry briefly.
+      rmSync(profile, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     },
   };
 }
@@ -53,6 +54,8 @@ export interface Page {
   screenshot(file: string): Promise<void>;
   /** Emulates a phone-sized touch screen. */
   emulatePhone(): Promise<void>;
+  /** Overrides the browser's user agent for this tab (takes effect on the next navigation). */
+  setUserAgent(userAgent: string): Promise<void>;
   /** Moves the real mouse pointer over the first element matching `selector`. */
   hover(selector: string): Promise<void>;
   errors(): Promise<string[]>;
@@ -140,6 +143,9 @@ export async function open(browser: Browser, url: string): Promise<Page> {
     },
     // Reloading clears the collector; treat that as no errors since.
     errors: () => evaluate<string[]>('window.__errors ?? []'),
+    async setUserAgent(userAgent) {
+      await send('Network.setUserAgentOverride', { userAgent });
+    },
     async hover(selector) {
       const point = await evaluate<{ x: number; y: number } | null>(`(() => {
         const el = document.querySelector(${JSON.stringify(selector)});
