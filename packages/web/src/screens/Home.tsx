@@ -7,7 +7,7 @@ const NAME_KEY = 'keeps:name';
 
 export const KEEPS_SITE = 'https://www.keepsgame.com';
 // The buy link from keepsgame.com, with the creators' Amazon attribution tags
-// kept, so sales through it are credited to them. Price as listed there (2026-10).
+// kept, so sales through it are credited to them. No price shown: it would go stale.
 export const AMAZON_LINK =
   'https://www.amazon.com/Keeps-an-Elegant-Game/dp/B0H7TBLY5X?maas=maas_adg_FEBF1A30E62A19690ED26156C54DC749_afap_abs&ref_=aa_maas&tag=maas';
 
@@ -56,7 +56,7 @@ export function Home() {
       <p className="tagline">An elegant game, for two to four players.</p>
       <div className="buy-row">
         <a className="buy" href={AMAZON_LINK} target="_blank" rel="noreferrer">
-          $9.99 on Amazon →
+          Buy Keeps on Amazon →
         </a>
         <a className="link" href={KEEPS_SITE} target="_blank" rel="noreferrer">
           keepsgame.com
