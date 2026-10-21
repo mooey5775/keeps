@@ -74,13 +74,19 @@ export function reveal(ctx: Ctx, holder: Seat, playId: number | null): void {
   state.keeps[hidden.seat][hidden.index] = { id: hidden.card };
   tracer.emit({ type: 'reveal', seat: holder, keep: hidden.seat, card: hidden.card });
 
+  // Respond to the play as the card would have, had it been face-up when the play started.
   const record = playId === null ? undefined : state.openPlays.find((p) => p.id === playId);
-  if (record?.hidden?.card === hidden.card) {
-    if (hidden.card === 'interest') {
-      for (const entry of record.entries) if (entry.seat === hidden.seat) entry.interest = true;
+  const before = record?.hidden?.card === hidden.card ? record.hidden.seat : null;
+  if (record && before !== null) {
+    // Interest needs to have been in the keep before and after the coin arrived
+    // (C-21), so only an Interest that didn't move responds.
+    if (hidden.card === 'interest' && hidden.seat === before) {
+      for (const entry of record.entries) if (entry.seat === before) entry.interest = true;
     }
-    if (hidden.card === 'retribution' && !record.retribution.includes(hidden.seat)) {
-      record.retribution.push(hidden.seat);
+    // Retribution answers for the keep it was in when the play started, even if
+    // the play swapped it away (C-30), never for the keep that received it (Q-15).
+    if (hidden.card === 'retribution' && !record.retribution.includes(before)) {
+      record.retribution.push(before);
     }
   }
   if (hidden.card === 'shackles') shackle(ctx, hidden.seat);
