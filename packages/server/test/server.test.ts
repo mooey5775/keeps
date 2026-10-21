@@ -10,7 +10,7 @@ let server: KeepsServer;
 let base: string;
 
 beforeAll(async () => {
-  server = await createKeepsServer({ port: 0, cardsDir: join(import.meta.dirname, '../../../cards') });
+  server = await createKeepsServer({ port: 0, cardsDir: join(import.meta.dirname, '../../../cards'), adminToken: 'sesame' });
   const address = server.http.address();
   if (!address || typeof address === 'string') throw new Error('no port');
   base = `localhost:${address.port}`;
@@ -23,8 +23,8 @@ class TestClient {
   messages: ServerMessage[] = [];
   private waiters: { match: (m: ServerMessage) => boolean; resolve: (m: ServerMessage) => void }[] = [];
 
-  constructor() {
-    this.socket = new WebSocket(`ws://${base}/ws`);
+  constructor(headers: Record<string, string> = {}) {
+    this.socket = new WebSocket(`ws://${base}/ws`, { headers });
     this.socket.on('message', (data) => {
       const message = JSON.parse(String(data)) as ServerMessage;
       this.messages.push(message);
@@ -115,5 +115,56 @@ describe('server', () => {
     client.send({ t: 'join', code: 'ZZZZ', name: 'x' });
     expect((await error).message).toBe('No room called ZZZZ.');
     await client.close();
+  });
+});
+
+describe('admin page', () => {
+  const auth = (password: string) => ({ authorization: `Basic ${Buffer.from(`admin:${password}`).toString('base64')}` });
+
+  it('asks for the password, and rejects a wrong one', async () => {
+    const none = await fetch(`http://${base}/admin`);
+    expect(none.status).toBe(401);
+    expect(none.headers.get('www-authenticate')).toContain('Basic');
+    expect((await fetch(`http://${base}/admin`, { headers: auth('wrong') })).status).toBe(401);
+  });
+
+  it("lists live rooms with players' names and real IPs (from Fly-Client-IP), and the top visitors", async () => {
+    const client = new TestClient({ 'fly-client-ip': '203.0.113.9' });
+    await client.open();
+    const welcomed = client.next('welcome');
+    client.send({ t: 'create', name: 'Ada' });
+    const { code } = await welcomed;
+
+    const json = (await (await fetch(`http://${base}/admin.json`, { headers: auth('sesame') })).json()) as {
+      rooms: { code: string; players: { name: string; ip: string }[] }[];
+      visitors: { ip: string; names: string[]; connections: number }[];
+    };
+    const room = json.rooms.find((r) => r.code === code)!;
+    expect(room.players).toEqual([expect.objectContaining({ name: 'Ada', ip: '203.0.113.9' })]);
+    expect(json.visitors).toContainEqual(expect.objectContaining({ ip: '203.0.113.9', names: ['Ada'], connections: 1 }));
+
+    const html = await (await fetch(`http://${base}/admin`, { headers: auth('sesame') })).text();
+    expect(html).toContain(code);
+    expect(html).toContain('203.0.113.9');
+    await client.close();
+  });
+
+  it('escapes player names on the page', async () => {
+    const client = new TestClient();
+    await client.open();
+    const welcomed = client.next('welcome');
+    client.send({ t: 'create', name: '<img src=x onerror=alert(1)>' });
+    await welcomed;
+    const html = await (await fetch(`http://${base}/admin`, { headers: auth('sesame') })).text();
+    expect(html).not.toContain('<img src=x');
+    expect(html).toContain('&lt;img src=x');
+    await client.close();
+  });
+
+  it("doesn't exist when no admin token is configured", async () => {
+    const plain = await createKeepsServer({ port: 0, cardsDir: join(import.meta.dirname, '../../../cards') });
+    const address = plain.http.address() as { port: number };
+    expect((await fetch(`http://localhost:${address.port}/admin`)).status).toBe(404);
+    await plain.close();
   });
 });

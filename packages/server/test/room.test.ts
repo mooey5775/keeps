@@ -428,3 +428,100 @@ describe('one seat, two connections', () => {
     expect(tab2.messages.some((m) => m.t === 'game')).toBe(true);
   });
 });
+
+describe('analytics events', () => {
+  interface Captured {
+    event: string;
+    who: { id: string; name: string; ip: string | null };
+    props: Record<string, unknown>;
+  }
+
+  function tracked() {
+    const captured: Captured[] = [];
+    const { room } = makeRoom({
+      tracker: {
+        capture: (event, who, props = {}) => captured.push({ event, who, props }),
+        shutdown: async () => {},
+      },
+    });
+    const join = (name: string, ip: string, client?: string) => {
+      const c = new Client();
+      c.id = room.join(name, c.send, { ip, client: client ?? null }).id;
+      return c;
+    };
+    return { room, captured, join, events: (name: string) => captured.filter((c) => c.event === name) };
+  }
+
+  it("tags every event with the player's name and IP", () => {
+    const { join, captured } = tracked();
+    join('Ada', '203.0.113.7', 'browser-ada-1');
+    join('Bo', '198.51.100.2');
+    expect(captured.map((c) => [c.event, c.who.name, c.who.ip])).toEqual([
+      ['room_created', 'Ada', '203.0.113.7'],
+      ['player_joined', 'Ada', '203.0.113.7'],
+      ['player_joined', 'Bo', '198.51.100.2'],
+    ]);
+    // A browser id identifies the person across rooms; without one, the room player id.
+    expect(captured[0]!.who.id).toBe('browser-ada-1');
+    expect(captured[2]!.who.id).toMatch(/^player:/);
+    for (const c of captured) expect(c.props.room).toBe('ABCD');
+  });
+
+  it('ignores a malformed browser id', () => {
+    const { join, captured } = tracked();
+    join('Ada', '203.0.113.7', '<script>');
+    expect(captured[0]!.who.id).toMatch(/^player:/);
+  });
+
+  it('records a whole game: start, cards played by whom, each round, and the finish', () => {
+    const { room, join, events } = tracked();
+    const ada = join('Ada', '203.0.113.7');
+    const bo = join('Bo', '198.51.100.2');
+    room.handle(ada.id, { t: 'settings', settings: { marksToWin: 2, firstPlayer: 'random' } });
+    room.handle(ada.id, { t: 'start' });
+    expect(events('game_started')[0]!.props).toMatchObject({ players: 2, marks_to_win: 2 });
+    expect([...(events('game_started')[0]!.props.player_names as string[])].sort()).toEqual(['Ada', 'Bo']);
+
+    for (let i = 0; ada.game().view.phase !== 'game-over'; i++) {
+      if (i > 3000) throw new Error('game did not finish');
+      step(room, [ada, bo]);
+    }
+    const plays = events('card_played');
+    expect(plays.length).toBeGreaterThan(0);
+    for (const p of plays) {
+      expect(['Ada', 'Bo']).toContain(p.who.name);
+      expect(typeof p.props.card).toBe('string');
+    }
+    const rounds = events('round_ended');
+    expect(rounds.length).toBeGreaterThanOrEqual(2);
+    for (const r of rounds) expect(Object.keys(r.props.scores as object).sort()).toEqual(['Ada', 'Bo']);
+    const [finished] = events('game_finished');
+    expect(finished).toBeDefined();
+    expect(finished!.props.marks).toEqual(expect.objectContaining({ [finished!.who.name]: 2 }));
+  });
+
+  it('records an undo that went through, against who asked for it', () => {
+    const { room, join, events } = tracked();
+    const ada = join('Ada', '203.0.113.7');
+    const bo = join('Bo', '198.51.100.2');
+    room.handle(ada.id, { t: 'start' });
+    const mover = step(room, [ada, bo]);
+    const other = mover === ada ? bo : ada;
+    room.handle(mover.id, { t: 'propose-undo' });
+    room.handle(other.id, { t: 'vote-undo', accept: true });
+    expect(events('undo_applied').map((e) => e.who.name)).toEqual([mover === ada ? 'Ada' : 'Bo']);
+  });
+
+  it('shows names, IPs and game progress on the admin snapshot', () => {
+    const { room, join } = tracked();
+    const ada = join('Ada', '203.0.113.7');
+    join('Bo', '198.51.100.2');
+    room.handle(ada.id, { t: 'start' });
+    const info = room.info();
+    expect(info.players.map((p) => [p.name, p.ip, p.connected])).toEqual([
+      ['Ada', '203.0.113.7', true],
+      ['Bo', '198.51.100.2', true],
+    ]);
+    expect(info.game).toMatchObject({ round: 1, phase: 'playing', commands: 0 });
+  });
+});

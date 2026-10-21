@@ -5,6 +5,8 @@ import { extname, join, normalize, resolve } from 'node:path';
 import { formatReplayLog } from '@keeps/engine';
 import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
+import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
+import { noTracker, type Tracker } from './analytics.ts';
 import { Room, type RoomDeps, type Send } from './room.ts';
 
 export interface ServerOptions {
@@ -17,6 +19,10 @@ export interface ServerOptions {
   dataDir?: string;
   /** Rooms with nobody connected are deleted after this long. */
   idleRoomMs?: number;
+  /** Product analytics (PostHog in production). */
+  tracker?: Tracker;
+  /** Password for /admin (HTTP basic auth). Without it, there is no admin page. */
+  adminToken?: string;
 }
 
 export interface KeepsServer {
@@ -44,8 +50,12 @@ const MIME: Record<string, string> = {
 
 export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> {
   const rooms = new Map<string, Room>();
+  const tracker = options.tracker ?? noTracker;
+  const visitors = new VisitorLog();
+  const startedAt = Date.now();
 
   const deps: RoomDeps = {
+    tracker,
     token: () => randomBytes(18).toString('base64url'),
     id: () => randomBytes(6).toString('base64url'),
     seed: () => randomBytes(12).toString('hex'),
@@ -61,10 +71,22 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     }
   }
 
-  const http = createServer((req, res) => serveStatic(req, res, options));
+  const snapshot = (): AdminSnapshot => ({
+    startedAt,
+    now: Date.now(),
+    rooms: [...rooms.values()].map((r) => r.info()),
+    visitors: visitors.top(),
+  });
+
+  const http = createServer((req, res) => {
+    const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
+    serveStatic(req, res, options);
+  });
   const wss = new WebSocketServer({ server: http, path: '/ws' });
 
-  wss.on('connection', (socket: WebSocket) => {
+  wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
+    const ip = clientIp(req);
     let room: Room | null = null;
     let playerId: string | null = null;
     let alive = true;
@@ -103,7 +125,9 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
           const code = newCode();
           room = new Room(code, deps);
           rooms.set(code, room);
-          playerId = room.join(message.name, send).id;
+          const player = room.join(message.name, send, { ip, client: message.client ?? null });
+          visitors.record(ip, player.name, Date.now());
+          playerId = player.id;
           return;
         }
         case 'join': {
@@ -111,13 +135,16 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
           const found = ROOM_CODE.test(code) ? rooms.get(code) : undefined;
           if (!found) return fail(`No room called ${code}.`);
           room = found;
-          playerId = found.join(message.name, send).id;
+          const player = found.join(message.name, send, { ip, client: message.client ?? null });
+          visitors.record(ip, player.name, Date.now());
+          playerId = player.id;
           return;
         }
         case 'resume': {
           const found = rooms.get(String(message.code ?? '').toUpperCase());
-          const player = found?.resume(String(message.token ?? ''), send);
+          const player = found?.resume(String(message.token ?? ''), send, { ip, client: message.client ?? null });
           if (!found || !player) return send({ t: 'gone' });
+          visitors.record(ip, player.name, Date.now());
           room = found;
           playerId = player.id;
           return;
@@ -150,11 +177,24 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
           new Promise<void>((done) => {
             clearInterval(sweep);
             for (const client of wss.clients) client.terminate();
-            wss.close(() => http.close(() => done()));
+            wss.close(() => http.close(() => void tracker.shutdown().finally(done)));
           }),
       }),
     );
   });
+}
+
+/**
+ * The visitor's IP. Behind Fly's proxy the socket's address is the proxy, and
+ * the real one is in Fly-Client-IP (or the first X-Forwarded-For entry).
+ */
+export function clientIp(req: IncomingMessage): string | null {
+  const fly = req.headers['fly-client-ip'];
+  if (typeof fly === 'string' && fly) return fly;
+  const forwarded = req.headers['x-forwarded-for'];
+  const first = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim();
+  if (first) return first;
+  return req.socket.remoteAddress?.replace(/^::ffff:/, '') ?? null;
 }
 
 function replaySaver(dataDir: string): NonNullable<RoomDeps['saveReplay']> {

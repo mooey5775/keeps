@@ -1,8 +1,10 @@
 import {
   apply,
+  coinsLabel,
   eventsFor,
   newGame,
   playerSeats,
+  scores,
   viewFor,
   type Command,
   type GameState,
@@ -19,6 +21,7 @@ import {
   type Settings,
   type UndoState,
 } from '@keeps/protocol';
+import type { Tracker } from './analytics.ts';
 
 // One game room: its players, lobby settings, the running game, and undo
 // votes. No sockets here: connections are just `send` callbacks, so the
@@ -38,6 +41,14 @@ export interface RoomDeps {
   now: () => number;
   /** Called with the game's replay log after every change to it. */
   saveReplay?: (code: string, startedAt: number, log: ReplayLog) => void;
+  /** Product analytics (PostHog in production). */
+  tracker?: Tracker;
+}
+
+/** Where a connection comes from: its IP and the browser's anonymous id. */
+export interface ConnectionInfo {
+  ip?: string | null;
+  client?: string | null;
 }
 
 interface Player {
@@ -47,6 +58,29 @@ interface Player {
   host: boolean;
   seat: Seat | null;
   send: Send | null;
+  /** The IP of the player's latest connection. */
+  ip: string | null;
+  /** Anonymous id of the player's browser, if it sent one. */
+  client: string | null;
+  joinedAt: number;
+}
+
+/** A room as the admin page shows it. */
+export interface RoomInfo {
+  code: string;
+  phase: 'lobby' | 'game';
+  createdAt: number;
+  lastActivity: number;
+  settings: Settings;
+  players: { name: string; seat: Seat | null; host: boolean; connected: boolean; ip: string | null; joinedAt: number }[];
+  game: {
+    startedAt: number;
+    round: number;
+    phase: string;
+    marks: number[];
+    turnSeat: Seat | null;
+    commands: number;
+  } | null;
 }
 
 interface Game {
@@ -58,6 +92,7 @@ interface Game {
   /** One entry per command this round: what to restore if it is undone. */
   history: { state: GameState; events: number }[];
   undo: { proposedBy: string; accepted: string[] } | null;
+  roundStartedAt: number;
 }
 
 export class Room {
@@ -66,12 +101,14 @@ export class Room {
   private players: Player[] = [];
   private settings: Settings = { ...DEFAULT_SETTINGS };
   private game: Game | null = null;
+  readonly createdAt: number;
   lastActivity: number;
 
   constructor(code: string, deps: RoomDeps) {
     this.code = code;
     this.deps = deps;
-    this.lastActivity = deps.now();
+    this.createdAt = deps.now();
+    this.lastActivity = this.createdAt;
   }
 
   get connectedCount(): number {
@@ -83,7 +120,7 @@ export class Room {
   }
 
   /** Adds a player (a spectator, if a game is running) and connects them. */
-  join(name: unknown, send: Send): Player {
+  join(name: unknown, send: Send, from: ConnectionInfo = {}): Player {
     const player: Player = {
       id: this.deps.id(),
       name: this.uniqueName(name),
@@ -91,9 +128,14 @@ export class Room {
       host: this.players.length === 0,
       seat: null,
       send,
+      ip: from.ip ?? null,
+      client: validClient(from.client),
+      joinedAt: this.deps.now(),
     };
     this.players.push(player);
     this.touch();
+    if (player.host) this.track('room_created', player);
+    this.track('player_joined', player, { spectator: this.game !== null, players: this.players.length });
     send({ t: 'welcome', code: this.code, token: player.token, playerId: player.id });
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
@@ -101,13 +143,16 @@ export class Room {
   }
 
   /** Reconnects a player by token. Returns null if the token is unknown. */
-  resume(token: string, send: Send): Player | null {
+  resume(token: string, send: Send, from: ConnectionInfo = {}): Player | null {
     const player = this.players.find((p) => p.token === token);
     if (!player) return null;
     // The seat moves to the new connection; tell the old one so it doesn't sit there stale.
     if (player.send && player.send !== send) player.send({ t: 'replaced' });
     player.send = send;
+    if (from.ip) player.ip = from.ip;
+    player.client = validClient(from.client) ?? player.client;
     this.touch();
+    this.track('player_resumed', player, { in_game: this.game !== null });
     send({ t: 'welcome', code: this.code, token: player.token, playerId: player.id });
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
@@ -198,8 +243,16 @@ export class Room {
     };
     const { state, events } = this.settings.firstPlayer === 'host' ? newGame(options) : preview;
     const startedAt = this.deps.now();
-    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null };
+    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt };
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
+    const seated = this.seatedPlayers();
+    this.track('game_started', player, {
+      players: count,
+      marks_to_win: this.settings.marksToWin,
+      first_player: this.settings.firstPlayer,
+      player_names: seated.map((p) => p.name),
+      player_ips: seated.map((p) => p.ip),
+    });
     this.broadcastRoom();
     for (const p of this.players) this.sendGame(p, true);
     return null;
@@ -212,15 +265,60 @@ export class Room {
     const result = apply(game.state, player.seat, command);
     if (!result.ok) return result.error.message;
 
-    const newRound = result.state.round !== game.state.round;
-    game.history = newRound ? [] : [...game.history, { state: game.state, events: game.events.length }];
+    const before = game.state;
+    const newRound = result.state.round !== before.round;
+    game.history = newRound ? [] : [...game.history, { state: before, events: game.events.length }];
     game.state = result.state;
     game.events = [...game.events, ...result.events];
     game.log.commands.push({ seat: player.seat, command });
     game.undo = null;
+    if (newRound) game.roundStartedAt = this.deps.now();
     this.deps.saveReplay?.(this.code, game.startedAt, game.log);
+    this.trackCommand(game, before, result.events);
     for (const p of this.players) this.sendGame(p, false, result.events);
     return null;
+  }
+
+  /** Analytics for what a command did: cards played, and rounds or the game ending. */
+  private trackCommand(game: Game, before: GameState, events: TraceEvent[]): void {
+    const now = this.deps.now();
+    for (const { payload } of events) {
+      if (payload.type !== 'play') continue;
+      const actor = this.playerAt(payload.seat);
+      if (actor) {
+        this.track('card_played', actor, {
+          card: payload.card,
+          hot: payload.hot,
+          ...(payload.copy ? { copied: payload.copy } : {}),
+          round: before.round,
+        });
+      }
+    }
+    const state = game.state;
+    const roundWasLive = before.phase === 'playing' || before.phase === 'post-round';
+    const roundOver = state.phase === 'round-over' || state.phase === 'game-over';
+    if (!roundWasLive || !roundOver || state.lastRoundWinner === null) return;
+    const winner = this.playerAt(state.lastRoundWinner);
+    if (!winner) return;
+    const values = scores(state);
+    const seated = this.seatedPlayers();
+    this.track('round_ended', winner, {
+      round: state.round,
+      reason: state.roundEnd?.kind ?? null,
+      players: seated.length,
+      scores: Object.fromEntries(seated.map((p) => [p.name, coinsLabel(values[p.seat!] ?? 0)])),
+      duration_ms: now - game.roundStartedAt,
+    });
+    if (state.phase === 'game-over') {
+      this.track('game_finished', winner, {
+        rounds: state.round,
+        players: seated.length,
+        player_names: seated.map((p) => p.name),
+        marks: Object.fromEntries(seated.map((p) => [p.name, state.marks[p.seat!]])),
+        commands: game.log.commands.length,
+        duration_ms: now - game.startedAt,
+      });
+    }
   }
 
   // -- Undo ------------------------------------------------------------------
@@ -267,6 +365,8 @@ export class Room {
     game.state = previous.state;
     game.events = game.events.slice(0, previous.events);
     game.log.commands.pop();
+    const proposer = this.find(game.undo.proposedBy);
+    if (proposer) this.track('undo_applied', proposer, { round: game.state.round });
     game.undo = null;
     this.deps.saveReplay?.(this.code, game.startedAt, game.log);
     for (const p of this.players) this.sendGame(p, true);
@@ -310,6 +410,50 @@ export class Room {
     return this.players.find((p) => p.id === playerId);
   }
 
+  private playerAt(seat: Seat): Player | undefined {
+    return this.players.find((p) => p.seat === seat);
+  }
+
+  private seatedPlayers(): Player[] {
+    return this.players.filter((p) => p.seat !== null).sort((a, b) => a.seat! - b.seat!);
+  }
+
+  private track(event: string, player: Player, properties: Record<string, unknown> = {}): void {
+    this.deps.tracker?.capture(
+      event,
+      { id: player.client ?? `player:${player.id}`, name: player.name, ip: player.ip },
+      { room: this.code, ...properties },
+    );
+  }
+
+  /** What the admin page shows about this room. */
+  info(): RoomInfo {
+    const game = this.game;
+    return {
+      code: this.code,
+      phase: game ? 'game' : 'lobby',
+      createdAt: this.createdAt,
+      lastActivity: this.lastActivity,
+      settings: { ...this.settings },
+      players: this.players.map((p) => ({
+        name: p.name,
+        seat: p.seat,
+        host: p.host,
+        connected: p.send !== null,
+        ip: p.ip,
+        joinedAt: p.joinedAt,
+      })),
+      game: game && {
+        startedAt: game.startedAt,
+        round: game.state.round,
+        phase: game.state.phase,
+        marks: [...game.state.marks],
+        turnSeat: game.state.turn?.seat ?? null,
+        commands: game.log.commands.length,
+      },
+    };
+  }
+
   private touch(): void {
     this.lastActivity = this.deps.now();
   }
@@ -346,4 +490,9 @@ export class Room {
       undo: this.undoState(player),
     });
   }
+}
+
+/** A browser's anonymous id: short, plain text only. */
+function validClient(client: unknown): string | null {
+  return typeof client === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(client) ? client : null;
 }

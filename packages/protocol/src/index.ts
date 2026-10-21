@@ -40,10 +40,11 @@ export interface UndoState {
   waitingOn: string[];
 }
 
+/** `client` is an anonymous id for the browser (for analytics), optional. */
 export type ClientMessage =
-  | { t: 'create'; name: string }
-  | { t: 'join'; code: string; name: string }
-  | { t: 'resume'; code: string; token: string }
+  | { t: 'create'; name: string; client?: string }
+  | { t: 'join'; code: string; name: string; client?: string }
+  | { t: 'resume'; code: string; token: string; client?: string }
   | { t: 'settings'; settings: Settings }
   | { t: 'start' }
   | { t: 'command'; command: Command }

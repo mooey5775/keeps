@@ -68,6 +68,22 @@ function forgetToken(code: string): void {
   }
 }
 
+/**
+ * A random, anonymous id for this browser, so analytics can count returning
+ * players across rooms. It identifies nothing but this browser's storage.
+ */
+function clientId(): string {
+  try {
+    const existing = localStorage.getItem('keeps:client');
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    localStorage.setItem('keeps:client', id);
+    return id;
+  } catch {
+    return crypto.randomUUID();
+  }
+}
+
 // Tabs of this browser tell each other which room they are in, so a new tab
 // can ask before taking over a seat another tab is using.
 const tabs = typeof BroadcastChannel === 'undefined' ? null : new BroadcastChannel('keeps-tabs');
@@ -114,17 +130,17 @@ class RoomStore {
   }
 
   create(name: string): void {
-    this.connect({ t: 'create', name });
+    this.connect({ t: 'create', name, client: clientId() });
   }
 
   join(code: string, name: string): void {
-    this.connect({ t: 'join', code, name });
+    this.connect({ t: 'join', code, name, client: clientId() });
   }
 
   /** Resumes a seat by token (default: this tab's, then this browser's). */
   resume(code: string, token = tabToken(code) ?? browserToken(code)): boolean {
     if (!token) return false;
-    this.connect({ t: 'resume', code, token });
+    this.connect({ t: 'resume', code, token, client: clientId() });
     return true;
   }
 
@@ -197,7 +213,7 @@ class RoomStore {
       case 'welcome':
         saveToken(message.code, message.token);
         // From now on, reconnecting means resuming this seat.
-        this.hello = { t: 'resume', code: message.code, token: message.token };
+        this.hello = { t: 'resume', code: message.code, token: message.token, client: clientId() };
         this.set({ status: 'open', code: message.code, playerId: message.playerId });
         return;
       case 'room':
