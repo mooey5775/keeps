@@ -1,0 +1,1487 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`golden games > 2 players 1`] = `
+"#1    R0 T0   game start: seats [player, ghost, player, ghost], first to 2 marks
+#2    R1 T0   round 1 start: S0 goes first
+#3    R1 T0   pile 'friar' dealt to S0 (top first): Tithes, Offering, Purity, Prayer, Invocation, Revelation, Providence, Epiphany, Retribution  [server only]
+#4    R1 T0   pile 'count' dealt to S1 (top first): Royal Favor, Requisition, Interest, Timepiece, Fiat, Dagger, Chalice, Medallion, Acquisition  [server only]
+#5    R1 T0   pile 'fool' dealt to S2 (top first): Pandemonium, Pickpocket, Hocus Pocus, Joker, Legerdemain, Blunder, Pluck, Fool Token, Shackles  [server only]
+#6    R1 T0   pile 'mask' dealt to S3 (top first): Count Token, Fabergé Egg, Juggling, Last Laugh, Scepter, Duplicity, Friar Token, Sanction, Resurrection  [server only]
+#7    R1 T1   S0 turn start (2 actions)
+#8    R1 T1     waiting on S0: action  ← #7
+#9    R1 T1       S0 action [turn, 1 left]: draw  ← #8
+#10   R1 T1         S0 draws Tithes from pile@S0  ← #9  [private: S0]
+#11   R1 T1     waiting on S0: action  ← #7
+#12   R1 T1       S0 action [turn, 0 left]: draw  ← #11
+#13   R1 T1         S0 draws Offering from pile@S0  ← #12  [private: S0]
+#14   R1 T1   S0 turn end
+#15   R1 T2   S2 turn start (2 actions)
+#16   R1 T2     waiting on S2: action  ← #15
+#17   R1 T2       S2 action [turn, 1 left]: draw  ← #16
+#18   R1 T2         S2 draws Pandemonium from pile@S2  ← #17  [private: S2]
+#19   R1 T2           S2 plays Pandemonium (HOT!) → discard  ← #18
+#20   R1 T2             waiting on S2: choose-direction  ← #19
+#21   R1 T2               all piles rotate one position to the right  ← #20
+#22   R1 T2     waiting on S2: action  ← #15
+#23   R1 T2       S2 action [turn, 0 left]: draw  ← #22
+#24   R1 T2         S2 draws Count Token from pile@S2  ← #23  [private: S2]
+#25   R1 T2   S2 turn end
+#26   R1 T3   S0 turn start (2 actions)
+#27   R1 T3     waiting on S0: action  ← #26
+#28   R1 T3       S0 action [turn, 1 left]: play Tithes → keep(S0)  ← #27
+#29   R1 T3         S0 plays Tithes → keep(S0)  ← #28
+#30   R1 T3     waiting on S0: action  ← #26
+#31   R1 T3       S0 action [turn, 0 left]: use Tithes: discard all Coin cards, reorder pile  ← #30
+#32   R1 T3         S0 discards Tithes from keep  ← #31
+#33   R1 T3           S0 looks at Royal Favor, Requisition, Interest, Timepiece, Fiat, Dagger, Chalice, Medallion, Acquisition (pile @S0)  ← #32  [private: S0]
+#34   R1 T3           waiting on S0: order-pile  ← #32
+#35   R1 T3             S0 reorders pile@S0 (top first): Royal Favor, Requisition, Interest, Timepiece, Fiat, Dagger, Chalice, Medallion, Acquisition  ← #34  [private: S0]
+#36   R1 T3   S0 turn end
+#37   R1 T4   S2 turn start (2 actions)
+#38   R1 T4     waiting on S2: action  ← #37
+#39   R1 T4       S2 action [turn, 1 left]: draw  ← #38
+#40   R1 T4         S2 draws Fabergé Egg from pile@S2  ← #39  [private: S2]
+#41   R1 T4     waiting on S2: action  ← #37
+#42   R1 T4       S2 action [turn, 0 left]: draw  ← #41
+#43   R1 T4         S2 draws Juggling from pile@S2  ← #42  [private: S2]
+#44   R1 T4           waiting on S2: hot-target (Juggling)  ← #43  [private: S2]
+#45   R1 T4             S2 plays Juggling (HOT!) → keep(S0)  ← #44
+#46   R1 T4   S2 turn end
+#47   R1 T5   S0 turn start (2 actions)
+#48   R1 T5     waiting on S0: action  ← #47
+#49   R1 T5       S0 action [turn, 1 left]: use Juggling: swap piles @S2 and @S3  ← #48
+#50   R1 T5         piles @S2 and @S3 swap places  ← #49
+#51   R1 T5     waiting on S0: action  ← #47
+#52   R1 T5       S0 action [turn, 0 left]: play Offering  ← #51
+#53   R1 T5         S0 plays Offering → discard  ← #52
+#54   R1 T5           waiting on S2: give-card  ← #53
+#55   R1 T5             S2 gives Count Token to S0  ← #54  [private: S2,S0]
+#56   R1 T5   S0 turn end
+#57   R1 T6   S2 turn start (2 actions)
+#58   R1 T6     waiting on S2: action  ← #57
+#59   R1 T6       S2 action [turn, 1 left]: draw  ← #58
+#60   R1 T6         S2 draws Purity from pile@S2  ← #59  [private: S2]
+#61   R1 T6     waiting on S2: action  ← #57
+#62   R1 T6       S2 action [turn, 0 left]: play Purity → keep(S2)  ← #61
+#63   R1 T6         S2 plays Purity → keep(S2)  ← #62
+#64   R1 T6   S2 turn end
+#65   R1 T7   S0 turn start (2 actions)
+#66   R1 T7     waiting on S0: action  ← #65
+#67   R1 T7       S0 action [turn, 1 left]: draw  ← #66
+#68   R1 T7         S0 draws Royal Favor from pile@S0  ← #67  [private: S0]
+#69   R1 T7           waiting on S0: hot-target (Royal Favor)  ← #68  [private: S0]
+#70   R1 T7             S0 plays Royal Favor (HOT!) → keep(S2)  ← #69
+#71   R1 T7               after Royal Favor: triggers → [royal-favor(S2)]  ← #70
+#72   R1 T7                 ROYAL FAVOR: S2 draws from their pile  ← #71
+#73   R1 T7                   S2 draws Prayer from pile@S2  ← #72  [private: S2]
+#74   R1 T7     waiting on S0: action  ← #65
+#75   R1 T7       S0 action [turn, 0 left]: use Juggling: swap piles @S1 and @S2  ← #74
+#76   R1 T7         piles @S1 and @S2 swap places  ← #75
+#77   R1 T7   S0 turn end
+#78   R1 T8   S2 turn start (2 actions)
+#79   R1 T8     waiting on S2: action  ← #78
+#80   R1 T8       S2 action [turn, 1 left]: play Fabergé Egg → keep(S2)  ← #79
+#81   R1 T8         S2 plays Fabergé Egg → keep(S2)  ← #80
+#82   R1 T8     waiting on S2: action  ← #78
+#83   R1 T8       S2 action [turn, 0 left]: play Prayer  ← #82
+#84   R1 T8         S2 plays Prayer → discard  ← #83
+#85   R1 T8           waiting on S2: choose-pile  ← #84
+#86   R1 T8             S2 looks at Pickpocket (pile @S2)  ← #85  [private: S2]
+#87   R1 T8             waiting on S2: take-or-discard  ← #85
+#88   R1 T8               S2 takes Pickpocket from pile@S2  ← #87  [private: S2]
+#89   R1 T8   S2 turn end
+#90   R1 T9   S0 turn start (2 actions)
+#91   R1 T9     waiting on S0: action  ← #90
+#92   R1 T9       S0 action [turn, 1 left]: play Count Token → keep(S2)  ← #91
+#93   R1 T9         S0 plays Count Token → keep(S2)  ← #92
+#94   R1 T9     waiting on S0: action  ← #90
+#95   R1 T9       S0 action [turn, 0 left]: use Juggling: swap piles @S0 and @S1  ← #94
+#96   R1 T9         piles @S0 and @S1 swap places  ← #95
+#97   R1 T9   S0 turn end
+#98   R1 T10  S2 turn start (2 actions)
+#99   R1 T10    waiting on S2: action  ← #98
+#100  R1 T10      S2 action [turn, 1 left]: play Pickpocket  ← #99
+#101  R1 T10        S2 plays Pickpocket → discard  ← #100
+#102  R1 T10          waiting on S2: choose-player  ← #101
+#103  R1 T10            Pickpocket has no effect: chose yourself  ← #102
+#104  R1 T10    waiting on S2: action  ← #98
+#105  R1 T10      S2 action [turn, 0 left]: draw  ← #104
+#106  R1 T10        S2 draws Hocus Pocus from pile@S2  ← #105  [private: S2]
+#107  R1 T10  S2 turn end
+#108  R1 T11  S0 turn start (2 actions)
+#109  R1 T11    waiting on S0: action  ← #108
+#110  R1 T11      S0 action [turn, 1 left]: use Juggling: swap piles @S1 and @S3  ← #109
+#111  R1 T11        piles @S1 and @S3 swap places  ← #110
+#112  R1 T11    waiting on S0: action  ← #108
+#113  R1 T11      S0 action [turn, 0 left]: draw  ← #112
+#114  R1 T11        S0 draws Invocation from pile@S0  ← #113  [private: S0]
+#115  R1 T11          S0 plays Invocation (HOT!) → discard  ← #114
+#116  R1 T11            waiting on S0: choose-pile  ← #115
+#117  R1 T11              S0 draws Joker from pile@S2  ← #116  [private: S0]
+#118  R1 T11                S0 plays Joker (HOT!) → discard  ← #117
+#119  R1 T11                  Joker has no effect: no non-Keep card to reveal  ← #118
+#120  R1 T11  S0 turn end
+#121  R1 T12  S2 turn start (2 actions)
+#122  R1 T12    waiting on S2: action  ← #121
+#123  R1 T12      S2 action [turn, 1 left]: draw  ← #122
+#124  R1 T12        S2 draws Legerdemain from pile@S2  ← #123  [private: S2]
+#125  R1 T12    waiting on S2: action  ← #121
+#126  R1 T12      S2 action [turn, 0 left]: play Legerdemain  ← #125
+#127  R1 T12        S2 plays Legerdemain → discard  ← #126
+#128  R1 T12          waiting on S2: choose-player  ← #127
+#129  R1 T12            Legerdemain has no effect: S1 has no cards  ← #128
+#130  R1 T12  S2 turn end
+#131  R1 T13  S0 turn start (2 actions)
+#132  R1 T13    waiting on S0: action  ← #131
+#133  R1 T13      S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S1  ← #132
+#134  R1 T13        piles @S0 and @S1 swap places  ← #133
+#135  R1 T13    waiting on S0: action  ← #131
+#136  R1 T13      S0 action [turn, 0 left]: draw  ← #135
+#137  R1 T13        S0 draws Last Laugh from pile@S0  ← #136  [private: S0]
+#138  R1 T13  S0 turn end
+#139  R1 T14  S2 turn start (2 actions)
+#140  R1 T14    waiting on S2: action  ← #139
+#141  R1 T14      S2 action [turn, 1 left]: draw  ← #140
+#142  R1 T14        S2 draws Blunder from pile@S2  ← #141  [private: S2]
+#143  R1 T14          S2 plays Blunder (HOT!) → keep(S2)  ← #142
+#144  R1 T14    waiting on S2: action  ← #139
+#145  R1 T14      S2 action [turn, 0 left]: draw  ← #144
+#146  R1 T14        S2 draws Pluck from pile@S2  ← #145  [private: S2]
+#147  R1 T14  S2 turn end
+#148  R1 T15  S0 turn start (2 actions)
+#149  R1 T15    waiting on S0: action  ← #148
+#150  R1 T15      S0 action [turn, 1 left]: use Juggling: swap piles @S2 and @S3  ← #149
+#151  R1 T15        piles @S2 and @S3 swap places  ← #150
+#152  R1 T15    waiting on S0: action  ← #148
+#153  R1 T15      S0 action [turn, 0 left]: play Last Laugh → keep(S0)  ← #152
+#154  R1 T15        S0 plays Last Laugh → keep(S0)  ← #153
+#155  R1 T15  S0 turn end
+#156  R1 T16  S2 turn start (2 actions)
+#157  R1 T16    waiting on S2: action  ← #156
+#158  R1 T16      S2 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S1  ← #157
+#159  R1 T16        S2 places Blunder face-up on pile@S1  ← #158
+#160  R1 T16  S2 turn end
+#161  R1 T17  S0 turn start (2 actions)
+#162  R1 T17    waiting on S0: action  ← #161
+#163  R1 T17      S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S2  ← #162
+#164  R1 T17        piles @S0 and @S2 swap places  ← #163
+#165  R1 T17    waiting on S0: action  ← #161
+#166  R1 T17      S0 action [turn, 0 left]: draw  ← #165
+#167  R1 T17        S0 draws Requisition from pile@S0  ← #166  [private: S0]
+#168  R1 T17  S0 turn end
+#169  R1 T18  S2 turn start (2 actions)
+#170  R1 T18    waiting on S2: action  ← #169
+#171  R1 T18      S2 action [turn, 1 left]: draw  ← #170
+#172  R1 T18        S2 draws Scepter from pile@S2  ← #171  [private: S2]
+#173  R1 T18    waiting on S2: action  ← #169
+#174  R1 T18      S2 action [turn, 0 left]: play Scepter → keep(S0)  ← #173
+#175  R1 T18        S2 plays Scepter → keep(S0)  ← #174
+#176  R1 T18  S2 turn end
+#177  R1 T19  S0 turn start (2 actions)
+#178  R1 T19    waiting on S0: action  ← #177
+#179  R1 T19      S0 action [turn, 1 left]: play Requisition  ← #178
+#180  R1 T19        S0 plays Requisition → discard  ← #179
+#181  R1 T19          waiting on S0: choose-pile  ← #180
+#182  R1 T19            S0 looks at Duplicity, Friar Token, Sanction, Resurrection (pile @S2)  ← #181  [private: S0]
+#183  R1 T19            waiting on S0: choose-pile-card  ← #181
+#184  R1 T19              S0 takes Duplicity from pile@S2  ← #183  [private: S0]
+#185  R1 T19    waiting on S0: action  ← #177
+#186  R1 T19      S0 action [turn, 0 left]: use Juggling: swap piles @S2 and @S3  ← #185
+#187  R1 T19        piles @S2 and @S3 swap places  ← #186
+#188  R1 T19  S0 turn end
+#189  R1 T20  S2 turn start (2 actions)
+#190  R1 T20    waiting on S2: action  ← #189
+#191  R1 T20      S2 action [turn, 1 left]: play Hocus Pocus  ← #190
+#192  R1 T20        S2 plays Hocus Pocus → discard  ← #191
+#193  R1 T20          S2 gets 2 actions from Hocus Pocus  ← #192
+#194  R1 T20          waiting on S2: action  ← #192
+#195  R1 T20            S2 action [hocus-pocus, 1 left]: play Pluck  ← #194
+#196  R1 T20              S2 plays Pluck → discard  ← #195
+#197  R1 T20                S2 sees S0: Duplicity  ← #196  [private: S2]
+#198  R1 T20                waiting on S2: choose-hand-card  ← #196
+#199  R1 T20                  S2 takes Duplicity from S0's hand  ← #198  [private: S2,S0]
+#200  R1 T20          waiting on S2: action  ← #192
+#201  R1 T20            S2 action [hocus-pocus, 0 left]: play Duplicity → keep(S0)  ← #200
+#202  R1 T20              S2 plays Duplicity → keep(S0)  ← #201
+#203  R1 T20                Duplicity has no effect: no other Keep card in hand to place face down  ← #202
+#204  R1 T20    waiting on S2: action  ← #189
+#205  R1 T20      S2 action [turn, 0 left]: draw  ← #204
+#206  R1 T20        S2 draws Fool Token from pile@S2  ← #205  [private: S2]
+#207  R1 T20  S2 turn end
+#208  R1 T21  S0 turn start (2 actions)
+#209  R1 T21    waiting on S0: action  ← #208
+#210  R1 T21      S0 action [turn, 1 left]: draw  ← #209
+#211  R1 T21        S0 draws Interest from pile@S0  ← #210  [private: S0]
+#212  R1 T21    waiting on S0: action  ← #208
+#213  R1 T21      S0 action [turn, 0 left]: use Juggling: swap piles @S1 and @S2  ← #212
+#214  R1 T21        piles @S1 and @S2 swap places  ← #213
+#215  R1 T21  S0 turn end
+#216  R1 T22  S2 turn start (2 actions)
+#217  R1 T22    waiting on S2: action  ← #216
+#218  R1 T22      S2 action [turn, 1 left]: draw  ← #217
+#219  R1 T22        S2 draws Blunder from pile@S2  ← #218
+#220  R1 T22          S2 plays Blunder (HOT!) → keep(S2)  ← #219
+#221  R1 T22    waiting on S2: action  ← #216
+#222  R1 T22      S2 action [turn, 0 left]: play Fool Token → keep(S2)  ← #221
+#223  R1 T22        S2 plays Fool Token → keep(S2)  ← #222
+#224  R1 T22  S2 turn end
+#225  R1 T23  S0 turn start (2 actions)
+#226  R1 T23    waiting on S0: action  ← #225
+#227  R1 T23      S0 action [turn, 1 left]: use Juggling: swap piles @S1 and @S2  ← #226
+#228  R1 T23        piles @S1 and @S2 swap places  ← #227
+#229  R1 T23    waiting on S0: action  ← #225
+#230  R1 T23      S0 action [turn, 0 left]: play Interest → keep(S0)  ← #229
+#231  R1 T23        S0 plays Interest → keep(S0)  ← #230
+#232  R1 T23  S0 turn end
+#233  R1 T24  S2 turn start (2 actions)
+#234  R1 T24    waiting on S2: action  ← #233
+#235  R1 T24      S2 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S3  ← #234
+#236  R1 T24        S2 places Blunder face-up on pile@S3  ← #235
+#237  R1 T24  S2 turn end
+#238  R1 T25  S0 turn start (2 actions)
+#239  R1 T25    waiting on S0: action  ← #238
+#240  R1 T25      S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S2  ← #239
+#241  R1 T25        piles @S0 and @S2 swap places  ← #240
+#242  R1 T25    waiting on S0: action  ← #238
+#243  R1 T25      S0 action [turn, 0 left]: draw  ← #242
+#244  R1 T25        S0 draws Shackles from pile@S0  ← #243  [private: S0]
+#245  R1 T25  S0 turn end
+#246  R1 T26  S2 turn start (2 actions)
+#247  R1 T26    waiting on S2: action  ← #246
+#248  R1 T26      S2 action [turn, 1 left]: draw  ← #247
+#249  R1 T26        S2 draws Timepiece from pile@S2  ← #248  [private: S2]
+#250  R1 T26    waiting on S2: action  ← #246
+#251  R1 T26      S2 action [turn, 0 left]: play Timepiece → keep(S2)  ← #250
+#252  R1 T26        S2 plays Timepiece → keep(S2)  ← #251
+#253  R1 T26  S2 turn end
+#254  R1 T27  S0 turn start (2 actions)
+#255  R1 T27    waiting on S0: action  ← #254
+#256  R1 T27      S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S2  ← #255
+#257  R1 T27        piles @S0 and @S2 swap places  ← #256
+#258  R1 T27    waiting on S0: action  ← #254
+#259  R1 T27      S0 action [turn, 0 left]: play Shackles → keep(S2)  ← #258
+#260  R1 T27        S0 plays Shackles → keep(S2)  ← #259
+#261  R1 T27  S0 turn end
+#262  R1 T28  S2 turn start (1 action)
+#263  R1 T28    waiting on S2: action  ← #262
+#264  R1 T28      S2 action [turn, 0 left]: use Shackles: discard it  ← #263
+#265  R1 T28        S2 discards Shackles from keep  ← #264
+#266  R1 T28  S2 turn end
+#267  R1 T29  S0 turn start (2 actions)
+#268  R1 T29    waiting on S0: action  ← #267
+#269  R1 T29      S0 action [turn, 1 left]: use Juggling: swap piles @S1 and @S2  ← #268
+#270  R1 T29        piles @S1 and @S2 swap places  ← #269
+#271  R1 T29    waiting on S0: action  ← #267
+#272  R1 T29      S0 action [turn, 0 left]: draw  ← #271
+#273  R1 T29        S0 draws Fiat from pile@S0  ← #272  [private: S0]
+#274  R1 T29          waiting on S0: hot-target (Fiat)  ← #273  [private: S0]
+#275  R1 T29            S0 plays Fiat (HOT!) → keep(S2)  ← #274
+#276  R1 T29              all piles are pushed to the center  ← #275
+#277  R1 T29              waiting on S0: claim-pile  ← #275
+#278  R1 T29                S0 claims the pile from @S3  ← #277
+#279  R1 T29                waiting on S2: claim-pile  ← #277
+#280  R1 T29                  S2 claims the pile from @S0  ← #279
+#281  R1 T29                  waiting on S0: claim-pile  ← #279
+#282  R1 T29                    S0 places the pile from @S2 at S1  ← #281
+#283  R1 T29                    the remaining pile from @S1 goes to ghost S3  ← #281
+#284  R1 T29  S0 turn end
+#285  R1 T30  S2 turn start (2 actions)
+#286  R1 T30    waiting on S2: action  ← #285
+#287  R1 T30      S2 action [turn, 1 left]: draw  ← #286
+#288  R1 T30        S2 draws Dagger from pile@S2  ← #287  [private: S2]
+#289  R1 T30    waiting on S2: action  ← #285
+#290  R1 T30      S2 action [turn, 0 left]: play Dagger → keep(S0)  ← #289
+#291  R1 T30        S2 plays Dagger → keep(S0)  ← #290
+#292  R1 T30          after Dagger: triggers → [interest(S0)]  ← #291
+#293  R1 T30            INTEREST: S0 draws from their pile  ← #292
+#294  R1 T30              S0 draws Blunder from pile@S0  ← #293
+#295  R1 T30                S0 plays Blunder (HOT!) → keep(S0)  ← #294
+#296  R1 T30                  after Blunder: triggers → [interest(S0)]  ← #295
+#297  R1 T30                    INTEREST: S0 draws from their pile  ← #296
+#298  R1 T30                      S0 draws Friar Token from pile@S0  ← #297  [private: S0]
+#299  R1 T30  S2 turn end
+#300  R1 T31  S0 turn start (2 actions)
+#301  R1 T31    waiting on S0: action  ← #300
+#302  R1 T31      S0 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S2  ← #301
+#303  R1 T31        S0 places Blunder face-up on pile@S2  ← #302
+#304  R1 T31  S0 turn end
+#305  R1 T32  S2 turn start (2 actions)
+#306  R1 T32    waiting on S2: action  ← #305
+#307  R1 T32      S2 action [turn, 1 left]: draw  ← #306
+#308  R1 T32        S2 draws Blunder from pile@S2  ← #307
+#309  R1 T32          S2 plays Blunder (HOT!) → keep(S2)  ← #308
+#310  R1 T32    waiting on S2: action  ← #305
+#311  R1 T32      S2 action [turn, 0 left]: draw  ← #310
+#312  R1 T32        S2 draws Chalice from pile@S2  ← #311  [private: S2]
+#313  R1 T32  S2 turn end
+#314  R1 T33  S0 turn start (2 actions)
+#315  R1 T33    waiting on S0: action  ← #314
+#316  R1 T33      S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S3  ← #315
+#317  R1 T33        piles @S0 and @S3 swap places  ← #316
+#318  R1 T33    waiting on S0: action  ← #314
+#319  R1 T33      S0 action [turn, 0 left]: play Friar Token → keep(S2)  ← #318
+#320  R1 T33        S0 plays Friar Token → keep(S2)  ← #319
+#321  R1 T33  ROUND END: token victory for S2
+#322  R1 T33    S2 earns a victory mark (1 total)  ← #321
+#323  R2 T0   round 2 start: S2 goes first
+#324  R2 T0   pile 'count' dealt to S0 (top first): Fabergé Egg, Royal Favor, Requisition, Fiat, Acquisition, Medallion, Chalice, Scepter, Interest  [server only]
+#325  R2 T0   pile 'mask' dealt to S1 (top first): Blunder, Friar Token, Count Token, Retribution, Timepiece, Shackles, Resurrection, Dagger, Pluck  [server only]
+#326  R2 T0   pile 'friar' dealt to S2 (top first): Purity, Epiphany, Offering, Tithes, Providence, Invocation, Sanction, Prayer, Revelation  [server only]
+#327  R2 T0   pile 'fool' dealt to S3 (top first): Fool Token, Pickpocket, Joker, Last Laugh, Duplicity, Juggling, Hocus Pocus, Pandemonium, Legerdemain  [server only]
+#328  R2 T1   S2 turn start (2 actions)
+#329  R2 T1     waiting on S2: action  ← #328
+#330  R2 T1       S2 action [turn, 1 left]: draw  ← #329
+#331  R2 T1         S2 draws Purity from pile@S2  ← #330  [private: S2]
+#332  R2 T1     waiting on S2: action  ← #328
+#333  R2 T1       S2 action [turn, 0 left]: play Purity → keep(S0)  ← #332
+#334  R2 T1         S2 plays Purity → keep(S0)  ← #333
+#335  R2 T1   S2 turn end
+#336  R2 T2   S0 turn start (2 actions)
+#337  R2 T2     waiting on S0: action  ← #336
+#338  R2 T2       S0 action [turn, 1 left]: draw  ← #337
+#339  R2 T2         S0 draws Fabergé Egg from pile@S0  ← #338  [private: S0]
+#340  R2 T2     waiting on S0: action  ← #336
+#341  R2 T2       S0 action [turn, 0 left]: draw  ← #340
+#342  R2 T2         S0 draws Royal Favor from pile@S0  ← #341  [private: S0]
+#343  R2 T2           waiting on S0: hot-target (Royal Favor)  ← #342  [private: S0]
+#344  R2 T2             S0 plays Royal Favor (HOT!) → keep(S2)  ← #343
+#345  R2 T2               after Royal Favor: triggers → [royal-favor(S2)]  ← #344
+#346  R2 T2                 ROYAL FAVOR: S2 draws from their pile  ← #345
+#347  R2 T2                   S2 draws Epiphany from pile@S2  ← #346  [private: S2]
+#348  R2 T2   S0 turn end
+#349  R2 T3   S2 turn start (2 actions)
+#350  R2 T3     waiting on S2: action  ← #349
+#351  R2 T3       S2 action [turn, 1 left]: draw  ← #350
+#352  R2 T3         S2 draws Offering from pile@S2  ← #351  [private: S2]
+#353  R2 T3     waiting on S2: action  ← #349
+#354  R2 T3       S2 action [turn, 0 left]: play Offering  ← #353
+#355  R2 T3         S2 plays Offering → discard  ← #354
+#356  R2 T3           S2 discards Epiphany from hand  ← #355
+#357  R2 T3           waiting on S0: give-card  ← #355
+#358  R2 T3             S0 gives Fabergé Egg to S2  ← #357  [private: S0,S2]
+#359  R2 T3   S2 turn end
+#360  R2 T4   S0 turn start (2 actions)
+#361  R2 T4     waiting on S0: action  ← #360
+#362  R2 T4       S0 action [turn, 1 left]: draw  ← #361
+#363  R2 T4         S0 draws Requisition from pile@S0  ← #362  [private: S0]
+#364  R2 T4     waiting on S0: action  ← #360
+#365  R2 T4       S0 action [turn, 0 left]: draw  ← #364
+#366  R2 T4         S0 draws Fiat from pile@S0  ← #365  [private: S0]
+#367  R2 T4           waiting on S0: hot-target (Fiat)  ← #366  [private: S0]
+#368  R2 T4             S0 plays Fiat (HOT!) → keep(S0)  ← #367
+#369  R2 T4               all piles are pushed to the center  ← #368
+#370  R2 T4               waiting on S0: claim-pile  ← #368
+#371  R2 T4                 S0 claims the pile from @S2  ← #370
+#372  R2 T4                 waiting on S2: claim-pile  ← #370
+#373  R2 T4                   S2 claims the pile from @S0  ← #372
+#374  R2 T4                   waiting on S0: claim-pile  ← #372
+#375  R2 T4                     S0 places the pile from @S3 at S1  ← #374
+#376  R2 T4                     the remaining pile from @S1 goes to ghost S3  ← #374
+#377  R2 T4   S0 turn end
+#378  R2 T5   S2 turn start (2 actions)
+#379  R2 T5     waiting on S2: action  ← #378
+#380  R2 T5       S2 action [turn, 1 left]: draw  ← #379
+#381  R2 T5         S2 draws Acquisition from pile@S2  ← #380  [private: S2]
+#382  R2 T5           waiting on S2: hot-target (Acquisition)  ← #381  [private: S2]
+#383  R2 T5             S2 plays Acquisition (HOT!) → keep(S0)  ← #382
+#384  R2 T5     waiting on S2: action  ← #378
+#385  R2 T5       S2 action [turn, 0 left]: play Fabergé Egg → keep(S0)  ← #384
+#386  R2 T5         S2 plays Fabergé Egg → keep(S0)  ← #385
+#387  R2 T5   S2 turn end
+#388  R2 T6   S0 turn start (2 actions)
+#389  R2 T6     waiting on S0: action  ← #388
+#390  R2 T6       S0 action [turn, 1 left]: play Requisition  ← #389
+#391  R2 T6         S0 plays Requisition → discard  ← #390
+#392  R2 T6           waiting on S0: choose-pile  ← #391
+#393  R2 T6             S0 looks at Tithes, Providence, Invocation, Sanction, Prayer, Revelation (pile @S0)  ← #392  [private: S0]
+#394  R2 T6             waiting on S0: choose-pile-card  ← #392
+#395  R2 T6               S0 takes Sanction from pile@S0  ← #394  [private: S0]
+#396  R2 T6                 waiting on S0: hot-target (Sanction)  ← #395  [private: S0]
+#397  R2 T6                   S0 plays Sanction (HOT!) → keep(S0)  ← #396
+#398  R2 T6     waiting on S0: action  ← #388
+#399  R2 T6       S0 action [turn, 0 left]: use Sanction: draw from pile@S2  ← #398
+#400  R2 T6         S0 draws Medallion from pile@S2  ← #399  [private: S0]
+#401  R2 T6   S0 turn end
+#402  R2 T7   S2 turn start (2 actions)
+#403  R2 T7     waiting on S2: action  ← #402
+#404  R2 T7       S2 action [turn, 1 left]: draw  ← #403
+#405  R2 T7         S2 draws Chalice from pile@S2  ← #404  [private: S2]
+#406  R2 T7     waiting on S2: action  ← #402
+#407  R2 T7       S2 action [turn, 0 left]: play Chalice → keep(S0)  ← #406
+#408  R2 T7         S2 plays Chalice → keep(S0)  ← #407
+#409  R2 T7   S2 turn end
+#410  R2 T8   S0 turn start (2 actions)
+#411  R2 T8     waiting on S0: action  ← #410
+#412  R2 T8       S0 action [turn, 1 left]: use Sanction: draw from pile@S3  ← #411
+#413  R2 T8         S0 draws Blunder from pile@S3  ← #412  [private: S0]
+#414  R2 T8           S0 plays Blunder (HOT!) → keep(S0)  ← #413
+#415  R2 T8     waiting on S0: action  ← #410
+#416  R2 T8       S0 action [turn, 0 left]: draw  ← #415
+#417  R2 T8         S0 draws Tithes from pile@S0  ← #416  [private: S0]
+#418  R2 T8   S0 turn end
+#419  R2 T9   S2 turn start (2 actions)
+#420  R2 T9     waiting on S2: action  ← #419
+#421  R2 T9       S2 action [turn, 1 left]: draw  ← #420
+#422  R2 T9         S2 draws Scepter from pile@S2  ← #421  [private: S2]
+#423  R2 T9     waiting on S2: action  ← #419
+#424  R2 T9       S2 action [turn, 0 left]: draw  ← #423
+#425  R2 T9         S2 draws Interest from pile@S2  ← #424  [private: S2]
+#426  R2 T9   S2 turn end
+#427  R2 T10  S0 turn start (2 actions)
+#428  R2 T10    waiting on S0: action  ← #427
+#429  R2 T10      S0 action [turn, 1 left]: play Medallion → keep(S0)  ← #428
+#430  R2 T10        S0 plays Medallion → keep(S0)  ← #429
+#431  R2 T10    waiting on S0: action  ← #427
+#432  R2 T10      S0 action [turn, 0 left]: play Tithes → keep(S2)  ← #431
+#433  R2 T10        S0 plays Tithes → keep(S2)  ← #432
+#434  R2 T10  S0 turn end
+#435  R2 T11  S2 turn start (2 actions)
+#436  R2 T11    waiting on S2: action  ← #435
+#437  R2 T11      S2 action [turn, 1 left]: play Scepter → keep(S2)  ← #436
+#438  R2 T11        S2 plays Scepter → keep(S2)  ← #437
+#439  R2 T11    waiting on S2: action  ← #435
+#440  R2 T11      S2 action [turn, 0 left]: play Interest → keep(S2)  ← #439
+#441  R2 T11        S2 plays Interest → keep(S2)  ← #440
+#442  R2 T11  S2 turn end
+#443  R2 T12  S0 turn start (2 actions)
+#444  R2 T12    waiting on S0: action  ← #443
+#445  R2 T12      S0 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S1  ← #444
+#446  R2 T12        S0 places Blunder face-up on pile@S1  ← #445
+#447  R2 T12  S0 turn end
+#448  R2 T13  S2 turn start (2 actions)
+#449  R2 T13    waiting on S2: action  ← #448
+#450  R2 T13      S2 action [turn, 1 left]: use Tithes: discard all Coin cards, reorder pile  ← #449
+#451  R2 T13        S2 discards Royal Favor, Tithes, Scepter from keep  ← #450
+#452  R2 T13    waiting on S2: action  ← #448
+#453  R2 T13      S2 action [turn, 0 left]: draw  ← #452
+#454  R2 T13        S2 draws from EMPTY pile@S2  ← #453
+#455  R2 T13        ROUND END: S2 drew from an empty pile  ← #453
+#456  R2 T13          score: S0=7 S2=0 → S0 wins  ← #455
+#457  R2 T13            S0 earns a victory mark (1 total)  ← #456
+#458  R3 T0   round 3 start: S0 goes first
+#459  R3 T0   pile 'fool' dealt to S0 (top first): Duplicity, Legerdemain, Last Laugh, Fool Token, Blunder, Juggling, Shackles, Pickpocket, Joker  [server only]
+#460  R3 T0   pile 'count' dealt to S1 (top first): Scepter, Requisition, Acquisition, Royal Favor, Fabergé Egg, Timepiece, Count Token, Dagger, Chalice  [server only]
+#461  R3 T0   pile 'mask' dealt to S2 (top first): Interest, Pandemonium, Fiat, Pluck, Medallion, Purity, Revelation, Friar Token, Hocus Pocus  [server only]
+#462  R3 T0   pile 'friar' dealt to S3 (top first): Tithes, Retribution, Epiphany, Sanction, Providence, Prayer, Invocation, Offering, Resurrection  [server only]
+#463  R3 T1   S0 turn start (2 actions)
+#464  R3 T1     waiting on S0: action  ← #463
+#465  R3 T1       S0 action [turn, 1 left]: draw  ← #464
+#466  R3 T1         S0 draws Duplicity from pile@S0  ← #465  [private: S0]
+#467  R3 T1     waiting on S0: action  ← #463
+#468  R3 T1       S0 action [turn, 0 left]: play Duplicity → keep(S0)  ← #467
+#469  R3 T1         S0 plays Duplicity → keep(S0)  ← #468
+#470  R3 T1           Duplicity has no effect: no other Keep card in hand to place face down  ← #469
+#471  R3 T1   S0 turn end
+#472  R3 T2   S2 turn start (2 actions)
+#473  R3 T2     waiting on S2: action  ← #472
+#474  R3 T2       S2 action [turn, 1 left]: draw  ← #473
+#475  R3 T2         S2 draws Interest from pile@S2  ← #474  [private: S2]
+#476  R3 T2     waiting on S2: action  ← #472
+#477  R3 T2       S2 action [turn, 0 left]: play Interest → keep(S2)  ← #476
+#478  R3 T2         S2 plays Interest → keep(S2)  ← #477
+#479  R3 T2   S2 turn end
+#480  R3 T3   S0 turn start (2 actions)
+#481  R3 T3     waiting on S0: action  ← #480
+#482  R3 T3       S0 action [turn, 1 left]: draw  ← #481
+#483  R3 T3         S0 draws Legerdemain from pile@S0  ← #482  [private: S0]
+#484  R3 T3     waiting on S0: action  ← #480
+#485  R3 T3       S0 action [turn, 0 left]: draw  ← #484
+#486  R3 T3         S0 draws Last Laugh from pile@S0  ← #485  [private: S0]
+#487  R3 T3   S0 turn end
+#488  R3 T4   S2 turn start (2 actions)
+#489  R3 T4     waiting on S2: action  ← #488
+#490  R3 T4       S2 action [turn, 1 left]: draw  ← #489
+#491  R3 T4         S2 draws Pandemonium from pile@S2  ← #490  [private: S2]
+#492  R3 T4           S2 plays Pandemonium (HOT!) → discard  ← #491
+#493  R3 T4             waiting on S2: choose-direction  ← #492
+#494  R3 T4               all piles rotate one position to the right  ← #493
+#495  R3 T4     waiting on S2: action  ← #488
+#496  R3 T4       S2 action [turn, 0 left]: draw  ← #495
+#497  R3 T4         S2 draws Tithes from pile@S2  ← #496  [private: S2]
+#498  R3 T4   S2 turn end
+#499  R3 T5   S0 turn start (2 actions)
+#500  R3 T5     waiting on S0: action  ← #499
+#501  R3 T5       S0 action [turn, 1 left]: draw  ← #500
+#502  R3 T5         S0 draws Scepter from pile@S0  ← #501  [private: S0]
+#503  R3 T5     waiting on S0: action  ← #499
+#504  R3 T5       S0 action [turn, 0 left]: play Scepter → keep(S0)  ← #503
+#505  R3 T5         S0 plays Scepter → keep(S0)  ← #504
+#506  R3 T5   S0 turn end
+#507  R3 T6   S2 turn start (2 actions)
+#508  R3 T6     waiting on S2: action  ← #507
+#509  R3 T6       S2 action [turn, 1 left]: draw  ← #508
+#510  R3 T6         S2 draws Retribution from pile@S2  ← #509  [private: S2]
+#511  R3 T6     waiting on S2: action  ← #507
+#512  R3 T6       S2 action [turn, 0 left]: draw  ← #511
+#513  R3 T6         S2 draws Epiphany from pile@S2  ← #512  [private: S2]
+#514  R3 T6   S2 turn end
+#515  R3 T7   S0 turn start (2 actions)
+#516  R3 T7     waiting on S0: action  ← #515
+#517  R3 T7       S0 action [turn, 1 left]: play Last Laugh → keep(S0)  ← #516
+#518  R3 T7         S0 plays Last Laugh → keep(S0)  ← #517
+#519  R3 T7     waiting on S0: action  ← #515
+#520  R3 T7       S0 action [turn, 0 left]: draw  ← #519
+#521  R3 T7         S0 draws Requisition from pile@S0  ← #520  [private: S0]
+#522  R3 T7   S0 turn end
+#523  R3 T8   S2 turn start (2 actions)
+#524  R3 T8     waiting on S2: action  ← #523
+#525  R3 T8       S2 action [turn, 1 left]: draw  ← #524
+#526  R3 T8         S2 draws Sanction from pile@S2  ← #525  [private: S2]
+#527  R3 T8           waiting on S2: hot-target (Sanction)  ← #526  [private: S2]
+#528  R3 T8             S2 plays Sanction (HOT!) → keep(S0)  ← #527
+#529  R3 T8     waiting on S2: action  ← #523
+#530  R3 T8       S2 action [turn, 0 left]: play Tithes → keep(S0)  ← #529
+#531  R3 T8         S2 plays Tithes → keep(S0)  ← #530
+#532  R3 T8   S2 turn end
+#533  R3 T9   S0 turn start (2 actions)
+#534  R3 T9     waiting on S0: action  ← #533
+#535  R3 T9       S0 action [turn, 1 left]: play Requisition  ← #534
+#536  R3 T9         S0 plays Requisition → discard  ← #535
+#537  R3 T9           waiting on S0: choose-pile  ← #536
+#538  R3 T9             S0 looks at Providence, Prayer, Invocation, Offering, Resurrection (pile @S2)  ← #537  [private: S0]
+#539  R3 T9             waiting on S0: choose-pile-card  ← #537
+#540  R3 T9               S0 takes Prayer from pile@S2  ← #539  [private: S0]
+#541  R3 T9     waiting on S0: action  ← #533
+#542  R3 T9       S0 action [turn, 0 left]: play Prayer  ← #541
+#543  R3 T9         S0 plays Prayer → discard  ← #542
+#544  R3 T9           waiting on S0: choose-pile  ← #543
+#545  R3 T9             S0 looks at Providence (pile @S2)  ← #544  [private: S0]
+#546  R3 T9             waiting on S0: take-or-discard  ← #544
+#547  R3 T9               S0 discards Providence from pile  ← #546
+#548  R3 T9                 S0 draws Invocation from pile@S2  ← #547  [private: S0]
+#549  R3 T9                   S0 plays Invocation (HOT!) → discard  ← #548
+#550  R3 T9                     waiting on S0: choose-pile  ← #549
+#551  R3 T9                       S0 draws Offering from pile@S2  ← #550  [private: S0]
+#552  R3 T9                         S0 plays Offering (HOT!) → discard  ← #551
+#553  R3 T9                           S0 discards Legerdemain from hand  ← #552
+#554  R3 T9                           waiting on S2: give-card  ← #552
+#555  R3 T9                             S2 gives Epiphany to S0  ← #554  [private: S2,S0]
+#556  R3 T9   S0 turn end
+#557  R3 T10  S2 turn start (2 actions)
+#558  R3 T10    waiting on S2: action  ← #557
+#559  R3 T10      S2 action [turn, 1 left]: play Retribution → keep(S0)  ← #558
+#560  R3 T10        S2 plays Retribution → keep(S0)  ← #559
+#561  R3 T10    waiting on S2: action  ← #557
+#562  R3 T10      S2 action [turn, 0 left]: draw  ← #561
+#563  R3 T10        S2 draws Resurrection from pile@S2  ← #562  [private: S2]
+#564  R3 T10  S2 turn end
+#565  R3 T11  S0 turn start (2 actions)
+#566  R3 T11    waiting on S0: action  ← #565
+#567  R3 T11      S0 action [turn, 1 left]: use Sanction: draw from pile@S2  ← #566
+#568  R3 T11        S0 draws from EMPTY pile@S2  ← #567
+#569  R3 T11        ROUND END: S0 drew from an empty pile  ← #567
+#570  R3 T11          LAST LAUGH: S0 may take one action before scoring  ← #569
+#571  R3 T11            waiting on S0: action  ← #570
+#572  R3 T11              S0 action [last-laugh, 0 left]: play Epiphany  ← #571
+#573  R3 T11                S0 plays Epiphany → discard  ← #572
+#574  R3 T11                  S0 looks at Acquisition, Fiat, Fool Token (piles @S0, @S1, @S3)  ← #573  [private: S0]
+#575  R3 T11                  waiting on S0: choose-top-card  ← #573
+#576  R3 T11                    S0 takes Acquisition from pile@S0  ← #575  [private: S0]
+#577  R3 T11                      waiting on S0: hot-target (Acquisition)  ← #576  [private: S0]
+#578  R3 T11                        S0 plays Acquisition (HOT!) → keep(S0)  ← #577
+#579  R3 T11          score: S0=9 S2=0 → S0 wins  ← #569
+#580  R3 T11            S0 earns a victory mark (2 total)  ← #579
+#581  R3 T11            GAME OVER: S0 wins  ← #579"
+`;
+
+exports[`golden games > 3 players 1`] = `
+"#1    R0 T0   game start: seats [player, player, player, ghost], first to 2 marks
+#2    R1 T0   round 1 start: S0 goes first
+#3    R1 T0   pile 'mask' dealt to S0 (top first): Interest, Scepter, Resurrection, Shackles, Last Laugh, Providence, Prayer, Medallion, Blunder  [server only]
+#4    R1 T0   pile 'friar' dealt to S1 (top first): Offering, Retribution, Revelation, Friar Token, Purity, Invocation, Tithes, Sanction, Epiphany  [server only]
+#5    R1 T0   pile 'fool' dealt to S2 (top first): Juggling, Duplicity, Pickpocket, Hocus Pocus, Fool Token, Joker, Pandemonium, Legerdemain, Pluck  [server only]
+#6    R1 T0   pile 'count' dealt to S3 (top first): Royal Favor, Dagger, Requisition, Fiat, Count Token, Acquisition, Chalice, Fabergé Egg, Timepiece  [server only]
+#7    R1 T1   S0 turn start (2 actions)
+#8    R1 T1     waiting on S0: action  ← #7
+#9    R1 T1       S0 action [turn, 1 left]: draw  ← #8
+#10   R1 T1         S0 draws Interest from pile@S0  ← #9  [private: S0]
+#11   R1 T1     waiting on S0: action  ← #7
+#12   R1 T1       S0 action [turn, 0 left]: play Interest → keep(S1)  ← #11
+#13   R1 T1         S0 plays Interest → keep(S1)  ← #12
+#14   R1 T1   S0 turn end
+#15   R1 T2   S1 turn start (2 actions)
+#16   R1 T2     waiting on S1: action  ← #15
+#17   R1 T2       S1 action [turn, 1 left]: draw  ← #16
+#18   R1 T2         S1 draws Offering from pile@S1  ← #17  [private: S1]
+#19   R1 T2     waiting on S1: action  ← #15
+#20   R1 T2       S1 action [turn, 0 left]: draw  ← #19
+#21   R1 T2         S1 draws Retribution from pile@S1  ← #20  [private: S1]
+#22   R1 T2   S1 turn end
+#23   R1 T3   S2 turn start (2 actions)
+#24   R1 T3     waiting on S2: action  ← #23
+#25   R1 T3       S2 action [turn, 1 left]: draw  ← #24
+#26   R1 T3         S2 draws Juggling from pile@S2  ← #25  [private: S2]
+#27   R1 T3           waiting on S2: hot-target (Juggling)  ← #26  [private: S2]
+#28   R1 T3             S2 plays Juggling (HOT!) → keep(S0)  ← #27
+#29   R1 T3     waiting on S2: action  ← #23
+#30   R1 T3       S2 action [turn, 0 left]: draw  ← #29
+#31   R1 T3         S2 draws Duplicity from pile@S2  ← #30  [private: S2]
+#32   R1 T3   S2 turn end
+#33   R1 T4   S0 turn start (2 actions)
+#34   R1 T4     waiting on S0: action  ← #33
+#35   R1 T4       S0 action [turn, 1 left]: use Juggling: swap piles @S0 and @S2  ← #34
+#36   R1 T4         piles @S0 and @S2 swap places  ← #35
+#37   R1 T4     waiting on S0: action  ← #33
+#38   R1 T4       S0 action [turn, 0 left]: draw  ← #37
+#39   R1 T4         S0 draws Pickpocket from pile@S0  ← #38  [private: S0]
+#40   R1 T4   S0 turn end
+#41   R1 T5   S1 turn start (2 actions)
+#42   R1 T5     waiting on S1: action  ← #41
+#43   R1 T5       S1 action [turn, 1 left]: play Offering  ← #42
+#44   R1 T5         S1 plays Offering → discard  ← #43
+#45   R1 T5           S1 discards Retribution from hand  ← #44
+#46   R1 T5           waiting on S0: give-card  ← #44
+#47   R1 T5           waiting on S2: give-card  ← #44
+#48   R1 T5             S2 gives Duplicity to S1  ← #47  [private: S2,S1]
+#49   R1 T5             S0 gives Pickpocket to S1  ← #46  [private: S0,S1]
+#50   R1 T5     waiting on S1: action  ← #41
+#51   R1 T5       S1 action [turn, 0 left]: draw  ← #50
+#52   R1 T5         S1 draws Revelation from pile@S1  ← #51  [private: S1]
+#53   R1 T5           S1 plays Revelation (HOT!) → discard  ← #52
+#54   R1 T5             waiting on S1: choose-pile  ← #53
+#55   R1 T5               pile@S2 is flipped upside down  ← #54
+#56   R1 T5   S1 turn end
+#57   R1 T6   S2 turn start (2 actions)
+#58   R1 T6     waiting on S2: action  ← #57
+#59   R1 T6       S2 action [turn, 1 left]: draw  ← #58
+#60   R1 T6         S2 draws Blunder from pile@S2  ← #59
+#61   R1 T6           S2 plays Blunder (HOT!) → keep(S2)  ← #60
+#62   R1 T6     waiting on S2: action  ← #57
+#63   R1 T6       S2 action [turn, 0 left]: draw  ← #62
+#64   R1 T6         S2 draws Medallion from pile@S2  ← #63
+#65   R1 T6   S2 turn end
+#66   R1 T7   S0 turn start (2 actions)
+#67   R1 T7     waiting on S0: action  ← #66
+#68   R1 T7       S0 action [turn, 1 left]: use Juggling: swap piles @S1 and @S3  ← #67
+#69   R1 T7         piles @S1 and @S3 swap places  ← #68
+#70   R1 T7     waiting on S0: action  ← #66
+#71   R1 T7       S0 action [turn, 0 left]: draw  ← #70
+#72   R1 T7         S0 draws Hocus Pocus from pile@S0  ← #71  [private: S0]
+#73   R1 T7   S0 turn end
+#74   R1 T8   S1 turn start (2 actions)
+#75   R1 T8     waiting on S1: action  ← #74
+#76   R1 T8       S1 action [turn, 1 left]: play Pickpocket  ← #75
+#77   R1 T8         S1 plays Pickpocket → discard  ← #76
+#78   R1 T8           waiting on S1: choose-player  ← #77
+#79   R1 T8             Pickpocket has no effect: chose yourself  ← #78
+#80   R1 T8     waiting on S1: action  ← #74
+#81   R1 T8       S1 action [turn, 0 left]: play Duplicity → keep(S0)  ← #80
+#82   R1 T8         S1 plays Duplicity → keep(S0)  ← #81
+#83   R1 T8           Duplicity has no effect: no other Keep card in hand to place face down  ← #82
+#84   R1 T8   S1 turn end
+#85   R1 T9   S2 turn start (2 actions)
+#86   R1 T9     waiting on S2: action  ← #85
+#87   R1 T9       S2 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S2  ← #86
+#88   R1 T9         S2 places Blunder face-up on pile@S2  ← #87
+#89   R1 T9   S2 turn end
+#90   R1 T10  S0 turn start (2 actions)
+#91   R1 T10    waiting on S0: action  ← #90
+#92   R1 T10      S0 action [turn, 1 left]: draw  ← #91
+#93   R1 T10        S0 draws Fool Token from pile@S0  ← #92  [private: S0]
+#94   R1 T10    waiting on S0: action  ← #90
+#95   R1 T10      S0 action [turn, 0 left]: use Juggling: swap piles @S0 and @S2  ← #94
+#96   R1 T10        piles @S0 and @S2 swap places  ← #95
+#97   R1 T10  S0 turn end
+#98   R1 T11  S1 turn start (2 actions)
+#99   R1 T11    waiting on S1: action  ← #98
+#100  R1 T11      S1 action [turn, 1 left]: draw  ← #99
+#101  R1 T11        S1 draws Royal Favor from pile@S1  ← #100  [private: S1]
+#102  R1 T11          waiting on S1: hot-target (Royal Favor)  ← #101  [private: S1]
+#103  R1 T11            S1 plays Royal Favor (HOT!) → keep(S2)  ← #102
+#104  R1 T11              after Royal Favor: triggers → [royal-favor(S2)]  ← #103
+#105  R1 T11                ROYAL FAVOR: S2 draws from their pile  ← #104
+#106  R1 T11                  S2 draws Joker from pile@S2  ← #105  [private: S2]
+#107  R1 T11    waiting on S1: action  ← #98
+#108  R1 T11      S1 action [turn, 0 left]: draw  ← #107
+#109  R1 T11        S1 draws Dagger from pile@S1  ← #108  [private: S1]
+#110  R1 T11  S1 turn end
+#111  R1 T12  S2 turn start (2 actions)
+#112  R1 T12    waiting on S2: action  ← #111
+#113  R1 T12      S2 action [turn, 1 left]: draw  ← #112
+#114  R1 T12        S2 draws Pandemonium from pile@S2  ← #113  [private: S2]
+#115  R1 T12          S2 plays Pandemonium (HOT!) → discard  ← #114
+#116  R1 T12            waiting on S2: choose-direction  ← #115
+#117  R1 T12              all piles rotate one position to the right  ← #116
+#118  R1 T12    waiting on S2: action  ← #111
+#119  R1 T12      S2 action [turn, 0 left]: play Medallion → keep(S2)  ← #118
+#120  R1 T12        S2 plays Medallion → keep(S2)  ← #119
+#121  R1 T12  S2 turn end
+#122  R1 T13  S0 turn start (2 actions)
+#123  R1 T13    waiting on S0: action  ← #122
+#124  R1 T13      S0 action [turn, 1 left]: draw  ← #123
+#125  R1 T13        S0 draws Requisition from pile@S0  ← #124  [private: S0]
+#126  R1 T13    waiting on S0: action  ← #122
+#127  R1 T13      S0 action [turn, 0 left]: use Juggling: swap piles @S0 and @S2  ← #126
+#128  R1 T13        piles @S0 and @S2 swap places  ← #127
+#129  R1 T13  S0 turn end
+#130  R1 T14  S1 turn start (2 actions)
+#131  R1 T14    waiting on S1: action  ← #130
+#132  R1 T14      S1 action [turn, 1 left]: draw  ← #131
+#133  R1 T14        S1 draws Legerdemain from pile@S1  ← #132  [private: S1]
+#134  R1 T14    waiting on S1: action  ← #130
+#135  R1 T14      S1 action [turn, 0 left]: play Dagger → keep(S0)  ← #134
+#136  R1 T14        S1 plays Dagger → keep(S0)  ← #135
+#137  R1 T14  S1 turn end
+#138  R1 T15  S2 turn start (2 actions)
+#139  R1 T15    waiting on S2: action  ← #138
+#140  R1 T15      S2 action [turn, 1 left]: draw  ← #139
+#141  R1 T15        S2 draws Fiat from pile@S2  ← #140  [private: S2]
+#142  R1 T15          waiting on S2: hot-target (Fiat)  ← #141  [private: S2]
+#143  R1 T15            S2 plays Fiat (HOT!) → keep(S0)  ← #142
+#144  R1 T15              all piles are pushed to the center  ← #143
+#145  R1 T15              waiting on S2: claim-pile  ← #143
+#146  R1 T15                S2 claims the pile from @S2  ← #145
+#147  R1 T15                waiting on S0: claim-pile  ← #145
+#148  R1 T15                  S0 claims the pile from @S3  ← #147
+#149  R1 T15                  waiting on S1: claim-pile  ← #147
+#150  R1 T15                    S1 claims the pile from @S0  ← #149
+#151  R1 T15                    the remaining pile from @S1 goes to ghost S3  ← #149
+#152  R1 T15    waiting on S2: action  ← #138
+#153  R1 T15      S2 action [turn, 0 left]: draw  ← #152
+#154  R1 T15        S2 draws Count Token from pile@S2  ← #153  [private: S2]
+#155  R1 T15  S2 turn end
+#156  R1 T16  S0 turn start (2 actions)
+#157  R1 T16    waiting on S0: action  ← #156
+#158  R1 T16      S0 action [turn, 1 left]: use Juggling: swap piles @S1 and @S3  ← #157
+#159  R1 T16        piles @S1 and @S3 swap places  ← #158
+#160  R1 T16    waiting on S0: action  ← #156
+#161  R1 T16      S0 action [turn, 0 left]: play Fool Token → keep(S2)  ← #160
+#162  R1 T16        S0 plays Fool Token → keep(S2)  ← #161
+#163  R1 T16  S0 turn end
+#164  R1 T17  S1 turn start (2 actions)
+#165  R1 T17    waiting on S1: action  ← #164
+#166  R1 T17      S1 action [turn, 1 left]: draw  ← #165
+#167  R1 T17        S1 draws Pluck from pile@S1  ← #166  [private: S1]
+#168  R1 T17    waiting on S1: action  ← #164
+#169  R1 T17      S1 action [turn, 0 left]: play Legerdemain  ← #168
+#170  R1 T17        S1 plays Legerdemain → discard  ← #169
+#171  R1 T17          waiting on S1: choose-player  ← #170
+#172  R1 T17            Legerdemain has no effect: S3 has no cards  ← #171
+#173  R1 T17  S1 turn end
+#174  R1 T18  S2 turn start (2 actions)
+#175  R1 T18    waiting on S2: action  ← #174
+#176  R1 T18      S2 action [turn, 1 left]: play Count Token → keep(S0)  ← #175
+#177  R1 T18        S2 plays Count Token → keep(S0)  ← #176
+#178  R1 T18    waiting on S2: action  ← #174
+#179  R1 T18      S2 action [turn, 0 left]: draw  ← #178
+#180  R1 T18        S2 draws Acquisition from pile@S2  ← #179  [private: S2]
+#181  R1 T18          waiting on S2: hot-target (Acquisition)  ← #180  [private: S2]
+#182  R1 T18            S2 plays Acquisition (HOT!) → keep(S0)  ← #181
+#183  R1 T18  S2 turn end
+#184  R1 T19  S0 turn start (2 actions)
+#185  R1 T19    waiting on S0: action  ← #184
+#186  R1 T19      S0 action [turn, 1 left]: draw  ← #185
+#187  R1 T19        S0 draws Blunder from pile@S0  ← #186
+#188  R1 T19          S0 plays Blunder (HOT!) → keep(S0)  ← #187
+#189  R1 T19    waiting on S0: action  ← #184
+#190  R1 T19      S0 action [turn, 0 left]: use Acquisition: discard Hocus Pocus, draw left pile first  ← #189
+#191  R1 T19        S0 discards Hocus Pocus from hand  ← #190
+#192  R1 T19          S0 draws from EMPTY pile@S1  ← #191
+#193  R1 T19          ROUND END: S0 drew from an empty pile  ← #191
+#194  R1 T19            score: S0=-9 S1=0 S2=1.5 → S2 wins  ← #193
+#195  R1 T19              S2 earns a victory mark (1 total)  ← #194
+#196  R2 T0   round 2 start: S2 goes first
+#197  R2 T0   pile 'count' dealt to S0 (top first): Requisition, Chalice, Timepiece, Fiat, Interest, Scepter, Dagger, Count Token, Acquisition  [server only]
+#198  R2 T0   pile 'fool' dealt to S1 (top first): Legerdemain, Blunder, Pickpocket, Fool Token, Last Laugh, Pluck, Shackles, Pandemonium, Juggling  [server only]
+#199  R2 T0   pile 'mask' dealt to S2 (top first): Resurrection, Royal Favor, Hocus Pocus, Medallion, Joker, Tithes, Fabergé Egg, Duplicity, Friar Token  [server only]
+#200  R2 T0   pile 'friar' dealt to S3 (top first): Prayer, Sanction, Revelation, Providence, Retribution, Offering, Invocation, Epiphany, Purity  [server only]
+#201  R2 T1   S2 turn start (2 actions)
+#202  R2 T1     waiting on S2: action  ← #201
+#203  R2 T1       S2 action [turn, 1 left]: draw  ← #202
+#204  R2 T1         S2 draws Resurrection from pile@S2  ← #203  [private: S2]
+#205  R2 T1     waiting on S2: action  ← #201
+#206  R2 T1       S2 action [turn, 0 left]: draw  ← #205
+#207  R2 T1         S2 draws Royal Favor from pile@S2  ← #206  [private: S2]
+#208  R2 T1           waiting on S2: hot-target (Royal Favor)  ← #207  [private: S2]
+#209  R2 T1             S2 plays Royal Favor (HOT!) → keep(S0)  ← #208
+#210  R2 T1               after Royal Favor: triggers → [royal-favor(S0)]  ← #209
+#211  R2 T1                 ROYAL FAVOR: S0 draws from their pile  ← #210
+#212  R2 T1                   S0 draws Requisition from pile@S0  ← #211  [private: S0]
+#213  R2 T1   S2 turn end
+#214  R2 T2   S0 turn start (2 actions)
+#215  R2 T2     waiting on S0: action  ← #214
+#216  R2 T2       S0 action [turn, 1 left]: draw  ← #215
+#217  R2 T2         S0 draws Chalice from pile@S0  ← #216  [private: S0]
+#218  R2 T2     waiting on S0: action  ← #214
+#219  R2 T2       S0 action [turn, 0 left]: play Requisition  ← #218
+#220  R2 T2         S0 plays Requisition → discard  ← #219
+#221  R2 T2           waiting on S0: choose-pile  ← #220
+#222  R2 T2             S0 looks at Legerdemain, Blunder, Pickpocket, Fool Token, Last Laugh, Pluck, Shackles, Pandemonium, Juggling (pile @S1)  ← #221  [private: S0]
+#223  R2 T2             waiting on S0: choose-pile-card  ← #221
+#224  R2 T2               S0 takes Last Laugh from pile@S1  ← #223  [private: S0]
+#225  R2 T2   S0 turn end
+#226  R2 T3   S1 turn start (2 actions)
+#227  R2 T3     waiting on S1: action  ← #226
+#228  R2 T3       S1 action [turn, 1 left]: draw  ← #227
+#229  R2 T3         S1 draws Legerdemain from pile@S1  ← #228  [private: S1]
+#230  R2 T3     waiting on S1: action  ← #226
+#231  R2 T3       S1 action [turn, 0 left]: play Legerdemain  ← #230
+#232  R2 T3         S1 plays Legerdemain → discard  ← #231
+#233  R2 T3           waiting on S1: choose-player  ← #232
+#234  R2 T3             S1 takes Chalice from S0's hand  ← #233
+#235  R2 T3               waiting on S1: hot-target (Chalice)  ← #234  [private: S1]
+#236  R2 T3                 S1 plays Chalice (HOT!) → keep(S0)  ← #235
+#237  R2 T3   S1 turn end
+#238  R2 T4   S2 turn start (2 actions)
+#239  R2 T4     waiting on S2: action  ← #238
+#240  R2 T4       S2 action [turn, 1 left]: play Resurrection  ← #239
+#241  R2 T4         S2 plays Resurrection → discard  ← #240
+#242  R2 T4           waiting on S2: choose-discard-card  ← #241
+#243  R2 T4             S2 takes Resurrection from the discard  ← #242
+#244  R2 T4     waiting on S2: action  ← #238
+#245  R2 T4       S2 action [turn, 0 left]: play Resurrection  ← #244
+#246  R2 T4         S2 plays Resurrection → discard  ← #245
+#247  R2 T4           waiting on S2: choose-discard-card  ← #246
+#248  R2 T4             S2 takes Legerdemain from the discard  ← #247
+#249  R2 T4   S2 turn end
+#250  R2 T5   S0 turn start (2 actions)
+#251  R2 T5     waiting on S0: action  ← #250
+#252  R2 T5       S0 action [turn, 1 left]: play Last Laugh → keep(S0)  ← #251
+#253  R2 T5         S0 plays Last Laugh → keep(S0)  ← #252
+#254  R2 T5     waiting on S0: action  ← #250
+#255  R2 T5       S0 action [turn, 0 left]: draw  ← #254
+#256  R2 T5         S0 draws Timepiece from pile@S0  ← #255  [private: S0]
+#257  R2 T5   S0 turn end
+#258  R2 T6   S1 turn start (2 actions)
+#259  R2 T6     waiting on S1: action  ← #258
+#260  R2 T6       S1 action [turn, 1 left]: draw  ← #259
+#261  R2 T6         S1 draws Blunder from pile@S1  ← #260  [private: S1]
+#262  R2 T6           S1 plays Blunder (HOT!) → keep(S1)  ← #261
+#263  R2 T6     waiting on S1: action  ← #258
+#264  R2 T6       S1 action [turn, 0 left]: draw  ← #263
+#265  R2 T6         S1 draws Pickpocket from pile@S1  ← #264  [private: S1]
+#266  R2 T6   S1 turn end
+#267  R2 T7   S2 turn start (2 actions)
+#268  R2 T7     waiting on S2: action  ← #267
+#269  R2 T7       S2 action [turn, 1 left]: draw  ← #268
+#270  R2 T7         S2 draws Hocus Pocus from pile@S2  ← #269  [private: S2]
+#271  R2 T7     waiting on S2: action  ← #267
+#272  R2 T7       S2 action [turn, 0 left]: play Hocus Pocus  ← #271
+#273  R2 T7         S2 plays Hocus Pocus → discard  ← #272
+#274  R2 T7           S2 gets 2 actions from Hocus Pocus  ← #273
+#275  R2 T7           waiting on S2: action  ← #273
+#276  R2 T7             S2 action [hocus-pocus, 1 left]: draw  ← #275
+#277  R2 T7               S2 draws Medallion from pile@S2  ← #276  [private: S2]
+#278  R2 T7           waiting on S2: action  ← #273
+#279  R2 T7             S2 action [hocus-pocus, 0 left]: play Medallion → keep(S2)  ← #278
+#280  R2 T7               S2 plays Medallion → keep(S2)  ← #279
+#281  R2 T7   S2 turn end
+#282  R2 T8   S0 turn start (2 actions)
+#283  R2 T8     waiting on S0: action  ← #282
+#284  R2 T8       S0 action [turn, 1 left]: play Timepiece → keep(S2)  ← #283
+#285  R2 T8         S0 plays Timepiece → keep(S2)  ← #284
+#286  R2 T8     waiting on S0: action  ← #282
+#287  R2 T8       S0 action [turn, 0 left]: draw  ← #286
+#288  R2 T8         S0 draws Fiat from pile@S0  ← #287  [private: S0]
+#289  R2 T8           waiting on S0: hot-target (Fiat)  ← #288  [private: S0]
+#290  R2 T8             S0 plays Fiat (HOT!) → keep(S0)  ← #289
+#291  R2 T8               all piles are pushed to the center  ← #290
+#292  R2 T8               waiting on S0: claim-pile  ← #290
+#293  R2 T8                 S0 claims the pile from @S3  ← #292
+#294  R2 T8                 waiting on S1: claim-pile  ← #292
+#295  R2 T8                   S1 claims the pile from @S0  ← #294
+#296  R2 T8                   waiting on S2: claim-pile  ← #294
+#297  R2 T8                     S2 claims the pile from @S2  ← #296
+#298  R2 T8                     the remaining pile from @S1 goes to ghost S3  ← #296
+#299  R2 T8   S0 turn end
+#300  R2 T9   S1 turn start (2 actions)
+#301  R2 T9     waiting on S1: action  ← #300
+#302  R2 T9       S1 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S1  ← #301
+#303  R2 T9         S1 places Blunder face-up on pile@S1  ← #302
+#304  R2 T9   S1 turn end
+#305  R2 T10  S2 turn start (2 actions)
+#306  R2 T10    waiting on S2: action  ← #305
+#307  R2 T10      S2 action [turn, 1 left]: play Legerdemain  ← #306
+#308  R2 T10        S2 plays Legerdemain → discard  ← #307
+#309  R2 T10          waiting on S2: choose-player  ← #308
+#310  R2 T10            Legerdemain has no effect: S3 has no cards  ← #309
+#311  R2 T10    waiting on S2: action  ← #305
+#312  R2 T10      S2 action [turn, 0 left]: draw  ← #311
+#313  R2 T10        S2 draws Joker from pile@S2  ← #312  [private: S2]
+#314  R2 T10  S2 turn end
+#315  R2 T11  S0 turn start (2 actions)
+#316  R2 T11    waiting on S0: action  ← #315
+#317  R2 T11      S0 action [turn, 1 left]: draw  ← #316
+#318  R2 T11        S0 draws Prayer from pile@S0  ← #317  [private: S0]
+#319  R2 T11    waiting on S0: action  ← #315
+#320  R2 T11      S0 action [turn, 0 left]: play Prayer  ← #319
+#321  R2 T11        S0 plays Prayer → discard  ← #320
+#322  R2 T11          waiting on S0: choose-pile  ← #321
+#323  R2 T11            S0 looks at Tithes (pile @S2)  ← #322  [private: S0]
+#324  R2 T11            waiting on S0: take-or-discard  ← #322
+#325  R2 T11              S0 takes Tithes from pile@S2  ← #324  [private: S0]
+#326  R2 T11  S0 turn end
+#327  R2 T12  S1 turn start (2 actions)
+#328  R2 T12    waiting on S1: action  ← #327
+#329  R2 T12      S1 action [turn, 1 left]: draw  ← #328
+#330  R2 T12        S1 draws Blunder from pile@S1  ← #329
+#331  R2 T12          S1 plays Blunder (HOT!) → keep(S1)  ← #330
+#332  R2 T12    waiting on S1: action  ← #327
+#333  R2 T12      S1 action [turn, 0 left]: play Pickpocket  ← #332
+#334  R2 T12        S1 plays Pickpocket → discard  ← #333
+#335  R2 T12          waiting on S1: choose-player  ← #334
+#336  R2 T12            Pickpocket has no effect: S2 has no Coin cards in hand  ← #335
+#337  R2 T12  S1 turn end
+#338  R2 T13  S2 turn start (2 actions)
+#339  R2 T13    waiting on S2: action  ← #338
+#340  R2 T13      S2 action [turn, 1 left]: draw  ← #339
+#341  R2 T13        S2 draws Fabergé Egg from pile@S2  ← #340  [private: S2]
+#342  R2 T13    waiting on S2: action  ← #338
+#343  R2 T13      S2 action [turn, 0 left]: play Fabergé Egg → keep(S0)  ← #342
+#344  R2 T13        S2 plays Fabergé Egg → keep(S0)  ← #343
+#345  R2 T13  S2 turn end
+#346  R2 T14  S0 turn start (2 actions)
+#347  R2 T14    waiting on S0: action  ← #346
+#348  R2 T14      S0 action [turn, 1 left]: draw  ← #347
+#349  R2 T14        S0 draws Sanction from pile@S0  ← #348  [private: S0]
+#350  R2 T14          waiting on S0: hot-target (Sanction)  ← #349  [private: S0]
+#351  R2 T14            S0 plays Sanction (HOT!) → keep(S1)  ← #350
+#352  R2 T14    waiting on S0: action  ← #346
+#353  R2 T14      S0 action [turn, 0 left]: play Tithes → keep(S1)  ← #352
+#354  R2 T14        S0 plays Tithes → keep(S1)  ← #353
+#355  R2 T14  S0 turn end
+#356  R2 T15  S1 turn start (2 actions)
+#357  R2 T15    waiting on S1: action  ← #356
+#358  R2 T15      S1 action [turn, 1 left]: use Sanction: draw from pile@S3  ← #357
+#359  R2 T15        S1 draws Fool Token from pile@S3  ← #358  [private: S1]
+#360  R2 T15    waiting on S1: action  ← #356
+#361  R2 T15      S1 action [turn, 0 left]: play Fool Token → keep(S2)  ← #360
+#362  R2 T15        S1 plays Fool Token → keep(S2)  ← #361
+#363  R2 T15  S1 turn end
+#364  R2 T16  S2 turn start (2 actions)
+#365  R2 T16    waiting on S2: action  ← #364
+#366  R2 T16      S2 action [turn, 1 left]: draw  ← #365
+#367  R2 T16        S2 draws Duplicity from pile@S2  ← #366  [private: S2]
+#368  R2 T16    waiting on S2: action  ← #364
+#369  R2 T16      S2 action [turn, 0 left]: play Duplicity → keep(S1)  ← #368
+#370  R2 T16        S2 plays Duplicity → keep(S1)  ← #369
+#371  R2 T16          Duplicity has no effect: no other Keep card in hand to place face down  ← #370
+#372  R2 T16  S2 turn end
+#373  R2 T17  S0 turn start (2 actions)
+#374  R2 T17    waiting on S0: action  ← #373
+#375  R2 T17      S0 action [turn, 1 left]: draw  ← #374
+#376  R2 T17        S0 draws Revelation from pile@S0  ← #375  [private: S0]
+#377  R2 T17          S0 plays Revelation (HOT!) → discard  ← #376
+#378  R2 T17            waiting on S0: choose-pile  ← #377
+#379  R2 T17              pile@S2 is flipped upside down  ← #378
+#380  R2 T17    waiting on S0: action  ← #373
+#381  R2 T17      S0 action [turn, 0 left]: draw  ← #380
+#382  R2 T17        S0 draws Providence from pile@S0  ← #381  [private: S0]
+#383  R2 T17  S0 turn end
+#384  R2 T18  S1 turn start (2 actions)
+#385  R2 T18    waiting on S1: action  ← #384
+#386  R2 T18      S1 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S0  ← #385
+#387  R2 T18        S1 places Blunder face-up on pile@S0  ← #386
+#388  R2 T18  S1 turn end
+#389  R2 T19  S2 turn start (2 actions)
+#390  R2 T19    waiting on S2: action  ← #389
+#391  R2 T19      S2 action [turn, 1 left]: draw  ← #390
+#392  R2 T19        S2 draws Friar Token from pile@S2  ← #391
+#393  R2 T19    waiting on S2: action  ← #389
+#394  R2 T19      S2 action [turn, 0 left]: play Friar Token → keep(S1)  ← #393
+#395  R2 T19        S2 plays Friar Token → keep(S1)  ← #394
+#396  R2 T19  S2 turn end
+#397  R2 T20  S0 turn start (2 actions)
+#398  R2 T20    waiting on S0: action  ← #397
+#399  R2 T20      S0 action [turn, 1 left]: draw  ← #398
+#400  R2 T20        S0 draws Blunder from pile@S0  ← #399
+#401  R2 T20          S0 plays Blunder (HOT!) → keep(S0)  ← #400
+#402  R2 T20    waiting on S0: action  ← #397
+#403  R2 T20      S0 action [turn, 0 left]: play Providence  ← #402
+#404  R2 T20        S0 plays Providence → discard  ← #403
+#405  R2 T20          waiting on S0: choose-keep-pair  ← #404
+#406  R2 T20            swap Fiat (keep S0) ⇄ Duplicity (keep S1)  ← #405
+#407  R2 T20  S0 turn end
+#408  R2 T21  S1 turn start (2 actions)
+#409  R2 T21    waiting on S1: action  ← #408
+#410  R2 T21      S1 action [turn, 1 left]: use Tithes: discard all Coin cards, reorder pile  ← #409
+#411  R2 T21        S1 discards Tithes, Friar Token from keep  ← #410
+#412  R2 T21          S1 looks at Interest, Scepter, Dagger, Count Token, Acquisition (pile @S1)  ← #411  [private: S1]
+#413  R2 T21          waiting on S1: order-pile  ← #411
+#414  R2 T21            S1 reorders pile@S1 (top first): Acquisition, Count Token, Dagger, Scepter, Interest  ← #413  [private: S1]
+#415  R2 T21    waiting on S1: action  ← #408
+#416  R2 T21      S1 action [turn, 0 left]: use Sanction: draw from pile@S0  ← #415
+#417  R2 T21        S1 draws Retribution from pile@S0  ← #416  [private: S1]
+#418  R2 T21  S1 turn end
+#419  R2 T22  S2 turn start (2 actions)
+#420  R2 T22    waiting on S2: action  ← #419
+#421  R2 T22      S2 action [turn, 1 left]: draw  ← #420
+#422  R2 T22        S2 draws from EMPTY pile@S2  ← #421
+#423  R2 T22        ROUND END: S2 drew from an empty pile  ← #421
+#424  R2 T22          LAST LAUGH: S0 may take one action before scoring  ← #423
+#425  R2 T22            waiting on S0: action  ← #424
+#426  R2 T22              S0 action [last-laugh, 0 left]: draw  ← #425
+#427  R2 T22                S0 draws Offering from pile@S0  ← #426  [private: S0]
+#428  R2 T22          score: S0=-4.5 S1=0 S2=3 → S2 wins  ← #423
+#429  R2 T22            S2 earns a victory mark (2 total)  ← #428
+#430  R2 T22            GAME OVER: S2 wins  ← #428"
+`;
+
+exports[`golden games > 4 players 1`] = `
+"#1    R0 T0   game start: seats [player, player, player, player], first to 2 marks
+#2    R1 T0   round 1 start: S1 goes first
+#3    R1 T0   pile 'mask' dealt to S0 (top first): Dagger, Pandemonium, Legerdemain, Acquisition, Fiat, Offering, Pickpocket, Revelation, Sanction  [server only]
+#4    R1 T0   pile 'fool' dealt to S1 (top first): Duplicity, Blunder, Joker, Fool Token, Juggling, Last Laugh, Shackles, Hocus Pocus, Pluck  [server only]
+#5    R1 T0   pile 'count' dealt to S2 (top first): Chalice, Scepter, Royal Favor, Fabergé Egg, Interest, Requisition, Medallion, Count Token, Timepiece  [server only]
+#6    R1 T0   pile 'friar' dealt to S3 (top first): Tithes, Retribution, Purity, Invocation, Providence, Prayer, Epiphany, Friar Token, Resurrection  [server only]
+#7    R1 T1   S1 turn start (2 actions)
+#8    R1 T1     waiting on S1: action  ← #7
+#9    R1 T1       S1 action [turn, 1 left]: draw  ← #8
+#10   R1 T1         S1 draws Duplicity from pile@S1  ← #9  [private: S1]
+#11   R1 T1     waiting on S1: action  ← #7
+#12   R1 T1       S1 action [turn, 0 left]: play Duplicity → keep(S3)  ← #11
+#13   R1 T1         S1 plays Duplicity → keep(S3)  ← #12
+#14   R1 T1           Duplicity has no effect: no other Keep card in hand to place face down  ← #13
+#15   R1 T1   S1 turn end
+#16   R1 T2   S2 turn start (2 actions)
+#17   R1 T2     waiting on S2: action  ← #16
+#18   R1 T2       S2 action [turn, 1 left]: draw  ← #17
+#19   R1 T2         S2 draws Chalice from pile@S2  ← #18  [private: S2]
+#20   R1 T2     waiting on S2: action  ← #16
+#21   R1 T2       S2 action [turn, 0 left]: play Chalice → keep(S2)  ← #20
+#22   R1 T2         S2 plays Chalice → keep(S2)  ← #21
+#23   R1 T2   S2 turn end
+#24   R1 T3   S3 turn start (2 actions)
+#25   R1 T3     waiting on S3: action  ← #24
+#26   R1 T3       S3 action [turn, 1 left]: draw  ← #25
+#27   R1 T3         S3 draws Tithes from pile@S3  ← #26  [private: S3]
+#28   R1 T3     waiting on S3: action  ← #24
+#29   R1 T3       S3 action [turn, 0 left]: play Tithes → keep(S3)  ← #28
+#30   R1 T3         S3 plays Tithes → keep(S3)  ← #29
+#31   R1 T3   S3 turn end
+#32   R1 T4   S0 turn start (2 actions)
+#33   R1 T4     waiting on S0: action  ← #32
+#34   R1 T4       S0 action [turn, 1 left]: draw  ← #33
+#35   R1 T4         S0 draws Dagger from pile@S0  ← #34  [private: S0]
+#36   R1 T4     waiting on S0: action  ← #32
+#37   R1 T4       S0 action [turn, 0 left]: play Dagger → keep(S3)  ← #36
+#38   R1 T4         S0 plays Dagger → keep(S3)  ← #37
+#39   R1 T4   S0 turn end
+#40   R1 T5   S1 turn start (2 actions)
+#41   R1 T5     waiting on S1: action  ← #40
+#42   R1 T5       S1 action [turn, 1 left]: draw  ← #41
+#43   R1 T5         S1 draws Blunder from pile@S1  ← #42  [private: S1]
+#44   R1 T5           S1 plays Blunder (HOT!) → keep(S1)  ← #43
+#45   R1 T5     waiting on S1: action  ← #40
+#46   R1 T5       S1 action [turn, 0 left]: draw  ← #45
+#47   R1 T5         S1 draws Joker from pile@S1  ← #46  [private: S1]
+#48   R1 T5   S1 turn end
+#49   R1 T6   S2 turn start (2 actions)
+#50   R1 T6     waiting on S2: action  ← #49
+#51   R1 T6       S2 action [turn, 1 left]: draw  ← #50
+#52   R1 T6         S2 draws Scepter from pile@S2  ← #51  [private: S2]
+#53   R1 T6     waiting on S2: action  ← #49
+#54   R1 T6       S2 action [turn, 0 left]: play Scepter → keep(S1)  ← #53
+#55   R1 T6         S2 plays Scepter → keep(S1)  ← #54
+#56   R1 T6   S2 turn end
+#57   R1 T7   S3 turn start (2 actions)
+#58   R1 T7     waiting on S3: action  ← #57
+#59   R1 T7       S3 action [turn, 1 left]: draw  ← #58
+#60   R1 T7         S3 draws Retribution from pile@S3  ← #59  [private: S3]
+#61   R1 T7     waiting on S3: action  ← #57
+#62   R1 T7       S3 action [turn, 0 left]: play Retribution → keep(S3)  ← #61
+#63   R1 T7         S3 plays Retribution → keep(S3)  ← #62
+#64   R1 T7   S3 turn end
+#65   R1 T8   S0 turn start (2 actions)
+#66   R1 T8     waiting on S0: action  ← #65
+#67   R1 T8       S0 action [turn, 1 left]: draw  ← #66
+#68   R1 T8         S0 draws Pandemonium from pile@S0  ← #67  [private: S0]
+#69   R1 T8           S0 plays Pandemonium (HOT!) → discard  ← #68
+#70   R1 T8             waiting on S0: choose-direction  ← #69
+#71   R1 T8               all piles rotate one position to the right  ← #70
+#72   R1 T8     waiting on S0: action  ← #65
+#73   R1 T8       S0 action [turn, 0 left]: draw  ← #72
+#74   R1 T8         S0 draws Fool Token from pile@S0  ← #73  [private: S0]
+#75   R1 T8   S0 turn end
+#76   R1 T9   S1 turn start (2 actions)
+#77   R1 T9     waiting on S1: action  ← #76
+#78   R1 T9       S1 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S2  ← #77
+#79   R1 T9         S1 places Blunder face-up on pile@S2  ← #78
+#80   R1 T9   S1 turn end
+#81   R1 T10  S2 turn start (2 actions)
+#82   R1 T10    waiting on S2: action  ← #81
+#83   R1 T10      S2 action [turn, 1 left]: draw  ← #82
+#84   R1 T10        S2 draws Blunder from pile@S2  ← #83
+#85   R1 T10          S2 plays Blunder (HOT!) → keep(S2)  ← #84
+#86   R1 T10    waiting on S2: action  ← #81
+#87   R1 T10      S2 action [turn, 0 left]: draw  ← #86
+#88   R1 T10        S2 draws Purity from pile@S2  ← #87  [private: S2]
+#89   R1 T10  S2 turn end
+#90   R1 T11  S3 turn start (2 actions)
+#91   R1 T11    waiting on S3: action  ← #90
+#92   R1 T11      S3 action [turn, 1 left]: use Tithes: discard all Coin cards, reorder pile  ← #91
+#93   R1 T11        S3 discards Tithes, Dagger from keep  ← #92
+#94   R1 T11          S3 looks at Legerdemain, Acquisition, Fiat, Offering, Pickpocket, Revelation, Sanction (pile @S3)  ← #93  [private: S3]
+#95   R1 T11          waiting on S3: order-pile  ← #93
+#96   R1 T11            S3 reorders pile@S3 (top first): Legerdemain, Acquisition, Fiat, Offering, Pickpocket, Revelation, Sanction  ← #95  [private: S3]
+#97   R1 T11    waiting on S3: action  ← #90
+#98   R1 T11      S3 action [turn, 0 left]: draw  ← #97
+#99   R1 T11        S3 draws Legerdemain from pile@S3  ← #98  [private: S3]
+#100  R1 T11  S3 turn end
+#101  R1 T12  S0 turn start (2 actions)
+#102  R1 T12    waiting on S0: action  ← #101
+#103  R1 T12      S0 action [turn, 1 left]: play Fool Token → keep(S3)  ← #102
+#104  R1 T12        S0 plays Fool Token → keep(S3)  ← #103
+#105  R1 T12          after Fool Token: triggers → [retribution(S3)]  ← #104
+#106  R1 T12            RETRIBUTION: S3 must take two actions now  ← #105
+#107  R1 T12              waiting on S3: action  ← #106
+#108  R1 T12                S3 action [retribution, 1 left]: draw  ← #107
+#109  R1 T12                  S3 draws Acquisition from pile@S3  ← #108  [private: S3]
+#110  R1 T12                    waiting on S3: hot-target (Acquisition)  ← #109  [private: S3]
+#111  R1 T12                      S3 plays Acquisition (HOT!) → keep(S1)  ← #110
+#112  R1 T12              waiting on S3: action  ← #106
+#113  R1 T12                S3 action [retribution, 0 left]: play Legerdemain  ← #112
+#114  R1 T12                  S3 plays Legerdemain → discard  ← #113
+#115  R1 T12                    waiting on S3: choose-player  ← #114
+#116  R1 T12                      S3 takes Joker from S1's hand  ← #115
+#117  R1 T12                        S3 plays Joker (HOT!) → discard  ← #116
+#118  R1 T12                          Joker has no effect: no non-Keep card to reveal  ← #117
+#119  R1 T12    waiting on S0: action  ← #101
+#120  R1 T12      S0 action [turn, 0 left]: draw  ← #119
+#121  R1 T12        S0 draws Juggling from pile@S0  ← #120  [private: S0]
+#122  R1 T12          waiting on S0: hot-target (Juggling)  ← #121  [private: S0]
+#123  R1 T12            S0 plays Juggling (HOT!) → keep(S2)  ← #122
+#124  R1 T12  S0 turn end
+#125  R1 T13  S1 turn start (2 actions)
+#126  R1 T13    waiting on S1: action  ← #125
+#127  R1 T13      S1 action [turn, 1 left]: draw  ← #126
+#128  R1 T13        S1 draws Royal Favor from pile@S1  ← #127  [private: S1]
+#129  R1 T13          waiting on S1: hot-target (Royal Favor)  ← #128  [private: S1]
+#130  R1 T13            S1 plays Royal Favor (HOT!) → keep(S1)  ← #129
+#131  R1 T13              after Royal Favor: triggers → [royal-favor(S1)]  ← #130
+#132  R1 T13                ROYAL FAVOR: S1 draws from their pile  ← #131
+#133  R1 T13                  S1 draws Fabergé Egg from pile@S1  ← #132  [private: S1]
+#134  R1 T13    waiting on S1: action  ← #125
+#135  R1 T13      S1 action [turn, 0 left]: draw  ← #134
+#136  R1 T13        S1 draws Interest from pile@S1  ← #135  [private: S1]
+#137  R1 T13  S1 turn end
+#138  R1 T14  S2 turn start (2 actions)
+#139  R1 T14    waiting on S2: action  ← #138
+#140  R1 T14      S2 action [turn, 0 left]: use Blunder (2 actions): place it on pile@S0  ← #139
+#141  R1 T14        S2 places Blunder face-up on pile@S0  ← #140
+#142  R1 T14  S2 turn end
+#143  R1 T15  S3 turn start (2 actions)
+#144  R1 T15    waiting on S3: action  ← #143
+#145  R1 T15      S3 action [turn, 1 left]: draw  ← #144
+#146  R1 T15        S3 draws Fiat from pile@S3  ← #145  [private: S3]
+#147  R1 T15          waiting on S3: hot-target (Fiat)  ← #146  [private: S3]
+#148  R1 T15            S3 plays Fiat (HOT!) → keep(S3)  ← #147
+#149  R1 T15              all piles are pushed to the center  ← #148
+#150  R1 T15              waiting on S3: claim-pile  ← #148
+#151  R1 T15                S3 claims the pile from @S1  ← #150
+#152  R1 T15                waiting on S0: claim-pile  ← #150
+#153  R1 T15                  S0 claims the pile from @S2  ← #152
+#154  R1 T15                  waiting on S1: claim-pile  ← #152
+#155  R1 T15                    S1 claims the pile from @S0  ← #154
+#156  R1 T15                    waiting on S2: claim-pile  ← #154
+#157  R1 T15                      S2 claims the pile from @S3  ← #156
+#158  R1 T15    waiting on S3: action  ← #143
+#159  R1 T15      S3 action [turn, 0 left]: draw  ← #158
+#160  R1 T15        S3 draws Requisition from pile@S3  ← #159  [private: S3]
+#161  R1 T15  S3 turn end
+#162  R1 T16  S0 turn start (2 actions)
+#163  R1 T16    waiting on S0: action  ← #162
+#164  R1 T16      S0 action [turn, 1 left]: draw  ← #163
+#165  R1 T16        S0 draws Invocation from pile@S0  ← #164  [private: S0]
+#166  R1 T16          S0 plays Invocation (HOT!) → discard  ← #165
+#167  R1 T16            waiting on S0: choose-pile  ← #166
+#168  R1 T16              S0 draws Blunder from pile@S1  ← #167
+#169  R1 T16                S0 plays Blunder (HOT!) → keep(S0)  ← #168
+#170  R1 T16    waiting on S0: action  ← #162
+#171  R1 T16      S0 action [turn, 0 left]: draw  ← #170
+#172  R1 T16        S0 draws Providence from pile@S0  ← #171  [private: S0]
+#173  R1 T16  S0 turn end
+#174  R1 T17  S1 turn start (2 actions)
+#175  R1 T17    waiting on S1: action  ← #174
+#176  R1 T17      S1 action [turn, 1 left]: use Acquisition: discard Interest, draw right pile first  ← #175
+#177  R1 T17        S1 discards Interest from hand  ← #176
+#178  R1 T17          S1 draws Prayer from pile@S0  ← #177  [private: S1]
+#179  R1 T17          S1 draws Offering from pile@S2  ← #177  [private: S1]
+#180  R1 T17    waiting on S1: action  ← #174
+#181  R1 T17      S1 action [turn, 0 left]: play Offering  ← #180
+#182  R1 T17        S1 plays Offering → discard  ← #181
+#183  R1 T17          S1 discards Fabergé Egg, Prayer from hand  ← #182
+#184  R1 T17          waiting on S0: give-card  ← #182
+#185  R1 T17          waiting on S2: give-card  ← #182
+#186  R1 T17          waiting on S3: give-card  ← #182
+#187  R1 T17            S3 gives Requisition to S1  ← #186  [private: S3,S1]
+#188  R1 T17            S0 gives Providence to S1  ← #184  [private: S0,S1]
+#189  R1 T17            S2 gives Purity to S1  ← #185  [private: S2,S1]
+#190  R1 T17          after Offering: triggers → [retribution(S3)]  ← #182
+#191  R1 T17            RETRIBUTION: S3 must take two actions now  ← #190
+#192  R1 T17              waiting on S3: action  ← #191
+#193  R1 T17                S3 action [retribution, 1 left]: draw  ← #192
+#194  R1 T17                  S3 draws Medallion from pile@S3  ← #193  [private: S3]
+#195  R1 T17              waiting on S3: action  ← #191
+#196  R1 T17                S3 action [retribution, 0 left]: play Medallion → keep(S0)  ← #195
+#197  R1 T17                  S3 plays Medallion → keep(S0)  ← #196
+#198  R1 T17  S1 turn end
+#199  R1 T18  S2 turn start (2 actions)
+#200  R1 T18    waiting on S2: action  ← #199
+#201  R1 T18      S2 action [turn, 1 left]: use Juggling: swap piles @S0 and @S2  ← #200
+#202  R1 T18        piles @S0 and @S2 swap places  ← #201
+#203  R1 T18    waiting on S2: action  ← #199
+#204  R1 T18      S2 action [turn, 0 left]: draw  ← #203
+#205  R1 T18        S2 draws Epiphany from pile@S2  ← #204  [private: S2]
+#206  R1 T18  S2 turn end
+#207  R1 T19  S3 turn start (2 actions)
+#208  R1 T19    waiting on S3: action  ← #207
+#209  R1 T19      S3 action [turn, 1 left]: draw  ← #208
+#210  R1 T19        S3 draws Count Token from pile@S3  ← #209  [private: S3]
+#211  R1 T19    waiting on S3: action  ← #207
+#212  R1 T19      S3 action [turn, 0 left]: play Count Token → keep(S1)  ← #211
+#213  R1 T19        S3 plays Count Token → keep(S1)  ← #212
+#214  R1 T19  S3 turn end
+#215  R1 T20  S0 turn start (2 actions)
+#216  R1 T20    waiting on S0: action  ← #215
+#217  R1 T20      S0 action [turn, 1 left]: draw  ← #216
+#218  R1 T20        S0 draws Pickpocket from pile@S0  ← #217  [private: S0]
+#219  R1 T20    waiting on S0: action  ← #215
+#220  R1 T20      S0 action [turn, 0 left]: draw  ← #219
+#221  R1 T20        S0 draws Revelation from pile@S0  ← #220  [private: S0]
+#222  R1 T20          S0 plays Revelation (HOT!) → discard  ← #221
+#223  R1 T20            waiting on S0: choose-pile  ← #222
+#224  R1 T20              pile@S2 is flipped upside down  ← #223
+#225  R1 T20  S0 turn end
+#226  R1 T21  S1 turn start (2 actions)
+#227  R1 T21    waiting on S1: action  ← #226
+#228  R1 T21      S1 action [turn, 1 left]: play Purity → keep(S1)  ← #227
+#229  R1 T21        S1 plays Purity → keep(S1)  ← #228
+#230  R1 T21    waiting on S1: action  ← #226
+#231  R1 T21      S1 action [turn, 0 left]: use Acquisition: discard Providence, draw left pile first  ← #230
+#232  R1 T21        S1 discards Providence from hand  ← #231
+#233  R1 T21          S1 draws Resurrection from pile@S2  ← #232
+#234  R1 T21          S1 draws Sanction from pile@S0  ← #232  [private: S1]
+#235  R1 T21            waiting on S1: hot-target (Sanction)  ← #234  [private: S1]
+#236  R1 T21              S1 plays Sanction (HOT!) → keep(S2)  ← #235
+#237  R1 T21  S1 turn end
+#238  R1 T22  S2 turn start (2 actions)
+#239  R1 T22    waiting on S2: action  ← #238
+#240  R1 T22      S2 action [turn, 1 left]: use Sanction: draw from pile@S2  ← #239
+#241  R1 T22        S2 draws Friar Token from pile@S2  ← #240
+#242  R1 T22    waiting on S2: action  ← #238
+#243  R1 T22      S2 action [turn, 0 left]: use Juggling: swap piles @S0 and @S3  ← #242
+#244  R1 T22        piles @S0 and @S3 swap places  ← #243
+#245  R1 T22  S2 turn end
+#246  R1 T23  S3 turn start (2 actions)
+#247  R1 T23    waiting on S3: action  ← #246
+#248  R1 T23      S3 action [turn, 1 left]: draw  ← #247
+#249  R1 T23        S3 draws from EMPTY pile@S3  ← #248
+#250  R1 T23        ROUND END: S3 drew from an empty pile  ← #248
+#251  R1 T23          score: S0=-8 S1=1.5 S2=2 S3=-1 → S2 wins  ← #250
+#252  R1 T23            S2 earns a victory mark (1 total)  ← #251
+#253  R2 T0   round 2 start: S2 goes first
+#254  R2 T0   pile 'count' dealt to S0 (top first): Timepiece, Requisition, Scepter, Fiat, Count Token, Acquisition, Chalice, Royal Favor, Fabergé Egg  [server only]
+#255  R2 T0   pile 'fool' dealt to S1 (top first): Shackles, Joker, Legerdemain, Hocus Pocus, Pandemonium, Juggling, Pluck, Pickpocket, Last Laugh  [server only]
+#256  R2 T0   pile 'mask' dealt to S2 (top first): Fool Token, Providence, Sanction, Resurrection, Dagger, Duplicity, Medallion, Blunder, Interest  [server only]
+#257  R2 T0   pile 'friar' dealt to S3 (top first): Prayer, Offering, Revelation, Purity, Epiphany, Retribution, Invocation, Tithes, Friar Token  [server only]
+#258  R2 T1   S2 turn start (2 actions)
+#259  R2 T1     waiting on S2: action  ← #258
+#260  R2 T1       S2 action [turn, 1 left]: draw  ← #259
+#261  R2 T1         S2 draws Fool Token from pile@S2  ← #260  [private: S2]
+#262  R2 T1     waiting on S2: action  ← #258
+#263  R2 T1       S2 action [turn, 0 left]: play Fool Token → keep(S0)  ← #262
+#264  R2 T1         S2 plays Fool Token → keep(S0)  ← #263
+#265  R2 T1   S2 turn end
+#266  R2 T2   S3 turn start (2 actions)
+#267  R2 T2     waiting on S3: action  ← #266
+#268  R2 T2       S3 action [turn, 1 left]: draw  ← #267
+#269  R2 T2         S3 draws Prayer from pile@S3  ← #268  [private: S3]
+#270  R2 T2     waiting on S3: action  ← #266
+#271  R2 T2       S3 action [turn, 0 left]: draw  ← #270
+#272  R2 T2         S3 draws Offering from pile@S3  ← #271  [private: S3]
+#273  R2 T2   S3 turn end
+#274  R2 T3   S0 turn start (2 actions)
+#275  R2 T3     waiting on S0: action  ← #274
+#276  R2 T3       S0 action [turn, 1 left]: draw  ← #275
+#277  R2 T3         S0 draws Timepiece from pile@S0  ← #276  [private: S0]
+#278  R2 T3     waiting on S0: action  ← #274
+#279  R2 T3       S0 action [turn, 0 left]: play Timepiece → keep(S1)  ← #278
+#280  R2 T3         S0 plays Timepiece → keep(S1)  ← #279
+#281  R2 T3   S0 turn end
+#282  R2 T4   S1 turn start (2 actions)
+#283  R2 T4     waiting on S1: action  ← #282
+#284  R2 T4       S1 action [turn, 1 left]: draw  ← #283
+#285  R2 T4         S1 draws Shackles from pile@S1  ← #284  [private: S1]
+#286  R2 T4     waiting on S1: action  ← #282
+#287  R2 T4       S1 action [turn, 0 left]: play Shackles → keep(S0)  ← #286
+#288  R2 T4         S1 plays Shackles → keep(S0)  ← #287
+#289  R2 T4   S1 turn end
+#290  R2 T5   S2 turn start (2 actions)
+#291  R2 T5     waiting on S2: action  ← #290
+#292  R2 T5       S2 action [turn, 1 left]: draw  ← #291
+#293  R2 T5         S2 draws Providence from pile@S2  ← #292  [private: S2]
+#294  R2 T5     waiting on S2: action  ← #290
+#295  R2 T5       S2 action [turn, 0 left]: play Providence  ← #294
+#296  R2 T5         S2 plays Providence → discard  ← #295
+#297  R2 T5           waiting on S2: choose-keep-pair  ← #296
+#298  R2 T5             swap Fool Token (keep S0) ⇄ Timepiece (keep S1)  ← #297
+#299  R2 T5   S2 turn end
+#300  R2 T6   S3 turn start (2 actions)
+#301  R2 T6     waiting on S3: action  ← #300
+#302  R2 T6       S3 action [turn, 1 left]: draw  ← #301
+#303  R2 T6         S3 draws Revelation from pile@S3  ← #302  [private: S3]
+#304  R2 T6           S3 plays Revelation (HOT!) → discard  ← #303
+#305  R2 T6             waiting on S3: choose-pile  ← #304
+#306  R2 T6               pile@S3 is flipped upside down  ← #305
+#307  R2 T6     waiting on S3: action  ← #300
+#308  R2 T6       S3 action [turn, 0 left]: play Prayer  ← #307
+#309  R2 T6         S3 plays Prayer → discard  ← #308
+#310  R2 T6           waiting on S3: choose-pile  ← #309
+#311  R2 T6             S3 looks at Friar Token (pile @S3)  ← #310  [private: S3]
+#312  R2 T6             waiting on S3: take-or-discard  ← #310
+#313  R2 T6               S3 discards Friar Token from pile  ← #312
+#314  R2 T6                 S3 draws Tithes from pile@S3  ← #313
+#315  R2 T6   S3 turn end
+#316  R2 T7   S0 turn start (1 action)
+#317  R2 T7     waiting on S0: action  ← #316
+#318  R2 T7       S0 action [turn, 0 left]: draw  ← #317
+#319  R2 T7         S0 draws Requisition from pile@S0  ← #318  [private: S0]
+#320  R2 T7   S0 turn end
+#321  R2 T8   S1 turn start (2 actions)
+#322  R2 T8     waiting on S1: action  ← #321
+#323  R2 T8       S1 action [turn, 1 left]: draw  ← #322
+#324  R2 T8         S1 draws Joker from pile@S1  ← #323  [private: S1]
+#325  R2 T8     waiting on S1: action  ← #321
+#326  R2 T8       S1 action [turn, 0 left]: draw  ← #325
+#327  R2 T8         S1 draws Legerdemain from pile@S1  ← #326  [private: S1]
+#328  R2 T8   S1 turn end
+#329  R2 T9   S2 turn start (2 actions)
+#330  R2 T9     waiting on S2: action  ← #329
+#331  R2 T9       S2 action [turn, 1 left]: draw  ← #330
+#332  R2 T9         S2 draws Sanction from pile@S2  ← #331  [private: S2]
+#333  R2 T9           waiting on S2: hot-target (Sanction)  ← #332  [private: S2]
+#334  R2 T9             S2 plays Sanction (HOT!) → keep(S3)  ← #333
+#335  R2 T9     waiting on S2: action  ← #329
+#336  R2 T9       S2 action [turn, 0 left]: draw  ← #335
+#337  R2 T9         S2 draws Resurrection from pile@S2  ← #336  [private: S2]
+#338  R2 T9   S2 turn end
+#339  R2 T10  S3 turn start (2 actions)
+#340  R2 T10    waiting on S3: action  ← #339
+#341  R2 T10      S3 action [turn, 1 left]: use Sanction: draw from pile@S2  ← #340
+#342  R2 T10        S3 draws Dagger from pile@S2  ← #341  [private: S3]
+#343  R2 T10    waiting on S3: action  ← #339
+#344  R2 T10      S3 action [turn, 0 left]: play Dagger → keep(S2)  ← #343
+#345  R2 T10        S3 plays Dagger → keep(S2)  ← #344
+#346  R2 T10  S3 turn end
+#347  R2 T11  S0 turn start (1 action)
+#348  R2 T11    waiting on S0: action  ← #347
+#349  R2 T11      S0 action [turn, 0 left]: play Requisition  ← #348
+#350  R2 T11        S0 plays Requisition → discard  ← #349
+#351  R2 T11          waiting on S0: choose-pile  ← #350
+#352  R2 T11            S0 looks at Invocation, Retribution, Epiphany, Purity (pile @S3)  ← #351  [private: S0]
+#353  R2 T11            waiting on S0: choose-pile-card  ← #351
+#354  R2 T11              S0 takes Retribution from pile@S3  ← #353  [private: S0]
+#355  R2 T11  S0 turn end
+#356  R2 T12  S1 turn start (2 actions)
+#357  R2 T12    waiting on S1: action  ← #356
+#358  R2 T12      S1 action [turn, 1 left]: draw  ← #357
+#359  R2 T12        S1 draws Hocus Pocus from pile@S1  ← #358  [private: S1]
+#360  R2 T12    waiting on S1: action  ← #356
+#361  R2 T12      S1 action [turn, 0 left]: play Joker as Hocus Pocus  ← #360
+#362  R2 T12        S1 plays Joker as Hocus Pocus → discard  ← #361
+#363  R2 T12          S1 reveals Hocus Pocus  ← #362
+#364  R2 T12          S1 gets 2 actions from Hocus Pocus  ← #362
+#365  R2 T12          waiting on S1: action  ← #362
+#366  R2 T12            S1 action [hocus-pocus, 1 left]: draw  ← #365
+#367  R2 T12              S1 draws Pandemonium from pile@S1  ← #366  [private: S1]
+#368  R2 T12                S1 plays Pandemonium (HOT!) → discard  ← #367
+#369  R2 T12                  waiting on S1: choose-direction  ← #368
+#370  R2 T12                    all piles rotate one position to the left  ← #369
+#371  R2 T12          waiting on S1: action  ← #362
+#372  R2 T12            S1 action [hocus-pocus, 0 left]: play Hocus Pocus  ← #371
+#373  R2 T12              S1 plays Hocus Pocus → discard  ← #372
+#374  R2 T12                S1 gets 2 actions from Hocus Pocus  ← #373
+#375  R2 T12                waiting on S1: action  ← #373
+#376  R2 T12                  S1 action [hocus-pocus, 1 left]: play Legerdemain  ← #375
+#377  R2 T12                    S1 plays Legerdemain → discard  ← #376
+#378  R2 T12                      waiting on S1: choose-player  ← #377
+#379  R2 T12                        S1 takes Resurrection from S2's hand  ← #378
+#380  R2 T12                          S1 plays Resurrection (HOT!) → discard  ← #379
+#381  R2 T12                            waiting on S1: choose-discard-card  ← #380
+#382  R2 T12                              S1 takes Legerdemain from the discard  ← #381
+#383  R2 T12                waiting on S1: action  ← #373
+#384  R2 T12                  S1 action [hocus-pocus, 0 left]: play Legerdemain  ← #383
+#385  R2 T12                    S1 plays Legerdemain → discard  ← #384
+#386  R2 T12                      waiting on S1: choose-player  ← #385
+#387  R2 T12                        S1 takes Retribution from S0's hand  ← #386
+#388  R2 T12                          waiting on S1: hot-target (Retribution)  ← #387  [private: S1]
+#389  R2 T12                            S1 plays Retribution (HOT!) → keep(S3)  ← #388
+#390  R2 T12  S1 turn end
+#391  R2 T13  S2 turn start (2 actions)
+#392  R2 T13    waiting on S2: action  ← #391
+#393  R2 T13      S2 action [turn, 1 left]: draw  ← #392
+#394  R2 T13        S2 draws Juggling from pile@S2  ← #393  [private: S2]
+#395  R2 T13          waiting on S2: hot-target (Juggling)  ← #394  [private: S2]
+#396  R2 T13            S2 plays Juggling (HOT!) → keep(S0)  ← #395
+#397  R2 T13    waiting on S2: action  ← #391
+#398  R2 T13      S2 action [turn, 0 left]: draw  ← #397
+#399  R2 T13        S2 draws Pluck from pile@S2  ← #398  [private: S2]
+#400  R2 T13  S2 turn end
+#401  R2 T14  S3 turn start (2 actions)
+#402  R2 T14    waiting on S3: action  ← #401
+#403  R2 T14      S3 action [turn, 1 left]: play Tithes → keep(S0)  ← #402
+#404  R2 T14        S3 plays Tithes → keep(S0)  ← #403
+#405  R2 T14    waiting on S3: action  ← #401
+#406  R2 T14      S3 action [turn, 0 left]: use Sanction: draw from pile@S1  ← #405
+#407  R2 T14        S3 draws Scepter from pile@S1  ← #406  [private: S3]
+#408  R2 T14  S3 turn end
+#409  R2 T15  S0 turn start (1 action)
+#410  R2 T15    waiting on S0: action  ← #409
+#411  R2 T15      S0 action [turn, 0 left]: use Juggling: swap piles @S0 and @S3  ← #410
+#412  R2 T15        piles @S0 and @S3 swap places  ← #411
+#413  R2 T15  S0 turn end
+#414  R2 T16  S1 turn start (2 actions)
+#415  R2 T16    waiting on S1: action  ← #414
+#416  R2 T16      S1 action [turn, 1 left]: draw  ← #415
+#417  R2 T16        S1 draws Fiat from pile@S1  ← #416  [private: S1]
+#418  R2 T16          waiting on S1: hot-target (Fiat)  ← #417  [private: S1]
+#419  R2 T16            S1 plays Fiat (HOT!) → keep(S0)  ← #418
+#420  R2 T16              all piles are pushed to the center  ← #419
+#421  R2 T16              waiting on S1: claim-pile  ← #419
+#422  R2 T16                S1 claims the pile from @S2  ← #421
+#423  R2 T16                waiting on S2: claim-pile  ← #421
+#424  R2 T16                  S2 claims the pile from @S1  ← #423
+#425  R2 T16                  waiting on S3: claim-pile  ← #423
+#426  R2 T16                    S3 claims the pile from @S0  ← #425
+#427  R2 T16                    waiting on S0: claim-pile  ← #425
+#428  R2 T16                      S0 claims the pile from @S3  ← #427
+#429  R2 T16    waiting on S1: action  ← #414
+#430  R2 T16      S1 action [turn, 0 left]: draw  ← #429
+#431  R2 T16        S1 draws Pickpocket from pile@S1  ← #430  [private: S1]
+#432  R2 T16  S1 turn end
+#433  R2 T17  S2 turn start (2 actions)
+#434  R2 T17    waiting on S2: action  ← #433
+#435  R2 T17      S2 action [turn, 1 left]: play Pluck  ← #434
+#436  R2 T17        S2 plays Pluck → discard  ← #435
+#437  R2 T17          S2 sees S0: (none); S1: Pickpocket; S3: Offering, Scepter  ← #436  [private: S2]
+#438  R2 T17          waiting on S2: choose-hand-card  ← #436
+#439  R2 T17            S2 takes Pickpocket from S1's hand  ← #438  [private: S2,S1]
+#440  R2 T17    waiting on S2: action  ← #433
+#441  R2 T17      S2 action [turn, 0 left]: play Pickpocket  ← #440
+#442  R2 T17        S2 plays Pickpocket → discard  ← #441
+#443  R2 T17          waiting on S2: choose-player  ← #442
+#444  R2 T17            Pickpocket has no effect: chose yourself  ← #443
+#445  R2 T17  S2 turn end
+#446  R2 T18  S3 turn start (2 actions)
+#447  R2 T18    waiting on S3: action  ← #446
+#448  R2 T18      S3 action [turn, 1 left]: play Scepter → keep(S2)  ← #447
+#449  R2 T18        S3 plays Scepter → keep(S2)  ← #448
+#450  R2 T18    waiting on S3: action  ← #446
+#451  R2 T18      S3 action [turn, 0 left]: use Sanction: draw from pile@S1  ← #450
+#452  R2 T18        S3 draws Last Laugh from pile@S1  ← #451  [private: S3]
+#453  R2 T18  S3 turn end
+#454  R2 T19  S0 turn start (1 action)
+#455  R2 T19    waiting on S0: action  ← #454
+#456  R2 T19      S0 action [turn, 0 left]: use Juggling: swap piles @S0 and @S3  ← #455
+#457  R2 T19        piles @S0 and @S3 swap places  ← #456
+#458  R2 T19  S0 turn end
+#459  R2 T20  S1 turn start (2 actions)
+#460  R2 T20    waiting on S1: action  ← #459
+#461  R2 T20      S1 action [turn, 1 left]: draw  ← #460
+#462  R2 T20        S1 draws from EMPTY pile@S1  ← #461
+#463  R2 T20        ROUND END: S1 drew from an empty pile  ← #461
+#464  R2 T20          score: S0=4 S1=-1 S2=4 S3=0 → S2 wins (tie-break over S0)  ← #463
+#465  R2 T20            S2 earns a victory mark (2 total)  ← #464
+#466  R2 T20            GAME OVER: S2 wins  ← #464"
+`;
