@@ -60,6 +60,21 @@ try {
     return [page];
   });
 
+  await check('on a phone, taking an action does not scroll the page', async () => {
+    const page = await open(a, `${base}/puzzles/P-01`);
+    await page.emulatePhone();
+    await page.evaluate('location.reload()');
+    await sleep(800);
+    await page.waitForText('Draw from your pile');
+    await page.evaluate('window.scrollTo(0, 0)');
+    await page.click('Draw from your pile');
+    await page.waitForText('1 action left');
+    await sleep(300);
+    const scrolled = await page.evaluate<number>('window.scrollY');
+    if (scrolled !== 0) throw new Error(`the page scrolled to y=${scrolled}`);
+    return [page];
+  });
+
   await check('puzzle solved by clicking the table (Rags to Riches)', async () => {
     const page = await open(a, `${base}/puzzles/P-03`);
     await page.click('Purity');
@@ -116,6 +131,9 @@ try {
       await sleep(15);
     }
     if (seen.size < 5) throw new Error(`only saw ${[...seen].join(', ')}`);
+    // The log keeps following the newest lines.
+    const gap = await page.evaluate<number>(`(() => { const el = document.querySelector('.log'); return el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0; })()`);
+    if (gap > 24) throw new Error(`the log is not scrolled to its newest line (${gap}px above the end)`);
     return [page];
   });
 

@@ -51,6 +51,8 @@ export interface Page {
   click(label: string): Promise<void>;
   type(selector: string, value: string): Promise<void>;
   screenshot(file: string): Promise<void>;
+  /** Emulates a phone-sized touch screen. */
+  emulatePhone(): Promise<void>;
   errors(): Promise<string[]>;
   close(): void;
 }
@@ -134,6 +136,11 @@ export async function open(browser: Browser, url: string): Promise<Page> {
     },
     // Reloading clears the collector; treat that as no errors since.
     errors: () => evaluate<string[]>('window.__errors ?? []'),
+    async emulatePhone() {
+      await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 3, mobile: true });
+      await send('Emulation.setTouchEmulationEnabled', { enabled: true });
+      await sleep(200);
+    },
     close: () => socket.close(),
   };
 }

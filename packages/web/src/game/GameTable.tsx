@@ -285,18 +285,29 @@ function OrderPile({ prompt, onSend }: { prompt: Extract<PromptView, { kind: 'or
 
 function Log({ events, names }: { events: readonly TraceEvent[]; names: ReturnType<typeof makeNames> }) {
   const lines = useMemo(() => logLines(events, names), [events, names]);
-  const end = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const atBottom = useRef(true);
+  // Keep the newest lines in view by scrolling the log box itself, never the
+  // page (on phones the log sits below the table), and only if the reader
+  // hasn't scrolled up to look at older lines.
   useEffect(() => {
-    end.current?.scrollIntoView({ block: 'nearest' });
+    const el = box.current;
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [lines.length]);
   return (
-    <div className="log">
+    <div
+      className="log"
+      ref={box}
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 24;
+      }}
+    >
       {lines.map((l) => (
         <div key={l.seq} className={l.heading ? 'log-heading' : 'log-line'} style={{ paddingLeft: `${l.depth * 0.8}em` }}>
           {l.text}
         </div>
       ))}
-      <div ref={end} />
     </div>
   );
 }
