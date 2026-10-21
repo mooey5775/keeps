@@ -180,6 +180,31 @@ button:focus-visible {
   color: var(--muted);
 }
 
+.buy-row {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+/* Matches the call to action on keepsgame.com. */
+a.buy {
+  display: inline-block;
+  padding: 0.55em 1.2em;
+  border: 2px solid var(--gold);
+  border-radius: 999px;
+  color: var(--gold-bright);
+  text-decoration: none;
+  font-weight: bold;
+  letter-spacing: 0.02em;
+}
+
+a.buy:hover {
+  background: var(--gold);
+  color: #1b140b;
+}
+
 .field {
   display: flex;
   flex-direction: column;

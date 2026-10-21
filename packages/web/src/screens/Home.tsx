@@ -5,6 +5,12 @@ import { navigate } from '../router.ts';
 
 const NAME_KEY = 'keeps:name';
 
+export const KEEPS_SITE = 'https://www.keepsgame.com';
+// The buy link from keepsgame.com, with the creators' Amazon attribution tags
+// kept, so sales through it are credited to them. Price as listed there (2026-10).
+export const AMAZON_LINK =
+  'https://www.amazon.com/Keeps-an-Elegant-Game/dp/B0H7TBLY5X?maas=maas_adg_FEBF1A30E62A19690ED26156C54DC749_afap_abs&ref_=aa_maas&tag=maas';
+
 export function savedName(): string {
   try {
     return localStorage.getItem(NAME_KEY) ?? '';
@@ -48,6 +54,14 @@ export function Home() {
     <main className="home">
       <h1>KEEPS</h1>
       <p className="tagline">An elegant game, for two to four players.</p>
+      <div className="buy-row">
+        <a className="buy" href={AMAZON_LINK} target="_blank" rel="noreferrer">
+          $9.99 on Amazon →
+        </a>
+        <a className="link" href={KEEPS_SITE} target="_blank" rel="noreferrer">
+          keepsgame.com
+        </a>
+      </div>
 
       <label className="field">
         <span>Your name</span>
@@ -91,7 +105,13 @@ export function Home() {
           Rules
         </a>
       </nav>
-      <p className="credit">Keeps is by David &amp; Elaina Buffkin. Card art © their respective owners.</p>
+      <p className="credit">
+        Keeps is by{' '}
+        <a href={KEEPS_SITE} target="_blank" rel="noreferrer">
+          David &amp; Elaina Buffkin
+        </a>
+        . Card art © their respective owners. Get your own copy to play at the table.
+      </p>
     </main>
   );
 }

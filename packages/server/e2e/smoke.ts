@@ -43,6 +43,11 @@ try {
   await check('home page loads', async () => {
     const page = await open(a, base);
     await page.waitForText('Create a room');
+    const links = await page.evaluate<string[]>(`[...document.querySelectorAll('a')].map((a) => a.href)`);
+    if (!links.some((h) => h.startsWith('https://www.amazon.com/Keeps-an-Elegant-Game/dp/B0H7TBLY5X?maas=') && h.includes('tag=maas'))) {
+      throw new Error('missing the Amazon link with the creators’ attribution tags');
+    }
+    if (!links.includes('https://www.keepsgame.com/')) throw new Error('missing the keepsgame.com link');
     return [page];
   });
 
