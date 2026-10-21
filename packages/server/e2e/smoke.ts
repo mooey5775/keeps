@@ -52,6 +52,11 @@ try {
     await page.waitForText('1 action left');
     await page.click('Draw from your pile');
     await page.waitForText('Solved!');
+    // A puzzle is one round: no "next round" to offer, just the puzzle's own buttons.
+    const offersNextRound = await page.evaluate<boolean>(`document.body.innerText.includes('Start the next round')`);
+    if (offersNextRound) throw new Error('a finished puzzle still offers "Start the next round"');
+    await page.click('Next puzzle');
+    await page.waitForText('Divine Intervention');
     return [page];
   });
 

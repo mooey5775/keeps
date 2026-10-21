@@ -78,7 +78,12 @@ function PuzzlePlayer({ puzzle }: { puzzle: Puzzle }) {
 
   const outcome = puzzleOutcome(state, startTurn);
   const decider: Seat = state.prompts[0]?.seat ?? YOU;
-  const view = useMemo(() => viewFor(state, decider), [state, decider]);
+  // A puzzle is a single round: once it's decided, offer no more moves (not
+  // even "start the next round"); the side panel offers restart and next puzzle.
+  const view = useMemo(() => {
+    const full = viewFor(state, decider);
+    return outcome === 'playing' ? full : { ...full, legal: [] };
+  }, [state, decider, outcome]);
   const index = PUZZLES.indexOf(puzzle);
   const next = PUZZLES[index + 1];
 

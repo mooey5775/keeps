@@ -46,7 +46,7 @@ export function Home() {
 
   return (
     <main className="home">
-      <h1>Keeps</h1>
+      <h1>KEEPS</h1>
       <p className="tagline">An elegant game, for two to four players.</p>
 
       <label className="field">

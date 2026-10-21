@@ -103,16 +103,23 @@ export async function open(browser: Browser, url: string): Promise<Page> {
     text: () => evaluate<string>('document.body.innerText'),
     path: () => evaluate<string>('location.pathname'),
     async click(label) {
-      const clicked = await evaluate<boolean>(`(() => {
-        const label = ${JSON.stringify(label)};
-        const el = [...document.querySelectorAll('button, [role=button]')].find((b) => !b.disabled
-          && ((b.innerText || '').includes(label) || (b.getAttribute('aria-label') || '').includes(label)));
-        if (!el) return false;
-        el.click();
-        return true;
-      })()`);
-      if (!clicked) throw new Error(`no enabled button "${label}"`);
-      await sleep(80);
+      // Retry briefly: right after navigation React may not have rendered yet.
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const clicked = await evaluate<boolean>(`(() => {
+          const label = ${JSON.stringify(label)};
+          const el = [...document.querySelectorAll('button, [role=button]')].find((b) => !b.disabled
+            && ((b.innerText || '').includes(label) || (b.getAttribute('aria-label') || '').includes(label)));
+          if (!el) return false;
+          el.click();
+          return true;
+        })()`);
+        if (clicked) {
+          await sleep(80);
+          return;
+        }
+        await sleep(100);
+      }
+      throw new Error(`no enabled button "${label}"`);
     },
     async type(selector, value) {
       await evaluate(`(() => {
