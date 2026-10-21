@@ -53,6 +53,8 @@ export interface Page {
   screenshot(file: string): Promise<void>;
   /** Emulates a phone-sized touch screen. */
   emulatePhone(): Promise<void>;
+  /** Moves the real mouse pointer over the first element matching `selector`. */
+  hover(selector: string): Promise<void>;
   errors(): Promise<string[]>;
   close(): void;
 }
@@ -136,6 +138,18 @@ export async function open(browser: Browser, url: string): Promise<Page> {
     },
     // Reloading clears the collector; treat that as no errors since.
     errors: () => evaluate<string[]>('window.__errors ?? []'),
+    async hover(selector) {
+      const point = await evaluate<{ x: number; y: number } | null>(`(() => {
+        const el = document.querySelector(${JSON.stringify(selector)});
+        if (!el) return null;
+        el.scrollIntoView({ block: 'center' });
+        const r = el.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      })()`);
+      if (!point) throw new Error(`nothing matches ${selector}`);
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+      await sleep(150);
+    },
     async emulatePhone() {
       await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 3, mobile: true });
       await send('Emulation.setTouchEmulationEnabled', { enabled: true });

@@ -80,6 +80,20 @@ try {
     return [page];
   });
 
+  await check('hovering any card shows the preview, clickable or not', async () => {
+    const page = await open(a, `${base}/puzzles/P-12`);
+    await page.waitForText('Draw from your pile');
+    // An opponent's keep card can't be clicked at the start of the turn.
+    await page.hover('[aria-label="Upper player\'s keep"] .card');
+    const shown = await page.evaluate<boolean>(`!!document.querySelector('.card-preview img')`);
+    if (!shown) throw new Error('no preview for a card that is not clickable');
+    // And a clickable one (in your hand).
+    await page.hover('.hand .card');
+    const again = await page.evaluate<string | null>(`document.querySelector('.card-preview img')?.getAttribute('src') ?? null`);
+    if (!again?.includes('Providence')) throw new Error(`preview did not follow the pointer: ${again}`);
+    return [page];
+  });
+
   await check('puzzle solved by clicking the table (Rags to Riches)', async () => {
     const page = await open(a, `${base}/puzzles/P-03`);
     await page.click('Purity');

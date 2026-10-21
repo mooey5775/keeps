@@ -42,20 +42,31 @@ export function Card({ id, faceDown = false, size = 'sm', clickable = false, pic
     .filter(Boolean)
     .join(' ');
   const title = label ?? (known ? `${CARDS[known].name}${faceDown ? ' (face down)' : ''}` : 'Face-down card');
-  return (
-    <button
-      type="button"
-      className={classes}
-      onClick={onClick}
-      disabled={!onClick}
-      title={title}
-      aria-label={title}
-      aria-pressed={picked || undefined}
-      onMouseEnter={() => known && setPreview(known)}
-      onMouseLeave={() => setPreview(null)}
-    >
+  // Hovering or focusing any card previews it. A card that can't be clicked
+  // right now must not be a disabled button: browsers send no mouse events to
+  // those, so the preview would never appear.
+  const preview = {
+    onMouseEnter: () => known && setPreview(known),
+    onMouseLeave: () => setPreview(null),
+    onFocus: () => known && setPreview(known),
+    onBlur: () => setPreview(null),
+  };
+  const content = (
+    <>
       <img src={showFace ? cardImage(known) : CARD_BACK} alt="" draggable={false} />
       {faceDown && known && <span className="peek">{CARDS[known].name}</span>}
+    </>
+  );
+  if (!onClick) {
+    return (
+      <span className={classes} title={title} aria-label={title} role="img" tabIndex={known ? 0 : -1} {...preview}>
+        {content}
+      </span>
+    );
+  }
+  return (
+    <button type="button" className={classes} onClick={onClick} title={title} aria-label={title} aria-pressed={picked || undefined} {...preview}>
+      {content}
     </button>
   );
 }
