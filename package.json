@@ -9,6 +9,7 @@
     "typecheck": "pnpm -r typecheck",
     "e2e": "pnpm --filter @keeps/web build && pnpm --filter @keeps/server e2e",
     "dev": "pnpm --parallel --filter @keeps/server --filter @keeps/web dev",
-    "start": "pnpm --filter @keeps/web build && pnpm --filter @keeps/server start"
+    "start": "pnpm --filter @keeps/web build && pnpm --filter @keeps/server start",
+    "screenshots": "pnpm --filter @keeps/web build && pnpm --filter @keeps/server screenshots"
   }
 }

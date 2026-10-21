@@ -109,7 +109,8 @@ textarea {
 }
 
 /* iOS Safari zooms the page into any text field smaller than 16px when it's
-   tapped. On touch screens, keep fields at 16px or more so it doesn't. */
+   tapped. On touch screens, keep fields at 16px or more so it doesn't
+   (desktop keeps the 14px of the text around them). */
 @media (pointer: coarse) {
   input,
   select,
@@ -233,7 +234,12 @@ a.buy:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
-  align-items: center;
+  /* Buttons match the height of the (16px) code field beside them. */
+  align-items: stretch;
+}
+
+.join-form > button {
+  margin-top: 0.75rem;
 }
 
 .join {

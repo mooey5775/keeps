@@ -106,6 +106,7 @@ function JoinForm({ code, error }: { code: string; error: string | null }) {
     <main className="home">
       <h2>Join room {code}</h2>
       <form
+        className="join-form"
         onSubmit={(e) => {
           e.preventDefault();
           if (!trimmed) return;

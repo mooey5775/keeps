@@ -51,7 +51,8 @@ export interface Page {
   /** Clicks the first enabled button whose text or accessible name contains `label`. */
   click(label: string): Promise<void>;
   type(selector: string, value: string): Promise<void>;
-  screenshot(file: string): Promise<void>;
+  /** Saves a PNG of the visible page, or with `fullPage` the whole scrollable page. */
+  screenshot(file: string, options?: { fullPage?: boolean }): Promise<void>;
   /** Emulates a phone-sized touch screen. */
   emulatePhone(): Promise<void>;
   /** Overrides the browser's user agent for this tab (takes effect on the next navigation). */
@@ -133,12 +134,18 @@ export async function open(browser: Browser, url: string): Promise<Page> {
     async type(selector, value) {
       await evaluate(`(() => {
         const el = document.querySelector(${JSON.stringify(selector)});
-        Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(el, ${JSON.stringify(value)});
+        // React tracks the native value setter, so set it through the element's own prototype.
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set.call(el, ${JSON.stringify(value)});
         el.dispatchEvent(new Event('input', { bubbles: true }));
       })()`);
     },
-    async screenshot(file) {
-      const response = await send('Page.captureScreenshot', { format: 'png' });
+    async screenshot(file, { fullPage = false } = {}) {
+      let clip: object | undefined;
+      if (fullPage) {
+        const metrics = (await send('Page.getLayoutMetrics')).result as { cssContentSize: { width: number; height: number } };
+        clip = { x: 0, y: 0, width: metrics.cssContentSize.width, height: metrics.cssContentSize.height, scale: 1 };
+      }
+      const response = await send('Page.captureScreenshot', { format: 'png', ...(clip ? { clip, captureBeyondViewport: true } : {}) });
       writeFileSync(file, Buffer.from(String(response.result?.data), 'base64'));
     },
     // Reloading clears the collector; treat that as no errors since.
