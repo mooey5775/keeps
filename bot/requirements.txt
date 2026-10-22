@@ -1,0 +1,7 @@
+chex==0.1.92
+dm-haiku==0.0.17
+jax==0.12.0.1
+jaxlib==0.12.0.1
+numpy==2.5.4
+open-spiel==2.0.2
+optax==0.2.8

@@ -56,6 +56,7 @@ describe('action ids', () => {
         }
         const actions = env.legalActions();
         expect(actions.length, `round ${g}, step ${step}: stuck`).toBeGreaterThan(0);
+        expect(actions, 'legal actions must be ascending (OpenSpiel)').toEqual([...actions].sort((x, y) => x - y));
         env.step(actions[Math.floor(random() * actions.length)]!);
       }
       expect(env.terminal, `round ${g} did not finish`).toBe(true);

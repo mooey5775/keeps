@@ -142,7 +142,8 @@ export class Decision {
   }
 
   next(prefix: readonly number[]): number[] {
-    if (this.order) return this.order.cards.map(CARD).filter((id) => !prefix.includes(id));
+    // Ascending, as OpenSpiel requires.
+    if (this.order) return this.order.cards.map(CARD).filter((id) => !prefix.includes(id)).sort((a, b) => a - b);
     const ids = new Set<number>();
     for (const o of this.options) if (startsWith(o.ids, prefix) && o.ids.length > prefix.length) ids.add(o.ids[prefix.length]!);
     return [...ids].sort((a, b) => a - b);

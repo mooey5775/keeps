@@ -5,3 +5,6 @@ coverage/
 .DS_Store
 data/
 screenshots/
+bot/.venv/
+__pycache__/
+bot/runs/
