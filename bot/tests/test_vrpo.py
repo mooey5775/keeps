@@ -22,15 +22,15 @@ from keeps_bot import selfplay
 
 MARVEL = os.path.join(os.path.dirname(__file__), '..', 'marvel')
 # The vendored files we changed (each change is marked "# Keeps:"); see marvel/VENDORED.md.
-EDITED = {'./buffer.py', './game_identity.py', './model/__init__.py'}
+EDITED = {'./buffer.py', './game_identity.py', './model/__init__.py', './training/vrpo.py'}
 
 
 def observations(rows=96, seed='vrpo-test'):
-  """Both players' observations, the mover and the legal actions at a spread of self-play moments."""
+  """Both players' observations, the true state, the mover and the legal actions at a spread of self-play moments."""
   b = keeps.bridge()
   worker = selfplay.Worker(32, seed, b.observation_size, b.num_actions, observation=2, both=True)
   rng = np.random.default_rng(0)
-  obs, mover, legal = [], [], []
+  obs, truth, mover, legal = [], [], [], []
   try:
     worker.send(np.full(worker.m, -1))
     for frame in range(90):
@@ -38,12 +38,14 @@ def observations(rows=96, seed='vrpo-test'):
       if frame % 9 == 4:
         pick = rng.choice(worker.m, size=10, replace=False)
         obs.append(worker.obs[pick].copy())
+        truth.append(worker.truth[pick].copy())
         mover.append(worker.player[pick].astype(np.int64))
         legal.append(worker.legal[pick].copy())
       worker.send(np.array([rng.choice(np.flatnonzero(l)) for l in worker.legal]))
   finally:
     worker.close()
-  return np.concatenate(obs)[:rows], np.concatenate(mover)[:rows], np.concatenate(legal)[:rows].astype(bool)
+  return (np.concatenate(obs)[:rows], np.concatenate(truth)[:rows], np.concatenate(mover)[:rows],
+          np.concatenate(legal)[:rows].astype(bool))
 
 
 @unittest.skipIf(torch is None, 'needs PyTorch (bot/.venv-torch)')
@@ -54,9 +56,9 @@ class VrpoTest(unittest.TestCase):
     keeps.set_observation(2)
     from keeps_bot.vrpo import game as vrpo_game
     b = keeps.bridge()
-    vrpo_game.configure(128, b.observation_size, b.layout)
+    vrpo_game.configure(128, b.observation_size, b.layout, b.truth_layout)
     cls.cfg = types.SimpleNamespace(game=vrpo_game, model=types.SimpleNamespace(fuse_layers=2))
-    cls.obs, cls.mover, cls.legal = observations()
+    cls.obs, cls.truth, cls.mover, cls.legal = observations()
 
   def test_vendored_marvel_matches_upstream_except_marked_edits(self):
     with open(os.path.join(MARVEL, 'UPSTREAM.sha256')) as f:
@@ -113,14 +115,17 @@ class VrpoTest(unittest.TestCase):
     legal[0, :4], legal[1, :2] = torch.as_tensor(self.legal[:4]).float(), torch.as_tensor(self.legal[4:6]).float()
     players = torch.zeros(2, 5, dtype=torch.long)
     players[0, :4], players[1, :2] = torch.as_tensor(self.mover[:4]), torch.as_tensor(self.mover[4:6])
+    truth = torch.zeros(2, 5, self.truth.shape[-1], dtype=torch.float16)
+    truth[0, :4], truth[1, :2] = torch.as_tensor(self.truth[:4]), torch.as_tensor(self.truth[4:6])
     rollout = TensorDict({'num_steps': torch.tensor([4, 2]), 'player_ids': players, 'obs_channels': channels,
-                          'avail_weights': legal}, batch_size=[2])
+                          'avail_weights': legal, 'critic_truth': truth}, batch_size=[2])
     with torch.no_grad():
       probs = agent(rollout=rollout).avail_probs
       q = critic(rollout=rollout).qvalues
       direct = agent.probabilities(rows[torch.arange(6), torch.as_tensor(self.mover[:6])].float(),
                                    torch.as_tensor(self.legal[:6]))
-      direct_q = critic.q_values(rows.float(), torch.as_tensor(self.mover[:6]), torch.as_tensor(self.legal[:6]))
+      direct_q = critic.q_values(rows.float(), torch.as_tensor(self.truth[:6], dtype=torch.float16).float(),
+                                 torch.as_tensor(self.mover[:6]), torch.as_tensor(self.legal[:6]))
     self.assertEqual(tuple(probs.shape), (2, 5, 48))
     self.assertEqual(tuple(q.shape), (2, 5, 48, 2))
     torch.testing.assert_close(probs[0, :4], direct[:4])
@@ -140,7 +145,8 @@ class VrpoTest(unittest.TestCase):
     n = 10  # one trajectory of 10 steps
     rollout = TensorDict({'num_steps': torch.tensor([n]), 'player_ids': torch.as_tensor(self.mover[None, :n]),
                           'obs_channels': torch.as_tensor(self.obs[None, :n], dtype=torch.float16),
-                          'avail_weights': torch.as_tensor(self.legal[None, :n]).float()}, batch_size=[1])
+                          'avail_weights': torch.as_tensor(self.legal[None, :n]).float(),
+                          'critic_truth': torch.as_tensor(self.truth[None, :n], dtype=torch.float16)}, batch_size=[1])
 
     def run():
       for model in (agent, critic):
@@ -163,6 +169,39 @@ class VrpoTest(unittest.TestCase):
     self.assertEqual(len(chunked[2]), len(whole[2]))
     for a, b in zip(chunked[2], whole[2]):
       torch.testing.assert_close(a, b, atol=1e-6, rtol=1e-4)
+
+  def test_truth_places_every_card_once_and_orders_the_piles(self):
+    b = keeps.bridge()
+    lay = b.truth_layout
+    cards, piles = lay['blocks']['cards'], lay['blocks']['piles']
+    pile_places = [lay['places'].index(f'pile-{k}') for k in range(4)]
+    worker = selfplay.Worker(32, 'truth', b.observation_size, b.num_actions, observation=2, both=True)
+    rng = np.random.default_rng(0)
+    checked = 0
+    try:
+      worker.send(np.full(worker.m, -1))
+      for _ in range(150):
+        worker.receive()
+        for u in worker.truth:
+          c = u[cards['offset']:cards['offset'] + cards['rows'] * cards['width']].reshape(cards['rows'], cards['width'])
+          p = u[piles['offset']:piles['offset'] + piles['rows'] * piles['width']].reshape(piles['rows'], piles['width'])
+          s, w = cards['columns']['place']
+          place = c[:, s:s + w]
+          np.testing.assert_array_equal(place.sum(1), 1)  # every card in exactly one place
+          ch, cw = piles['columns']['character']
+          self.assertEqual(sorted(p[:, ch:ch + cw].argmax(1)), [0, 1, 2, 3])  # the characters, a permutation
+          d0, _ = cards['columns']['depth-scaled']
+          size0, _ = piles['columns']['size']
+          for k in range(4):
+            members = place[:, pile_places[k]] == 1
+            depths = sorted(np.round(c[members, d0] * 12).astype(int))
+            self.assertEqual(depths, list(range(members.sum())))  # depths 0..size-1, no gaps
+            self.assertAlmostEqual(p[k, size0] * 12, members.sum(), places=4)
+          checked += 1
+        worker.send(np.array([rng.choice(np.flatnonzero(l)) for l in worker.legal]))
+    finally:
+      worker.close()
+    self.assertGreater(checked, 4000)
 
   def test_both_mode_gives_the_mover_the_usual_observation(self):
     # The critic's second view mustn't change what the mover sees (RoundEnv.peekInto).

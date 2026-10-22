@@ -7,17 +7,18 @@ It is the training code behind VRPO (arXiv 2605.19235) and Ataraxos's Dou Dizhu 
 
 We train the Keeps bot with it (`keeps_bot/vrpo/`) and change it only where Keeps
 plugs in. `UPSTREAM.sha256` holds the upstream files' hashes. `bot/tests/test_vrpo.py`
-checks that every file except the three below still matches them, and that each of the
-three marks its change `# Keeps:`.
+checks that every file except the four below still matches them, and that each of the
+four marks its change `# Keeps:`.
 
 | File | Change |
 |---|---|
 | `game_identity.py` | `game_name='keeps'` resolves to `keeps_bot/vrpo/game.py`; `nanopokerlib` (their C++ game library) is imported only for its own games |
 | `model/__init__.py` | `Agent` and `CentralCritic` are our entity-network policy and critic (`keeps_bot/vrpo/models.py`), not their transformers |
 | `buffer.py` | a game can define its own trajectory fields (ours are float observation rows, not tokens) |
+| `training/vrpo.py` | the critic's replay batches also keep the fields the game's critic names (`critic_replay_keys`: our critic also reads the true state) |
 
 Not changed, and used as is:
-- the VRPO trainer (`training/vrpo.py`);
+- the VRPO trainer (`training/vrpo.py`, apart from the replay keys above);
 - its losses and its Q(λ)/expected-SARSA advantage (`training/losses.py`, `training/gae.py`);
 - the Muon optimizer and the EMA (`optim/`), and the schedules (`training/trainer.py`);
 - the replay buffer (`buffer.py`, apart from the hook above);

@@ -3,6 +3,7 @@ import { actionName, NUM_ACTIONS } from './actions.ts';
 import { observationSize, RoundEnv, type ObservationVersion } from './env.ts';
 import { encoderFingerprint } from './fingerprint.ts';
 import { LAYOUT2 } from './observation2.ts';
+import { TRUTH_LAYOUT } from './truth.ts';
 
 // The environment server: Python (OpenSpiel) drives heads-up rounds through it,
 // so the rules exist only in the TypeScript engine. Run: node src/server.ts.
@@ -16,7 +17,7 @@ import { LAYOUT2 } from './observation2.ts';
 //   {"op": "obs", "id", "player"}          → {"obs"}
 //   {"op": "free", "ids": [...]}           → {}
 //   {"op": "describe", "id"}               → {"text"}
-//   {"op": "info"}                         → {"observationSize", "observationVersion", "layout", "numActions", "actionNames", "fingerprint"}
+//   {"op": "info"}                         → {"observationSize", "observationVersion", "layout", "numActions", "actionNames", "fingerprint", "truthLayout"}
 // status = {"player", "legal", "terminal", "returns", "obs"}: "player" is the
 // player to move (-4 when the round is over), "obs" their observation.
 // Observations are little-endian float32 arrays, base64-encoded.
@@ -88,6 +89,7 @@ function run(op: Op): object {
         numActions: NUM_ACTIONS,
         actionNames: Array.from({ length: NUM_ACTIONS }, (_, i) => actionName(i)),
         fingerprint: (fingerprint ??= encoderFingerprint(version)),
+        truthLayout: TRUTH_LAYOUT, // the worker's `both` frames (truth.ts)
       };
     case 'describe': {
       const env = get(op.id);

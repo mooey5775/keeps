@@ -9,7 +9,7 @@ step of a trajectory comes from a policy at most one iteration old.
 
 Each worker plays its share of the rounds in `both` mode: every step, both
 players' observations (the mover's, which the policy reads, and the other
-player's, for the critic). Workers are stepped a group at a time, one policy call
+player's, for the critic) and the true state (for the critic only). Workers are stepped a group at a time, one policy call
 per group, so the other groups' workers compute while the GPU works.
 
 Rounds longer than the horizon are dropped when they end (about 1 in 5,000 at
@@ -44,6 +44,7 @@ class Sampler:
     self.workers = [selfplay.Worker(m, f'vrpo-{seed}-{w}', O, A, observation=2, both=True) for w in range(workers)]
     # Each slot's round so far.
     self._obs = [np.zeros((m, T, 2, O), np.float16) for _ in self.workers]
+    self._truth = [np.zeros((m, T, game.truth_layout['size']), np.float16) for _ in self.workers]
     self._legal = [np.zeros((m, T, A), np.bool_) for _ in self.workers]
     self._player = [np.zeros((m, T), np.int64) for _ in self.workers]
     self._action = [np.zeros((m, T), np.int64) for _ in self.workers]
@@ -81,6 +82,7 @@ class Sampler:
       for i in np.flatnonzero(worker.done):
         self._finish(w, i, int(worker.reward[i]))
     obs = np.concatenate([self.workers[w].obs for w in group]).astype(np.float16)  # [n, 2, O]
+    truth = np.concatenate([self.workers[w].truth for w in group]).astype(np.float16)  # [n, U]
     mover = np.concatenate([self.workers[w].player for w in group]).astype(np.int64)
     legal = np.concatenate([self.workers[w].legal for w in group]).astype(np.bool_)
     n = len(mover)
@@ -93,19 +95,20 @@ class Sampler:
     for w in group:
       worker = self.workers[w]
       m = worker.m
-      self._record(w, slice(at, at + m), obs, mover, legal, actions, probs)
+      self._record(w, slice(at, at + m), obs, truth, mover, legal, actions, probs)
       worker.send(actions[at:at + m])
       at += m
     self.total_env_steps += n
     self.total_game_steps += n
     self._stats['decisions'] += n
 
-  def _record(self, w, part, obs, mover, legal, actions, probs):
+  def _record(self, w, part, obs, truth, mover, legal, actions, probs):
     length = self._len[w]
     rows = np.flatnonzero(length < self.T)  # past the horizon: no longer recorded, the round will be dropped
     t = length[rows]
     sel = np.arange(part.start, part.stop)[rows]
     self._obs[w][rows, t] = obs[sel]
+    self._truth[w][rows, t] = truth[sel]
     self._legal[w][rows, t] = legal[sel]
     self._player[w][rows, t] = mover[sel]
     self._action[w][rows, t] = actions[sel]
@@ -121,8 +124,9 @@ class Sampler:
       self._stats['rounds_cut'] += 1
       return
     self._stats['player0_wins'] += result > 0
-    self.finished.append((self._obs[w][i, :n].copy(), self._legal[w][i, :n].copy(), self._player[w][i, :n].copy(),
-                          self._action[w][i, :n].copy(), self._probs[w][i, :n].copy(), result))
+    self.finished.append((self._obs[w][i, :n].copy(), self._truth[w][i, :n].copy(), self._legal[w][i, :n].copy(),
+                          self._player[w][i, :n].copy(), self._action[w][i, :n].copy(), self._probs[w][i, :n].copy(),
+                          result))
 
   def _rollout(self, episodes):
     B, T, A, O = len(episodes), self.T, self.A, self.game.num_channels
@@ -143,10 +147,12 @@ class Sampler:
     obs, legal, player = batch['obs_channels'].numpy(), batch['avail_weights'].numpy(), batch['player_ids'].numpy()
     commit, probs, action = batch['avail_is_commit'].numpy(), batch['avail_probs'].numpy(), batch['action_taken'].numpy()
     rewards, terminal, steps = batch['rewards'].numpy(), batch['is_terminal'].numpy(), batch['num_steps'].numpy()
-    for j, (e_obs, e_legal, e_player, e_action, e_probs, result) in enumerate(episodes):
+    truth = batch['critic_truth'].numpy()
+    for j, (e_obs, e_truth, e_legal, e_player, e_action, e_probs, result) in enumerate(episodes):
       n = len(e_action)
       steps[j] = n
       obs[j, :n] = e_obs
+      truth[j, :n] = e_truth
       legal[j, :n] = e_legal
       commit[j, :n] = e_legal  # every Keeps decision is a step of the game (MARVEL counts committed steps)
       player[j, :n] = e_player

@@ -16,7 +16,10 @@ and leave the rest zero, as MARVEL's mask them.
                  feature with a weight vector, as in marvel/model/critic.py. An
                  action's feature is a learned vector per action id, plus, for a card
                  or a position, a projection of that card's or position's rows in the
-                 mover's view (the pointer heads' candidates).
+                 mover's view (the pointer heads' candidates). Beyond MARVEL's: the
+                 true state (truth.ts: the piles' order and characters, which neither
+                 player knows) enters the mixer as a third slot beside the players',
+                 so the critic can separate the luck of a draw from the play.
 
 Both compute each step on its own, so a rollout's steps go through in chunks of
 CHUNK (MARVEL scores a whole iteration's rounds at once, ~135,000 steps): with
@@ -224,8 +227,34 @@ class Agent(CheckpointableModule, TrainableModule):
     return AgentOutput(avail_probs=out)
 
 
+class TruthEncoder(nn.Module):
+  """The true state (truth.ts) as one feature vector: shared layers over its card rows and pile rows."""
+
+  def __init__(self, truth_layout):
+    super().__init__()
+    self.blocks_layout = truth_layout['blocks']
+    cards, piles = self.blocks_layout['cards'], self.blocks_layout['piles']
+    self.card_embedding = nn.Parameter(_truncated_normal_(torch.empty(cards['rows'], CARD_EMBEDDING), 0.1))
+    self.card_in = linear(cards['width'], 64, no_weight_decay=True)
+    self.card_embed = linear(CARD_EMBEDDING, 64, bias=False)
+    self.card_out = linear(64, 64)
+    self.pile = mlp([piles['width'], 32, 32])
+    self.out = linear(cards['rows'] * 64 + piles['rows'] * 32, FEATURE)
+
+  def rows(self, truth, name):
+    b = self.blocks_layout[name]
+    return truth[:, b['offset']:b['offset'] + b['rows'] * b['width']].reshape(truth.shape[0], b['rows'], b['width'])
+
+  def forward(self, truth):
+    """truth [n, U] float32 → [n, FEATURE]."""
+    n = truth.shape[0]
+    h_card = torch.relu(self.card_out(torch.relu(self.card_in(self.rows(truth, 'cards')) + self.card_embed(self.card_embedding))))
+    h_pile = self.pile(self.rows(truth, 'piles'))
+    return self.out(torch.cat([h_card.reshape(n, -1), h_pile.reshape(n, -1)], -1))
+
+
 class CentralCritic(CheckpointableModule, TrainableModule):
-  """Q(s, a) for both players at each step, from both players' observations."""
+  """Q(s, a) for both players at each step, from both players' observations and the true state."""
 
   checkpoint_state_key = 'critic_state_dict'
 
@@ -240,8 +269,10 @@ class CentralCritic(CheckpointableModule, TrainableModule):
     self.num_specials = self.num_actions - first_special
     self.torso = EntityTorso(game.layout)
     self.state_proj = linear(TRUNK, FEATURE)
-    # MARVEL's critic mixer (critic.py, architecture v1.2+): its ResGatedMLP over the players' features.
-    self.critic_mixer = ResGatedMLP(self.num_players * FEATURE, n_layers=cfg.model.fuse_layers, expansion_ratio=1)
+    self.truth = TruthEncoder(game.truth_layout)
+    # MARVEL's critic mixer (critic.py, architecture v1.2+): its ResGatedMLP over the players' features,
+    # with the true state's as one more slot.
+    self.critic_mixer = ResGatedMLP((self.num_players + 1) * FEATURE, n_layers=cfg.model.fuse_layers, expansion_ratio=1)
     action_embedding = torch.empty(self.num_actions, FEATURE)
     nn.init.normal_(action_embedding)  # as MARVEL's embeddings (TrainableModule._init_module)
     self.action_embedding = nn.Parameter(action_embedding)
@@ -250,12 +281,12 @@ class CentralCritic(CheckpointableModule, TrainableModule):
     # MARVEL's value head: an output projection, std 0.01 (critic.py).
     self.value_head = BaseMarvelModule._build_output_proj(FEATURE, std=0.01)
 
-  def q_values(self, obs, mover, legal):
-    """obs [n, 2, O] float32 (player 0's, player 1's), mover [n], legal [n, 48] → Q [n, 48, 2]."""
+  def q_values(self, obs, truth, mover, legal):
+    """obs [n, 2, O] float32 (player 0's, player 1's), truth [n, U], mover [n], legal [n, 48] → Q [n, 48, 2]."""
     n = obs.shape[0]
     x, h_card, positions, _, _ = self.torso(obs.reshape(n * self.num_players, -1))
-    state = self.state_proj(x).reshape(n, self.num_players * FEATURE)
-    mixed = self.critic_mixer(state).reshape(n, self.num_players, FEATURE)
+    state = torch.cat([self.state_proj(x).reshape(n, self.num_players * FEATURE), self.truth(truth)], -1)
+    mixed = self.critic_mixer(state).reshape(n, self.num_players + 1, FEATURE)[:, :self.num_players]
     # Action features from the mover's view.
     pick = torch.arange(n, device=obs.device) * self.num_players + mover
     entity = torch.cat([self.card_action(h_card[pick]), self.pos_action(positions[pick]),
@@ -269,8 +300,10 @@ class CentralCritic(CheckpointableModule, TrainableModule):
       raise ValueError('the critic keeps no cache')
     b, t = _valid_steps(rollout)
     obs = rollout['obs_channels'][b, t]  # float16 until its chunk
+    truth = rollout['critic_truth'][b, t]
     legal = rollout['avail_weights'][b, t] > 0
-    q = _by_chunks(lambda o, m, l: self.q_values(o.float(), m, l), obs, rollout['player_ids'][b, t], legal)
+    q = _by_chunks(lambda o, u, m, l: self.q_values(o.float(), u.float(), m, l), obs, truth, rollout['player_ids'][b, t],
+                   legal)
     out = q.new_zeros(rollout['player_ids'].shape + (self.num_actions, self.num_players))
     out[b, t] = q
     return CriticOutput(qvalues=out)

@@ -64,6 +64,7 @@ class Bridge:
     self.num_actions = info['numActions']
     self.action_names = info['actionNames']
     self.fingerprint = info['fingerprint']  # the encoder's (see packages/learn/src/fingerprint.ts)
+    self.truth_layout = info.get('truthLayout')  # the true state in the worker's `both` frames (truth.ts)
 
   def send(self, ops):
     """Sends a request; read its results with receive(). Lets several servers work at once."""

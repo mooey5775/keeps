@@ -156,6 +156,8 @@ class VRPOTrainer(AlgorithmTrainer):
                     "action_taken",
                     "rewards",
                 )
+                # Keeps: and any fields the game's critic also reads (our critic's true state).
+                replay_keys += tuple(getattr(game, "critic_replay_keys", ()))
                 collect_batch = rollout.select(*replay_keys).to(runtime.device)
                 for aux_ep in range(aux_phase_epochs):
                     total_trajectories = int(collect_batch.batch_size[0])

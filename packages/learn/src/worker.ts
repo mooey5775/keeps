@@ -1,6 +1,7 @@
 import { NUM_ACTIONS } from './actions.ts';
 import { RoundEnv } from './env.ts';
 import { observationSize, type ObservationVersion } from './env.ts';
+import { encodeTruth, TRUTH_SIZE } from './truth.ts';
 
 // The training worker: many heads-up rounds at once, stepped in lockstep with
 // binary frames, for self-play at speed. (server.ts is the general, JSON
@@ -14,6 +15,8 @@ import { observationSize, type ObservationVersion } from './env.ts';
 //           (with `both`: [M, 2, OBSERVATION_SIZE], player 0's then player 1's,
 //           for a critic that sees both. The mover's is exactly what it is
 //           without `both`; the other player's is a peek, RoundEnv.peekInto.)
+//   truth   float32 [M, TRUTH_SIZE]        only with `both`: the true state (truth.ts), for
+//           the critic
 //   legal   uint8   [M, NUM_ACTIONS]       their legal actions (1 = legal)
 //   player  int8    [M]                    the player to move (0 or 1)
 //   done    uint8   [M]                    1 if this step ended the slot's round (obs etc. are the next round's)
@@ -31,9 +34,10 @@ let dealt = 0;
 const deal = () => RoundEnv.start(`${seedBase}-${dealt++}`, { checked: false, observation: version });
 const envs = Array.from({ length: M }, deal);
 
-const obsBytes = M * VIEWS * OBSERVATION_SIZE * 4;
+const obsBytes = M * VIEWS * OBSERVATION_SIZE * 4 + (both ? M * TRUTH_SIZE * 4 : 0);
 const frame = Buffer.alloc(obsBytes + M * NUM_ACTIONS + M * 3);
 const obs = new Float32Array(frame.buffer, frame.byteOffset, M * VIEWS * OBSERVATION_SIZE);
+const truth = new Float32Array(frame.buffer, frame.byteOffset + M * VIEWS * OBSERVATION_SIZE * 4, both ? M * TRUTH_SIZE : 0);
 const legal = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes, M * NUM_ACTIONS);
 const player = new Int8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS, M);
 const done = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS + M, M);
@@ -58,6 +62,7 @@ function step(actions: Int32Array): void {
     if (both) {
       env.observeInto(p, obs, (2 * i + p) * OBSERVATION_SIZE);
       env.peekInto(1 - p, obs, (2 * i + 1 - p) * OBSERVATION_SIZE);
+      encodeTruth(env.state, truth, i * TRUTH_SIZE);
     } else {
       env.observeInto(p, obs, i * OBSERVATION_SIZE);
     }

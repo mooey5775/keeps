@@ -81,7 +81,7 @@ def main():
   os.makedirs(run_dir, exist_ok=True)
   keeps.set_observation(2)
   b = keeps.bridge()
-  vrpo_game.configure(args.horizon, b.observation_size, b.layout)
+  vrpo_game.configure(args.horizon, b.observation_size, b.layout, b.truth_layout)
   cfg = tyro.cli(TrainConfig, default=dou_dizhu_settings(run_dir), args=rest)
   configure_torch(cfg)
   torch.set_float32_matmul_precision('high')  # as marvel/train.py
