@@ -32,17 +32,19 @@ Episode = collections.namedtuple('Episode', 'obs legal player action prob result
 class Worker:
   """One Node worker process and its frame layout."""
 
-  def __init__(self, rounds, seed, obs_size, num_actions, observation=None):
+  def __init__(self, rounds, seed, obs_size, num_actions, observation=None, both=False):
+    """`both`: obs holds both players' observations, [rounds, 2, obs_size] (for a central critic)."""
     self.m = rounds
     version = observation if observation is not None else keeps.OBSERVATION
-    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed, str(version)], cwd=os.path.dirname(WORKER),
-                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed, str(version)] + (['both'] if both else []),
+                                  cwd=os.path.dirname(WORKER), stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
     m, o, a = rounds, obs_size, num_actions
-    self._buf = bytearray(m * o * 4 + m * a + m * 3)
+    views = 2 if both else 1
+    self._buf = bytearray(m * views * o * 4 + m * a + m * 3)
     self._view = memoryview(self._buf)
     raw = np.frombuffer(self._buf, dtype=np.uint8)
-    self.obs = raw[:m * o * 4].view('<f4').reshape(m, o)
-    at = m * o * 4
+    self.obs = raw[:m * views * o * 4].view('<f4').reshape((m, 2, o) if both else (m, o))
+    at = m * views * o * 4
     self.legal = raw[at:at + m * a].reshape(m, a)
     at += m * a
     self.player = raw[at:at + m].view(np.int8)

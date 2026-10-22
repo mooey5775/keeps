@@ -6,5 +6,6 @@ coverage/
 data/
 screenshots/
 bot/.venv/
+bot/.venv-torch/
 __pycache__/
 bot/runs/

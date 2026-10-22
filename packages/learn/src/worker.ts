@@ -4,12 +4,16 @@ import { observationSize, type ObservationVersion } from './env.ts';
 
 // The training worker: many heads-up rounds at once, stepped in lockstep with
 // binary frames, for self-play at speed. (server.ts is the general, JSON
-// interface OpenSpiel's per-state API uses.) Run: node src/worker.ts <rounds> <seed> [observation version].
+// interface OpenSpiel's per-state API uses.)
+// Run: node src/worker.ts <rounds> <seed> [observation version] [both].
 //
 // Each slot holds one round; when it ends, the slot deals a new one at once.
 // Protocol, repeated: read M int32 actions (little-endian; -1 = none, as on the
 // first frame), apply each to its slot, then write one frame:
 //   obs     float32 [M, OBSERVATION_SIZE]  the player to move's observation
+//           (with `both`: [M, 2, OBSERVATION_SIZE], player 0's then player 1's,
+//           for a critic that sees both. The mover's is exactly what it is
+//           without `both`; the other player's is a peek, RoundEnv.peekInto.)
 //   legal   uint8   [M, NUM_ACTIONS]       their legal actions (1 = legal)
 //   player  int8    [M]                    the player to move (0 or 1)
 //   done    uint8   [M]                    1 if this step ended the slot's round (obs etc. are the next round's)
@@ -18,16 +22,18 @@ import { observationSize, type ObservationVersion } from './env.ts';
 const M = Number(process.argv[2]);
 const seedBase = process.argv[3] ?? 'w';
 const version = Number(process.argv[4] ?? 1) as ObservationVersion;
+const both = process.argv[5] === 'both';
 const OBSERVATION_SIZE = observationSize(version);
-if (!Number.isInteger(M) || M <= 0) throw new Error('usage: worker.ts <rounds> <seed>');
+const VIEWS = both ? 2 : 1;
+if (!Number.isInteger(M) || M <= 0) throw new Error('usage: worker.ts <rounds> <seed> [version] [both]');
 
 let dealt = 0;
 const deal = () => RoundEnv.start(`${seedBase}-${dealt++}`, { checked: false, observation: version });
 const envs = Array.from({ length: M }, deal);
 
-const obsBytes = M * OBSERVATION_SIZE * 4;
+const obsBytes = M * VIEWS * OBSERVATION_SIZE * 4;
 const frame = Buffer.alloc(obsBytes + M * NUM_ACTIONS + M * 3);
-const obs = new Float32Array(frame.buffer, frame.byteOffset, M * OBSERVATION_SIZE);
+const obs = new Float32Array(frame.buffer, frame.byteOffset, M * VIEWS * OBSERVATION_SIZE);
 const legal = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes, M * NUM_ACTIONS);
 const player = new Int8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS, M);
 const done = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS + M, M);
@@ -49,7 +55,12 @@ function step(actions: Int32Array): void {
     }
     const p = env.currentPlayer;
     player[i] = p;
-    env.observeInto(p, obs, i * OBSERVATION_SIZE);
+    if (both) {
+      env.observeInto(p, obs, (2 * i + p) * OBSERVATION_SIZE);
+      env.peekInto(1 - p, obs, (2 * i + 1 - p) * OBSERVATION_SIZE);
+    } else {
+      env.observeInto(p, obs, i * OBSERVATION_SIZE);
+    }
     for (const a of env.legalActions()) legal[i * NUM_ACTIONS + a] = 1;
   }
 }

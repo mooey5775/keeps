@@ -51,6 +51,11 @@ export class RoundEnv {
   private legalCache: { decision: Decision; length: number; ids: number[] } | null = null;
   /** Each player's belief, kept up to date from their log (built on first use). */
   private beliefs: (Belief | null)[] = [null, null];
+  /**
+   * Separate beliefs for peekInto (a central critic's view of the player not
+   * moving), so peeking never changes what a player's own belief has observed.
+   */
+  private peekBeliefs: (Belief | null)[] = [null, null];
   /** What each player has been shown, extended as events happen. */
   private logs: TraceEvent[][];
   private views: { state: GameState | null; views: (PlayerView | null)[] } = { state: null, views: [null, null] };
@@ -80,6 +85,7 @@ export class RoundEnv {
     copy.prefix = [...this.prefix];
     // What each player has seen goes beyond the log (views at earlier decisions): copy it.
     copy.beliefs = this.beliefs.map((b) => b?.clone() ?? null);
+    copy.peekBeliefs = this.peekBeliefs.map((b) => b?.clone() ?? null);
     return copy;
   }
 
@@ -106,6 +112,21 @@ export class RoundEnv {
     }
     const view = this.view(player);
     const belief = (this.beliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!, { sound: true })).update(this.log(player)).observe(view);
+    const moving = !this.terminal && this.currentPlayer === player;
+    encodeObservation2(view, belief, moving ? this.prefix : [], moving ? this.legalActions() : [], out, start);
+  }
+
+  /**
+   * Observation v2 of `player` now, from a belief of its own (observed at every
+   * peek), for a critic that sees both players. A player's real belief observes
+   * its view only at its own decisions (observeInto, and the bot), and the view
+   * can show things only for a moment, so observing more often can conclude
+   * more: peeking with the real belief would change what the player later sees.
+   */
+  peekInto(player: number, out: Float32Array, start: number): void {
+    if (this.version !== 2) throw new Error('peekInto needs observation v2');
+    const view = this.view(player);
+    const belief = (this.peekBeliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!, { sound: true })).update(this.log(player)).observe(view);
     const moving = !this.terminal && this.currentPlayer === player;
     encodeObservation2(view, belief, moving ? this.prefix : [], moving ? this.legalActions() : [], out, start);
   }

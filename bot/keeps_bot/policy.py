@@ -4,7 +4,8 @@ Training saves `policy-<step>.pkl` (weights and shape) next to its checkpoints;
 `load()` rebuilds the network R-NaD trains (same modules, so the same parameter
 names) and returns a function from observations and legal masks to action
 probabilities, post-processed the way R-NaD plays at test time (actions under
-3% dropped, the rest rounded to 32nds).
+3% dropped, the rest rounded to 32nds), unless the policy was saved with
+postprocess='none' (VRPO's are played as trained).
 """
 
 import os
@@ -64,13 +65,13 @@ def load(path):
   net = build(saved)
   entity = saved.get('network', 'mlp') == 'entity'
   params = jax.device_put(saved['params'])
-  finetune = rnad.FineTuning()
+  finetune = rnad.FineTuning() if saved.get('postprocess', 'rnad') == 'rnad' else None
 
   @jax.jit
   def probabilities(params, obs, legal):
     out = net.apply(params, rnad.EnvStep(obs=obs, legal=legal))
     pi = out[0] if entity else out
-    return finetune.post_process_policy(pi, legal)
+    return finetune.post_process_policy(pi, legal) if finetune else pi
 
   return (lambda obs, legal: np.asarray(probabilities(params, jnp.asarray(obs), jnp.asarray(legal)))), saved
 

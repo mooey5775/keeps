@@ -141,8 +141,10 @@ def policy_file(saved, run, step, fingerprint, evals=None):
       'observationSize': keeps.bridge().observation_size,
       'numActions': saved['num_actions'],
       'fingerprint': fingerprint,
-      'postprocess': {'threshold': rnad.FineTuning().policy_threshold,
-                      'discretization': rnad.FineTuning().policy_discretization},
+      # R-NaD's test-time post-processing; none (0, 0: the raw policy) for policies trained to be played as is.
+      'postprocess': ({'threshold': rnad.FineTuning().policy_threshold,
+                       'discretization': rnad.FineTuning().policy_discretization}
+                      if saved.get('postprocess', 'rnad') == 'rnad' else {'threshold': 0, 'discretization': 0}),
       'evals': evals,
   }
   if network == 'entity':
