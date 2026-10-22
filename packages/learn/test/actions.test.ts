@@ -1,6 +1,6 @@
 import { buildPosition, legalCommands, viewFor, type Command, type Seat } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
-import { actionName, CARD, Decision, encode, NUM_ACTIONS } from '../src/actions.ts';
+import { actionName, CARD, Decision, encode, NUM_ACTIONS, POS } from '../src/actions.ts';
 import { RoundEnv } from '../src/env.ts';
 
 // The action space must be a faithful, unambiguous re-encoding of the engine's
@@ -92,6 +92,53 @@ describe('action ids', () => {
       env.step(CARD(card));
     }
     expect(env.state.piles[env.state.pileAt[0]].cards.map((c) => c.id)).toEqual(order);
+  });
+
+  it('names seats and piles relative to the chooser, as the observation does', () => {
+    // The network can't tell which seat it's in (the observation is relative), so
+    // "my keep" must be the same id from either seat. With absolute seats it was
+    // 50/50 on every keep and pile choice, whatever it learned.
+    const seatOf = (c: Command): Seat[] => {
+      if (c.type !== 'answer') return [];
+      const a = c.answer;
+      if (a.kind === 'action') {
+        const ch = a.choice;
+        if (ch.action === 'play' && ch.target !== undefined) return [ch.target];
+        if (ch.action === 'ability' && ch.card === 'sanction') return [ch.from];
+        if (ch.action === 'ability' && ch.card === 'blunder') return [ch.pile];
+        if (ch.action === 'ability' && ch.card === 'juggling') return [...ch.piles];
+        return [];
+      }
+      if (a.kind === 'hot-target' || a.kind === 'duplicity-hide') return [a.target];
+      if (a.kind === 'choose-pile' || a.kind === 'choose-top-card') return [a.pile];
+      if (a.kind === 'choose-player') return [a.seat];
+      if (a.kind === 'claim-pile') return [a.from];
+      return [];
+    };
+    const kinds = new Set<string>();
+    for (let g = 0; g < 200; g++) {
+      const random = rng(500 + g);
+      const env = RoundEnv.start(`relative-${g}`, { checked: false });
+      while (!env.terminal) {
+        if (env.prefix.length === 0) {
+          const seat = env.decider();
+          const view = viewFor(env.state, seat);
+          for (const command of legalCommands(env.state, seat)) {
+            if (command.type === 'next-round') continue;
+            const ids = encode(command, view);
+            for (const named of seatOf(command)) {
+              const expected = POS((named - seat + 4) % 4);
+              expect(ids, `seat ${seat}: ${JSON.stringify(command)}`).toContain(expected);
+              if (named === seat) expect(ids).toContain(POS(0));
+              kinds.add(command.type === 'answer' ? command.answer.kind : command.type);
+            }
+          }
+        }
+        const legal = env.legalActions();
+        env.step(legal[Math.floor(random() * legal.length)]!);
+      }
+    }
+    expect(kinds.size).toBeGreaterThanOrEqual(4);
   });
 
   it('has 48 ids with readable names', () => {

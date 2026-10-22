@@ -69,13 +69,15 @@ class KeepsRNaD(rnad.RNaDSolver):
       self.selfplay = selfplay.SelfPlay(self._workers, self._rounds, self.config.trajectory_max,
                                         game.observation_size, game.num_actions, seed=self.config.seed,
                                         groups=self._groups)
+      # Decisions before this session (a resumed checkpoint's), so the total carries on.
+      self._decisions_before = self.actor_steps
       # Self-play runs ahead in the background with the latest parameters, at most two batches ahead.
       self.selfplay.start(self._policy, queue_max=2 * self.config.batch_size, threads=self._actors)
     play = self.selfplay
     started = time.perf_counter()
     episodes = play.wait(self.config.batch_size)
     self.waited += time.perf_counter() - started
-    self.actor_steps = play.decisions
+    self.actor_steps = self._decisions_before + play.decisions
     longest = max(len(e.action) for e in episodes)
     length = next((n for n in LENGTHS if n > longest), LENGTHS[-1])
     if self._batcher is None:
@@ -143,7 +145,7 @@ def main():
   def save_policy(step):
     play = solver.selfplay
     policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, solver.config.policy_network_layers, num_actions,
-                  learner_steps=step, decisions=play.decisions if play else 0, fingerprint=keeps.bridge().fingerprint)
+                  learner_steps=step, decisions=solver.actor_steps, fingerprint=keeps.bridge().fingerprint)
 
   if solver.learner_steps == 0:
     save_policy(0)
@@ -159,7 +161,7 @@ def main():
       rounds = play.rounds - r0
       entry = {
           'learner_steps': step,
-          'decisions': play.decisions,
+          'decisions': solver.actor_steps,
           'loss': float(logs['loss']),
           'decisions_per_s': round((play.decisions - d0) / max(now - t0, 1e-9)),
           'rounds': play.rounds,
@@ -176,7 +178,7 @@ def main():
         f.write(json.dumps(entry) + '\n')
       for key in ('loss', 'decisions_per_s', 'round_length', 'player0_win_rate', 'cut_rate', 'learner_idle'):
         writer.add_scalar(f'train/{key}', entry[key], step)
-      writer.add_scalar('train/decisions', play.decisions, step)
+      writer.add_scalar('train/decisions', solver.actor_steps, step)
       writer.flush()
     if step % args.eval_every == 0:
       save_policy(step)

@@ -10,7 +10,11 @@ import { CARD_IDS, type CardId, type Command, type PlayerView, type PromptView, 
 //                     Offering picks, Providence's cards, Tithes' order. Cards are
 //                     unique, and an ability card is never also in your hand
 //                     (the ones that start in a hand are HOT), so it's unambiguous.
-//   POS(s)     36..39 every seat or pile position: keep targets, piles, players, Fiat claims
+//   POS(r)     36..39 every seat or pile position: keep targets, piles, players, Fiat claims,
+//                     RELATIVE to the player choosing (0 = their own, 1 = their left,
+//                     2 = opposite, 3 = their right), like the observation. (Absolute
+//                     seats made "my keep" and "their keep" indistinguishable to the
+//                     network: it can't tell which seat it's in.)
 //   FACE_DOWN  40     the face-down card (Providence); a round has at most one
 //   LEFT RIGHT 41 42  Acquisition's first side, Pandemonium
 //   YES NO     43 44  Prayer (take?), a Duplicity reveal window (reveal?)
@@ -19,7 +23,10 @@ import { CARD_IDS, type CardId, type Command, type PlayerView, type PromptView, 
 //   REVEAL     47     Duplicity's free reveal
 
 export const CARD = (card: CardId): number => CARD_IDS.indexOf(card);
-export const POS = (seat: Seat): number => 36 + seat;
+export const POS = (position: number): number => 36 + position;
+
+/** The position id of `seat` as `me` sees it. */
+export const posOf = (seat: Seat, me: Seat): number => POS((seat - me + 4) % 4);
 export const FACE_DOWN = 40;
 export const LEFT = 41;
 export const RIGHT = 42;
@@ -32,14 +39,17 @@ export const NUM_ACTIONS = 48;
 
 export function actionName(id: number): string {
   if (id >= 0 && id < 36) return CARD_IDS[id]!;
-  if (id >= 36 && id < 40) return `pos${id - 36}`;
+  if (id >= 36 && id < 40) return ['at-own', 'at-left', 'at-opposite', 'at-right'][id - 36]!;
   return ['face-down', 'left', 'right', 'yes', 'no', 'draw', 'pass', 'reveal'][id - 40] ?? `?${id}`;
 }
 
 type MyPrompt = Extract<PromptView, { mine: true }>;
 
-/** The ids a command is chosen with, in order. `view` is the chooser's view (for the prompt's cards and the keeps). */
+/** The ids a command is chosen with, in order. `view` is the chooser's view (for the prompt's cards, the keeps, and their seat). */
 export function encode(command: Command, view: PlayerView): number[] {
+  if (view.viewer === 'spectator') throw new Error('a spectator has no commands');
+  const me = view.viewer;
+  const at = (seat: Seat) => posOf(seat, me);
   if (command.type === 'reveal-duplicity') return [REVEAL];
   if (command.type !== 'answer') throw new Error(`no encoding for ${command.type}`);
   const answer = command.answer;
@@ -52,17 +62,17 @@ export function encode(command: Command, view: PlayerView): number[] {
         case 'pass':
           return [PASS];
         case 'play':
-          return [CARD(c.card), ...(c.target !== undefined ? [POS(c.target)] : []), ...(c.copy ? [CARD(c.copy)] : [])];
+          return [CARD(c.card), ...(c.target !== undefined ? [at(c.target)] : []), ...(c.copy ? [CARD(c.copy)] : [])];
         case 'ability':
           switch (c.card) {
             case 'juggling':
-              return [CARD('juggling'), POS(c.piles[0]), POS(c.piles[1])];
+              return [CARD('juggling'), at(c.piles[0]), at(c.piles[1])];
             case 'sanction':
-              return [CARD('sanction'), POS(c.from)];
+              return [CARD('sanction'), at(c.from)];
             case 'acquisition':
               return [CARD('acquisition'), CARD(c.discard), c.first === 'left' ? LEFT : RIGHT];
             case 'blunder':
-              return [CARD('blunder'), POS(c.pile)];
+              return [CARD('blunder'), at(c.pile)];
             case 'shackles':
             case 'tithes':
               return [CARD(c.card)];
@@ -74,15 +84,15 @@ export function encode(command: Command, view: PlayerView): number[] {
       }
     }
     case 'hot-target':
-      return [POS(answer.target)];
+      return [at(answer.target)];
     case 'choose-pile':
-      return [POS(answer.pile)];
+      return [at(answer.pile)];
     case 'choose-pile-card': {
       const prompt = myPrompt(view, command.promptId, 'choose-pile-card');
       return [CARD(prompt.cards[answer.index]!)];
     }
     case 'choose-top-card':
-      return [POS(answer.pile)];
+      return [at(answer.pile)];
     case 'take-or-discard':
       return [answer.take ? YES : NO];
     case 'choose-discard-card':
@@ -94,7 +104,7 @@ export function encode(command: Command, view: PlayerView): number[] {
     case 'order-pile':
       return answer.order.map(CARD);
     case 'choose-player':
-      return [POS(answer.seat)];
+      return [at(answer.seat)];
     case 'choose-hand-card':
       return [CARD(answer.card)];
     case 'give-card':
@@ -102,9 +112,9 @@ export function encode(command: Command, view: PlayerView): number[] {
     case 'joker-copy':
       return [CARD(answer.card)];
     case 'claim-pile':
-      return [POS(answer.from)];
+      return [at(answer.from)];
     case 'duplicity-hide':
-      return [CARD(answer.card), POS(answer.target)];
+      return [CARD(answer.card), at(answer.target)];
     case 'reveal-window':
       return [answer.reveal ? YES : NO];
     default:
