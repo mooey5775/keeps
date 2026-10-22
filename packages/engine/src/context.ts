@@ -54,7 +54,15 @@ export function pushAfterPlay(ctx: Ctx, op: OpBody): void {
   state.stack.splice(index, 0, { ...op, ...ctx.tracer.context(), play: null });
 }
 
-/** Deep copy of plain-data engine state. */
+/** Deep copy of plain-data engine state (arrays, objects, primitives). */
 export function clone<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
+  if (typeof value !== 'object' || value === null) return value;
+  if (Array.isArray(value)) return value.map(clone) as T;
+  const out: Record<string, unknown> = {};
+  for (const key in value) {
+    const v = (value as Record<string, unknown>)[key];
+    // As JSON would: drop undefined fields.
+    if (v !== undefined) out[key] = clone(v);
+  }
+  return out as T;
 }

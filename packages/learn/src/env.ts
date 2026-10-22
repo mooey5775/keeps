@@ -45,21 +45,28 @@ export class RoundEnv {
   private decision: Decision | null = null;
   /** Each player's belief, kept up to date from their log (built on first use). */
   private beliefs: (Belief | null)[] = [null, null];
+  /** What each player has been shown, extended as events happen. */
+  private logs: TraceEvent[][];
+  private views: { state: GameState | null; views: (PlayerView | null)[] } = { state: null, views: [null, null] };
+  /** Off: the engine skips legality and invariant checks (commands come from its own legal list). For training speed. */
+  readonly checked: boolean;
 
-  private constructor(state: GameState, events: TraceEvent[]) {
+  private constructor(state: GameState, events: TraceEvent[], checked: boolean) {
     this.state = state;
     this.events = events;
+    this.checked = checked;
+    this.logs = SEAT_OF_PLAYER.map((seat) => eventsFor(events, seat));
   }
 
   /** A fresh round, dealt from `seed`. */
-  static start(seed: string): RoundEnv {
+  static start(seed: string, { checked = true }: { checked?: boolean } = {}): RoundEnv {
     const { state, events } = newGame({ players: 2, seed, marksToWin: 1 });
-    return new RoundEnv(state, events);
+    return new RoundEnv(state, events, checked);
   }
 
   /** A copy that can be stepped independently (states never change in place). */
   clone(): RoundEnv {
-    const copy = new RoundEnv(this.state, this.events);
+    const copy = new RoundEnv(this.state, [...this.events], this.checked);
     copy.prefix = [...this.prefix];
     return copy;
   }
@@ -88,18 +95,20 @@ export class RoundEnv {
   }
 
   view(player: number): PlayerView {
-    return viewFor(this.state, SEAT_OF_PLAYER[player]!);
+    // Cached until the state changes (a move of several ids observes the same state each time).
+    if (this.views.state !== this.state) this.views = { state: this.state, views: [null, null] };
+    return (this.views.views[player] ??= viewFor(this.state, SEAT_OF_PLAYER[player]!));
   }
 
   /** What `player` has been shown this round. */
-  log(player: number): TraceEvent[] {
-    return eventsFor(this.events, SEAT_OF_PLAYER[player]!);
+  log(player: number): readonly TraceEvent[] {
+    return this.logs[player]!;
   }
 
   private currentDecision(): Decision {
     if (!this.decision) {
       const seat = this.decider();
-      this.decision = new Decision(viewFor(this.state, seat), legalCommands(this.state, seat));
+      this.decision = new Decision(this.view(playerOfSeat(seat)), legalCommands(this.state, seat));
     }
     return this.decision;
   }
@@ -119,10 +128,11 @@ export class RoundEnv {
   }
 
   private applyCommand(seat: Seat, command: Command): void {
-    const result = apply(this.state, seat, command);
+    const result = apply(this.state, seat, command, { trusted: !this.checked });
     if (!result.ok) throw new Error(`engine rejected ${JSON.stringify(command)}: ${result.error.message}`);
     this.state = result.state;
-    this.events = [...this.events, ...result.events];
+    this.events.push(...result.events);
+    SEAT_OF_PLAYER.forEach((s, player) => this.logs[player]!.push(...eventsFor(result.events, s)));
     this.prefix = [];
     this.decision = null;
   }

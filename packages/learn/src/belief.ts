@@ -82,6 +82,8 @@ export class Belief {
   /** Fiat: piles by their position before it, and the claims made so far. */
   private fiat: { before: number[]; claims: { claimant: Seat; from: Seat }[] } | null = null;
   private processed = 0;
+  /** Derived from `origin` (recomputed when it changes): evidence, identity weights, origins by character. */
+  private derived: { counts: number[][]; weights: { assignment: Identity[]; weight: number }[]; byCharacter: Map<string, number[]>; identities?: number[][] } | null = null;
 
   constructor(me: Seat) {
     this.me = me;
@@ -99,6 +101,7 @@ export class Belief {
     this.at = [0, 1, 2, 3];
     this.piles = [];
     this.origin.clear();
+    this.derived = null;
     this.opponentKnown.clear();
     this.opponentHidden = [0, 0, 0, 0];
     this.opponentMaybeHidden.clear();
@@ -334,7 +337,10 @@ export class Belief {
   }
 
   private learnOrigin(card: CardId, p: number): void {
-    if (!this.origin.has(card)) this.origin.set(card, p);
+    if (!this.origin.has(card)) {
+      this.origin.set(card, p);
+      this.derived = null;
+    }
   }
 
   /**
@@ -423,8 +429,16 @@ export class Belief {
 
   // -- Beliefs --------------------------------------------------------------
 
+  private derive() {
+    if (!this.derived) {
+      const counts = this.countEvidence();
+      this.derived = { counts, weights: this.weigh(counts), byCharacter: new Map() };
+    }
+    return this.derived;
+  }
+
   /** Cards of each character known to come from each physical pile. */
-  private evidence(): number[][] {
+  private countEvidence(): number[][] {
     const counts = [0, 1, 2, 3].map(() => [0, 0, 0]);
     for (const [card, p] of this.origin) counts[p]![CHARACTERS.indexOf(CARDS[card].character)]! += 1;
     return counts;
@@ -432,7 +446,10 @@ export class Belief {
 
   /** Weights of the 24 identity assignments (assignment[p] = identity of physical pile p), normalized. */
   identityWeights(): { assignment: Identity[]; weight: number }[] {
-    const counts = this.evidence();
+    return this.derive().weights;
+  }
+
+  private weigh(counts: number[][]): { assignment: Identity[]; weight: number }[] {
     const weighted = ASSIGNMENTS.map((assignment) => {
       let weight = 1;
       for (let p = 0; p < 4 && weight > 0; p++) {
@@ -460,22 +477,30 @@ export class Belief {
 
   /** Probability that each physical pile has each identity: [pile][identity]. */
   identities(): number[][] {
+    const derived = this.derive();
+    if (derived.identities) return derived.identities;
     const out = [0, 1, 2, 3].map(() => [0, 0, 0, 0]);
     for (const { assignment, weight } of this.identityWeights()) {
       assignment.forEach((id, p) => {
         out[p]![IDENTITIES.indexOf(id)]! += weight;
       });
     }
+    derived.identities = out;
     return out;
   }
 
   /** Probability that a card was dealt into each physical pile. */
-  originProbabilities(card: CardId, weights = this.identityWeights()): number[] {
+  originProbabilities(card: CardId): readonly number[] {
     const known = this.origin.get(card);
-    if (known !== undefined) return [0, 1, 2, 3].map((p) => (p === known ? 1 : 0));
-    const counts = this.evidence();
-    const x = CHARACTERS.indexOf(CARDS[card].character);
+    if (known !== undefined) return ONE_PILE[known]!;
+    // The same for every card of a character whose origin isn't known.
+    const { counts, weights, byCharacter } = this.derive();
+    const character = CARDS[card].character;
+    const cached = byCharacter.get(character);
+    if (cached) return cached;
+    const x = CHARACTERS.indexOf(character);
     const out = [0, 0, 0, 0];
+    byCharacter.set(character, out);
     for (const { assignment, weight } of weights) {
       if (weight === 0) continue;
       const mask = assignment.indexOf('mask');
@@ -501,49 +526,75 @@ export class Belief {
    * opponent's hidden cards.
    */
   locations(view: PlayerView): Map<CardId, Location> {
+    const table = this.locationTable(view);
     const out = new Map<CardId, Location>();
-    const set = (card: CardId, where: Place) => out.set(card, { [where]: 1 });
-    for (const card of view.hands[this.me]!.cards ?? []) set(card, 'my-hand');
+    CARD_IDS.forEach((card, c) => {
+      const loc: Location = {};
+      PLACES.forEach((place, i) => {
+        const v = table[c * PLACES.length + i]!;
+        if (v > 0) loc[place] = v;
+      });
+      out.set(card, loc);
+    });
+    return out;
+  }
+
+  /** locations() as a flat table: [card (CARD_IDS order)][place (PLACES order)] → probability. */
+  locationTable(view: PlayerView): Float32Array {
+    const P = PLACES.length;
+    const out = new Float32Array(CARD_IDS.length * P);
+    const located = new Uint8Array(CARD_IDS.length);
+    const set = (card: CardId, place: number, q = 1) => {
+      const row = CARD_INDEX.get(card)! * P;
+      out.fill(0, row, row + P);
+      out[row + place] = q;
+      located[row / P] = 1;
+    };
+    for (const card of view.hands[this.me]!.cards ?? []) set(card, PLACE.myHand);
     for (const keep of view.keeps) {
+      const mine = keep.seat === this.me;
       for (const c of keep.cards) {
         if (!c.id) continue;
-        if (c.faceDown) set(c.id, keep.seat === this.me ? 'my-keep-face-down' : 'opponent-keep-face-down');
-        else set(c.id, keep.seat === this.me ? 'my-keep' : 'opponent-keep');
+        if (c.faceDown) set(c.id, mine ? PLACE.myKeepFaceDown : PLACE.opponentKeepFaceDown);
+        else set(c.id, mine ? PLACE.myKeep : PLACE.opponentKeep);
       }
     }
-    for (const card of view.discard) set(card, 'discard');
+    for (const card of view.discard) set(card, PLACE.discard);
+    const hidden = this.opponentHidden.reduce((a, b) => a + b, 0);
     for (const card of this.opponentKnown) {
-      if (out.has(card)) continue;
+      if (located[CARD_INDEX.get(card)!]) continue;
       if (this.opponentMaybeHidden.has(card)) {
         // Still in their hand, or the card they hid face down.
-        const q = 1 / (this.opponentMaybeHidden.size + this.opponentHidden.reduce((a, b) => a + b, 0));
-        out.set(card, { 'opponent-hand': 1 - q, 'opponent-hidden': q });
-      } else set(card, 'opponent-hand');
+        const q = 1 / (this.opponentMaybeHidden.size + hidden);
+        set(card, PLACE.opponentHand, 1 - q);
+        out[CARD_INDEX.get(card)! * P + PLACE.opponentHidden] = q;
+      } else set(card, PLACE.opponentHand);
     }
     for (let position = 0; position < 4; position++) {
+      const place = PLACE.pile0 + ((position - this.me + 4) % 4);
       const top = view.piles[position]!.top;
-      if (top) set(top, pilePlace(this.me, position as Seat));
-      for (const card of this.piles[this.pileAt(position as Seat)]!.members) if (!out.has(card)) set(card, pilePlace(this.me, position as Seat));
+      if (top) set(top, place);
+      for (const card of this.piles[this.pileAt(position as Seat)]!.members) if (!located[CARD_INDEX.get(card)!]) set(card, place);
     }
-    const weights = this.identityWeights();
-    for (const card of CARD_IDS) {
-      if (out.has(card)) continue;
-      const origins = this.originProbabilities(card, weights);
-      const loc: Location = {};
+    CARD_IDS.forEach((card, c) => {
+      if (located[c]) return;
+      const row = c * P;
+      const origins = this.originProbabilities(card);
+      let sum = 0;
       for (let position = 0; position < 4; position++) {
         const p = this.pileAt(position as Seat);
         const unseen = this.unseenIn(p);
-        const hidden = this.opponentHidden[p]!;
-        const total = unseen + hidden;
+        const inHand = this.opponentHidden[p]!;
+        const total = unseen + inHand;
         if (origins[p]! === 0 || total <= 0) continue;
-        const place = pilePlace(this.me, position as Seat);
-        loc[place] = (loc[place] ?? 0) + origins[p]! * (unseen / total);
-        loc['opponent-hidden'] = (loc['opponent-hidden'] ?? 0) + origins[p]! * (hidden / total);
+        const place = PLACE.pile0 + ((position - this.me + 4) % 4);
+        out[row + place]! += origins[p]! * (unseen / total);
+        out[row + PLACE.opponentHidden]! += origins[p]! * (inHand / total);
+        sum += origins[p]!;
       }
-      const sum = Object.values(loc).reduce((a, b) => a + b, 0);
-      if (sum > 0) for (const k of Object.keys(loc) as Place[]) loc[k] = loc[k]! / sum;
-      out.set(card, sum > 0 ? loc : { other: 1 });
-    }
+      if (sum > 0) for (let i = 0; i < P; i++) out[row + i]! /= sum;
+      else out[row + PLACE.other] = 1;
+    });
     return out;
   }
 }
@@ -568,6 +619,21 @@ export type Place = (typeof PLACES)[number];
 export type Location = Partial<Record<Place, number>>;
 
 export const pilePlace = (me: Seat, position: Seat): Place => `pile-${(position - me + 4) % 4}` as Place;
+
+const PLACE = {
+  myHand: PLACES.indexOf('my-hand'),
+  myKeep: PLACES.indexOf('my-keep'),
+  opponentKeep: PLACES.indexOf('opponent-keep'),
+  myKeepFaceDown: PLACES.indexOf('my-keep-face-down'),
+  opponentKeepFaceDown: PLACES.indexOf('opponent-keep-face-down'),
+  discard: PLACES.indexOf('discard'),
+  opponentHand: PLACES.indexOf('opponent-hand'),
+  opponentHidden: PLACES.indexOf('opponent-hidden'),
+  pile0: PLACES.indexOf('pile-0'),
+  other: PLACES.indexOf('other'),
+};
+const ONE_PILE: readonly (readonly number[])[] = [0, 1, 2, 3].map((known) => [0, 1, 2, 3].map((p) => (p === known ? 1 : 0)));
+const CARD_INDEX = new Map(CARD_IDS.map((card, i) => [card, i]));
 
 function choose(n: number, k: number): number {
   if (k < 0 || k > n) return 0;

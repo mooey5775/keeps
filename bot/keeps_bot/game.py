@@ -10,7 +10,10 @@ generator, so the game is "sampled stochastic": new_initial_state() deals a
 fresh random round, and there are no chance nodes.
 
 Each step returns the player to move, their legal actions and observation in
-one round trip; OpenSpiel's per-step queries are answered from that.
+one round trip; OpenSpiel's per-step queries are answered from that. For
+training, `set_workers(n)` runs n servers and `new_states` / `step_states`
+deal and step many rounds at once, spread across them, so the servers work
+in parallel.
 """
 
 import base64
@@ -46,22 +49,32 @@ class Bridge:
     self.num_actions = info['numActions']
     self.action_names = info['actionNames']
 
-  def call(self, ops):
-    with self._lock:
-      if self._pending_free:
-        ops = [{'op': 'free', 'ids': self._pending_free}] + ops
-        drop = 1
-        self._pending_free = []
-      else:
-        drop = 0
-      self._proc.stdin.write(json.dumps({'ops': ops}) + '\n')
+  def send(self, ops):
+    """Sends a request; read its results with receive(). Lets several servers work at once."""
+    self._lock.acquire()
+    if self._pending_free:
+      ops = [{'op': 'free', 'ids': self._pending_free}] + ops
+      self._drop = 1
+      self._pending_free = []
+    else:
+      self._drop = 0
+    self._proc.stdin.write(json.dumps({'ops': ops}) + '\n')
+
+  def receive(self):
+    try:
       line = self._proc.stdout.readline()
+    finally:
+      self._lock.release()
     if not line:
       raise RuntimeError('the environment server exited')
     response = json.loads(line)
     if 'error' in response:
       raise RuntimeError(f"environment server: {response['error']}")
-    return response['results'][drop:]
+    return response['results'][self._drop:]
+
+  def call(self, ops):
+    self.send(ops)
+    return self.receive()
 
   def free(self, env_id):
     # Sent with the next request, to avoid a round trip per state.
@@ -72,14 +85,28 @@ class Bridge:
     self._proc.wait(timeout=10)
 
 
-_bridge = None
+_bridges = []
 
 
-def bridge():
-  global _bridge
-  if _bridge is None:
-    _bridge = Bridge()
-  return _bridge
+def set_workers(n):
+  """Runs n environment servers (new rounds are spread across them)."""
+  while len(_bridges) < n:
+    _bridges.append(Bridge())
+
+
+def bridge(index=0):
+  set_workers(index + 1)
+  return _bridges[index]
+
+
+_next_worker = 0
+
+
+def _pick_worker():
+  global _next_worker
+  index = _next_worker % max(1, len(_bridges))
+  _next_worker += 1
+  return index
 
 
 class EnvHandle:
@@ -90,18 +117,19 @@ class EnvHandle:
   copy is a real copy of the round.
   """
 
-  def __init__(self, env_id):
+  def __init__(self, env_id, worker=0):
     self.id = env_id
+    self.worker = worker
 
   def __deepcopy__(self, memo):
-    return EnvHandle(bridge().call([{'op': 'clone', 'id': self.id}])[0]['id'])
+    return EnvHandle(bridge(self.worker).call([{'op': 'clone', 'id': self.id}])[0]['id'], self.worker)
 
   def __copy__(self):
     return self.__deepcopy__({})
 
   def __del__(self):
-    if _bridge is not None:
-      _bridge.free(self.id)
+    if self.worker < len(_bridges):
+      _bridges[self.worker].free(self.id)
 
 
 def decode_obs(text):
@@ -153,7 +181,19 @@ class KeepsGame(pyspiel.Game):
     """A freshly dealt round (from `seed`, or a random one)."""
     if seed is None:
       seed = f'{self._rng.getrandbits(64):016x}'
-    return KeepsState(self, bridge().call([{'op': 'new', 'seed': str(seed)}])[0])
+    worker = _pick_worker()
+    return KeepsState(self, bridge(worker).call([{'op': 'new', 'seed': str(seed)}])[0], worker)
+
+  def new_states(self, count, workers=None):
+    """`count` freshly dealt rounds, spread across the servers `workers` (default: all), one request each."""
+    workers = list(workers if workers is not None else range(max(1, len(_bridges))))
+    by_worker = {w: [] for w in workers}
+    for i in range(count):
+      by_worker[workers[i % len(workers)]].append({'op': 'new', 'seed': f'{self._rng.getrandbits(64):016x}'})
+    by_worker = {w: ops for w, ops in by_worker.items() if ops}
+    for w, ops in by_worker.items():
+      bridge(w).send(ops)
+    return [KeepsState(self, status, w) for w in by_worker for status in bridge(w).receive()]
 
   def make_py_observer(self, iig_obs_type=None, params=None):
     return KeepsObserver(bridge().observation_size)
@@ -162,9 +202,9 @@ class KeepsGame(pyspiel.Game):
 class KeepsState(pyspiel.State):
   """A round in progress: a handle to an environment in the Node server."""
 
-  def __init__(self, game, status):
+  def __init__(self, game, status, worker=0):
     super().__init__(game)
-    self._env = EnvHandle(status['id'])
+    self._env = EnvHandle(status['id'], worker)
     self._set(status)
 
   def _set(self, status):
@@ -181,7 +221,7 @@ class KeepsState(pyspiel.State):
     return list(self._legal) if player == self._player and not self._terminal else []
 
   def _apply_action(self, action):
-    self._set(bridge().call([{'op': 'step', 'id': self._env.id, 'action': int(action)}])[0])
+    self._set(bridge(self._env.worker).call([{'op': 'step', 'id': self._env.id, 'action': int(action)}])[0])
 
   def _action_to_string(self, player, action):
     return bridge().action_names[action]
@@ -195,10 +235,39 @@ class KeepsState(pyspiel.State):
   def observation_for(self, player):
     if player == self._player and self._obs is not None:
       return self._obs
-    return decode_obs(bridge().call([{'op': 'obs', 'id': self._env.id, 'player': int(player)}])[0]['obs'])
+    return decode_obs(bridge(self._env.worker).call([{'op': 'obs', 'id': self._env.id, 'player': int(player)}])[0]['obs'])
 
   def __str__(self):
-    return bridge().call([{'op': 'describe', 'id': self._env.id}])[0]['text']
+    return bridge(self._env.worker).call([{'op': 'describe', 'id': self._env.id}])[0]['text']
+
+
+def send_steps(states, actions):
+  """Sends one action for each live state, a request per server, without waiting.
+
+  For training only: it updates the states directly, bypassing OpenSpiel's
+  history bookkeeping (R-NaD doesn't use it). Finish with receive_steps(); a
+  server takes one request at a time, so receive before sending it another.
+  """
+  by_worker = {}
+  for state, action in zip(states, actions):
+    if not state.is_terminal():
+      by_worker.setdefault(state._env.worker, []).append((state, int(action)))
+  for w, items in by_worker.items():
+    bridge(w).send([{'op': 'step', 'id': s._env.id, 'action': a} for s, a in items])
+  return by_worker
+
+
+def receive_steps(pending):
+  """Updates the states sent by send_steps(); returns how many stepped."""
+  for w, items in pending.items():
+    for (state, _), status in zip(items, bridge(w).receive()):
+      state._set(status)
+  return sum(len(items) for items in pending.values())
+
+
+def step_states(states, actions):
+  """Applies one action to each live state, all servers working at once."""
+  return receive_steps(send_steps(states, actions))
 
 
 class KeepsObserver:

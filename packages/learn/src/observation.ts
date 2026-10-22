@@ -79,11 +79,9 @@ export function encodeObservation(view: PlayerView, belief: Belief, prefix: read
   };
 
   // cards: where each card is
-  const locations = belief.locations(view);
-  for (const card of CARD_IDS) {
-    const loc = locations.get(card) ?? {};
-    for (const place of PLACES) put(loc[place] ?? 0);
-  }
+  const locations = belief.locationTable(view);
+  out.set(locations, at);
+  at += locations.length;
 
   // tops: the known top card of each pile; depth: known positions
   const depth = new Map<CardId, number>();

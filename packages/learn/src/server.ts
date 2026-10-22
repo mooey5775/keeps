@@ -56,7 +56,7 @@ function run(op: Op): object {
   switch (op.op) {
     case 'new': {
       const id = nextId++;
-      const env = RoundEnv.start(op.seed);
+      const env = RoundEnv.start(op.seed, { checked: false });
       envs.set(id, env);
       return { id, ...status(env) };
     }

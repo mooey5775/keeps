@@ -56,10 +56,16 @@ export function newGame(options: NewGameOptions): { state: GameState; events: Tr
 /**
  * Applies one player command. Pure: `state` is never modified. Rejected
  * commands return an error and change nothing.
+ *
+ * `trusted` skips checking that the command is legal and the invariant checks
+ * afterwards, for callers that only send commands built from legalCommands()
+ * and need the speed (the learning environment). The server never sets it.
  */
-export function apply(state: GameState, seat: Seat, command: Command): ApplyResult {
-  const rejection = validate(state, seat, command);
-  if (rejection) return { ok: false, error: rejection };
+export function apply(state: GameState, seat: Seat, command: Command, { trusted = false }: { trusted?: boolean } = {}): ApplyResult {
+  if (!trusted) {
+    const rejection = validate(state, seat, command);
+    if (rejection) return { ok: false, error: rejection };
+  }
 
   const draft = clone(state);
   const ctx = newCtx(draft, new Tracer(draft));
@@ -70,8 +76,10 @@ export function apply(state: GameState, seat: Seat, command: Command): ApplyResu
     if (error instanceof EngineFailure) return { ok: false, error: { code: error.code, message: error.message } };
     throw error;
   }
-  assertInvariants(draft);
-  assertRestInvariants(draft);
+  if (!trusted) {
+    assertInvariants(draft);
+    assertRestInvariants(draft);
+  }
   return { ok: true, state: draft, events: ctx.tracer.events };
 }
 
