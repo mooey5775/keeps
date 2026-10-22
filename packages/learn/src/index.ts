@@ -1,4 +1,7 @@
 export * from './actions.ts';
 export * from './belief.ts';
+export * from './bot.ts';
 export * from './env.ts';
+export * from './fingerprint.ts';
 export * from './observation.ts';
+export * from './policy.ts';

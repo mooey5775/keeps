@@ -119,7 +119,8 @@ def main():
   else:
     solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds, groups=args.groups, actors=args.actors)
   with open(os.path.join(run_dir, 'config.json'), 'w') as f:
-    json.dump({**vars(args), 'observation_size': keeps.bridge().observation_size, 'device': str(jax.devices()[0])}, f, indent=2)
+    json.dump({**vars(args), 'observation_size': keeps.bridge().observation_size, 'fingerprint': keeps.bridge().fingerprint,
+               'device': str(jax.devices()[0])}, f, indent=2)
 
   log_path = os.path.join(run_dir, 'log.jsonl')
   writer = SummaryWriter(os.path.join(run_dir, 'tb', 'train'))
@@ -128,7 +129,7 @@ def main():
   def save_policy(step):
     play = solver.selfplay
     policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, config.policy_network_layers, num_actions,
-                  learner_steps=step, decisions=play.decisions if play else 0)
+                  learner_steps=step, decisions=play.decisions if play else 0, fingerprint=keeps.bridge().fingerprint)
 
   if solver.learner_steps == 0:
     save_policy(0)
