@@ -19,6 +19,7 @@ import time
 
 import numpy as np
 
+from keeps_bot import game as keeps
 from keeps_bot import rnad
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
@@ -31,9 +32,10 @@ Episode = collections.namedtuple('Episode', 'obs legal player action prob result
 class Worker:
   """One Node worker process and its frame layout."""
 
-  def __init__(self, rounds, seed, obs_size, num_actions):
+  def __init__(self, rounds, seed, obs_size, num_actions, observation=None):
     self.m = rounds
-    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed], cwd=os.path.dirname(WORKER),
+    version = observation if observation is not None else keeps.OBSERVATION
+    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed, str(version)], cwd=os.path.dirname(WORKER),
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
     m, o, a = rounds, obs_size, num_actions
     self._buf = bytearray(m * o * 4 + m * a + m * 3)

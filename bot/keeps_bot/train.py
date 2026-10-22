@@ -28,6 +28,7 @@ import jax
 from tensorboardX import SummaryWriter
 
 from keeps_bot import game as keeps
+from keeps_bot import networks
 from keeps_bot import policy as policies
 from keeps_bot import rnad
 from keeps_bot import selfplay
@@ -41,8 +42,10 @@ LENGTHS = (64, 96, 128, 160, 200, 256, 320)
 class KeepsRNaD(rnad.RNaDSolver):
   """R-NaD fed by the self-play workers instead of OpenSpiel states."""
 
-  def __init__(self, config, workers=14, rounds=128, groups=2, actors=1):
+  def __init__(self, config, workers=14, rounds=128, groups=2, actors=1, network='mlp', observation=1):
     self._workers, self._rounds, self._groups, self._actors = workers, rounds, groups, actors
+    self.network_kind, self.observation = network, observation
+    keeps.set_observation(observation)
     self.selfplay = None
     self._batcher = None
     self.waited = 0.0  # seconds the learner has waited for self-play
@@ -50,15 +53,22 @@ class KeepsRNaD(rnad.RNaDSolver):
 
   def __getstate__(self):
     return {**super().__getstate__(), 'workers': self._workers, 'rounds': self._rounds, 'groups': self._groups,
-            'actors': self._actors}
+            'actors': self._actors, 'network': self.network_kind, 'observation': self.observation}
 
   def __setstate__(self, state):
     self._workers, self._rounds = state['workers'], state['rounds']
     self._groups, self._actors = state.get('groups', 2), state.get('actors', 1)
+    self.network_kind, self.observation = state.get('network', 'mlp'), state.get('observation', 1)
+    keeps.set_observation(self.observation)
     self.selfplay = None
     self._batcher = None
     self.waited = 0.0
     super().__setstate__(state)
+
+  def _network_function(self):
+    if self.network_kind == 'entity':
+      return networks.entity(keeps.bridge().layout, self._game.num_distinct_actions())
+    return super()._network_function()
 
   def _policy(self, obs, legal):
     return self._network_jit_apply(self.params, rnad.EnvStep(obs=obs, legal=legal))
@@ -96,7 +106,9 @@ def main():
   parser.add_argument('--steps', type=int, default=100_000, help='learner steps')
   parser.add_argument('--batch', type=int, default=256, help='rounds per learner step')
   parser.add_argument('--trajectory', type=int, default=200, help='decisions recorded per round (longer rounds are cut)')
-  parser.add_argument('--layers', default='256,256')
+  parser.add_argument('--layers', default='256,256', help='the MLP network\'s layers')
+  parser.add_argument('--network', choices=('mlp', 'entity'), default='mlp')
+  parser.add_argument('--obs', type=int, choices=(1, 2), default=1, help='observation version (entity needs 2)')
   parser.add_argument('--lr', type=float, default=5e-5)
   parser.add_argument('--entropy-size', type=int, default=2000, help='learner steps per entropy-schedule iteration')
   parser.add_argument('--eta', type=float, default=0.2,
@@ -127,14 +139,17 @@ def main():
     with open(args.resume, 'rb') as f:
       solver = pickle.load(f)
   else:
-    solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds, groups=args.groups, actors=args.actors)
+    if args.network == 'entity' and args.obs != 2:
+      parser.error('the entity network reads observation v2: add --obs 2')
+    solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds, groups=args.groups, actors=args.actors,
+                       network=args.network, observation=args.obs)
   with open(os.path.join(run_dir, 'config.json'), 'w') as f:
     # The solver's own settings (from the checkpoint, when resuming), not the command line's defaults.
     c = solver.config
     actual = {'layers': ','.join(map(str, c.policy_network_layers)), 'batch': c.batch_size, 'lr': c.learning_rate,
               'entropy_size': c.entropy_schedule_size[-1], 'eta': c.eta_reward_transform, 'trajectory': c.trajectory_max,
               'seed': c.seed, 'workers': solver._workers, 'rounds': solver._rounds, 'groups': solver._groups,
-              'actors': solver._actors}
+              'actors': solver._actors, 'network': solver.network_kind, 'obs': solver.observation}
     json.dump({**vars(args), **actual, 'observation_size': keeps.bridge().observation_size,
                'fingerprint': keeps.bridge().fingerprint, 'device': str(jax.devices()[0])}, f, indent=2)
 
@@ -145,7 +160,8 @@ def main():
   def save_policy(step):
     play = solver.selfplay
     policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, solver.config.policy_network_layers, num_actions,
-                  learner_steps=step, decisions=solver.actor_steps, fingerprint=keeps.bridge().fingerprint)
+                  learner_steps=step, decisions=solver.actor_steps, fingerprint=keeps.bridge().fingerprint,
+                  network=solver.network_kind, observation=solver.observation, layout=keeps.bridge().layout)
 
   if solver.learner_steps == 0:
     save_policy(0)

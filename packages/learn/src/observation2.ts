@@ -119,32 +119,53 @@ const TOKEN_CARDS = new Set<CardId>(['count-token', 'fool-token', 'friar-token']
 const MOVE_KIND_INDEX = Object.fromEntries(MOVE_KINDS.map((k, i) => [k, i])) as Record<string, number>;
 const MOVE_PLACE_INDEX = Object.fromEntries(MOVE_PLACES.map((k, i) => [k, i])) as Record<string, number>;
 
-/** Absolute offset of each block's row 0, plus each column's start within a row, resolved once. */
-const OFFSETS = Object.fromEntries(
-  Object.entries(LAYOUT2.blocks).map(([name, b]) => [
-    name,
-    { offset: b.offset, width: b.width, col: Object.fromEntries(Object.entries(b.columns).map(([c, [start, width]]) => [c, { start, width }])) },
-  ]),
-) as Record<string, { offset: number; width: number; col: Record<string, { start: number; width: number }> }>;
 
-export function encodeObservation2(view: PlayerView, belief: Belief, prefix: readonly number[], legal: readonly number[]): Float32Array {
-  const out = new Float32Array(OBSERVATION2_SIZE);
+/** Column starts of a block's rows, as plain numbers (the encoder writes by index). */
+function starts(blockName: string): Record<string, number> {
+  return Object.fromEntries(Object.entries(LAYOUT2.blocks[blockName]!.columns).map(([name, [start]]) => [name, start]));
+}
+const PILE = { offset: LAYOUT2.blocks.piles!.offset, width: LAYOUT2.blocks.piles!.width, col: starts('piles') };
+const PLAYER = { offset: LAYOUT2.blocks.players!.offset, width: LAYOUT2.blocks.players!.width, col: starts('players') };
+const TURN = { offset: LAYOUT2.blocks.turns!.offset, width: LAYOUT2.blocks.turns!.width, col: starts('turns') };
+const DECISION = { offset: LAYOUT2.blocks.decision!.offset, col: starts('decision') };
+const PILE_EVENT_COLUMNS = Array.from({ length: PILE_HISTORY }, (_, i) => ({
+  kind: PILE.col[`event${i}_kind`]!,
+  by: PILE.col[`event${i}_by`]!,
+  age: PILE.col[`event${i}_age`]!,
+}));
+const PILE_EVENT_INDEX = Object.fromEntries(PILE_EVENTS.map((k, i) => [k, i])) as Record<string, number>;
+const PROMPT_INDEX = Object.fromEntries(PROMPT_KINDS.map((k, i) => [k, i])) as Record<string, number>;
+// Scratch flags for the ids in play (the encoder isn't reentrant; Node runs it on one thread).
+const LEGAL = new Uint8Array(NUM_ACTIONS);
+const CHOSEN = new Uint8Array(NUM_ACTIONS);
+
+/**
+ * Encodes into `out` at `start` (a fresh array by default), so a worker can
+ * write straight into its frame. `legal`: the ids legal after `prefix`.
+ */
+export function encodeObservation2(
+  view: PlayerView,
+  belief: Belief,
+  prefix: readonly number[],
+  legal: readonly number[],
+  out: Float32Array = new Float32Array(OBSERVATION2_SIZE),
+  start = 0,
+): Float32Array {
+  out.fill(0, start, start + OBSERVATION2_SIZE);
   const me = belief.me;
   const opp = belief.opponent;
   const rel = (seat: Seat) => (seat - me + 4) % 4;
   const at = (position: number): Seat => ((me + position) % 4) as Seat;
   const history = belief.history;
-  const legalSet = new Set(legal);
-  const chosen = new Set(prefix);
+  LEGAL.fill(0);
+  CHOSEN.fill(0);
+  for (const id of legal) LEGAL[id] = 1;
+  for (const id of prefix) CHOSEN[id] = 1;
   const prompt = view.prompts.find((p) => p.mine);
-  const put = (blockName: string, row: number, column: string, value: number, index = 0) => {
-    const b = OFFSETS[blockName]!;
-    const c = b.col[column]!;
-    if (index < 0 || index >= c.width) return;
-    out[b.offset + row * b.width + c.start + index] = value;
-  };
 
   // cards
+  const C = CARD_COLUMNS;
+  const location = C.location!;
   const locations = belief.locationTable(view);
   const subject: CardId | null = prompt?.mine && (prompt.kind === 'hot-target' || prompt.kind === 'take-or-discard') ? prompt.card : null;
   const topOf = new Map<CardId, number>();
@@ -157,11 +178,10 @@ export function encodeObservation2(view: PlayerView, belief: Belief, prefix: rea
       if (card && !depth.has(card)) depth.set(card, i);
     });
   }
-  const C = CARD_COLUMNS;
-  const location = (C.location ?? 0);
-  CARD_IDS.forEach((card, c) => {
+  for (let c = 0; c < CARD_IDS.length; c++) {
     // CARD(card) === c: rows are in CARD_IDS order.
-    const base = CARDS_OFFSET + c * CARDS_WIDTH;
+    const card = CARD_IDS[c]!;
+    const base = start + CARDS_OFFSET + c * CARDS_WIDTH;
     const printed = CARDS[card];
     if (typeof printed.coins === 'number') out[base + C.coins!] = printed.coins / 20;
     else if (printed.coins === 'tithes') out[base + C.tithes!] = 1;
@@ -174,8 +194,8 @@ export function encodeObservation2(view: PlayerView, belief: Belief, prefix: rea
     if (top !== undefined) out[base + C.top_of! + top] = 1;
     const d = depth.get(card);
     if (d !== undefined) out[base + C.depth!] = (d + 1) / 10;
-    if (legalSet.has(c)) out[base + C.legal!] = 1;
-    if (chosen.has(c)) out[base + C.chosen!] = 1;
+    if (LEGAL[c]) out[base + C.legal!] = 1;
+    if (CHOSEN[c]) out[base + C.chosen!] = 1;
     if (subject === card) out[base + C.subject!] = 1;
     const move = history.lastMove.get(card);
     if (move) {
@@ -187,99 +207,111 @@ export function encodeObservation2(view: PlayerView, belief: Belief, prefix: rea
       out[base + C.move_age!] = AGE(history.turn - move.turn);
     }
     if (history.opponentKnows.has(card)) out[base + C.opponent_knows!] = 1;
-  });
+  }
 
   // piles
   const identities = belief.identities();
   const promptPile = prompt?.mine && 'pile' in prompt ? (prompt.pile as Seat) : null;
   const claim = prompt?.mine && prompt.kind === 'claim-pile' ? prompt : null;
+  const P = PILE.col;
   for (let r = 0; r < 4; r++) {
+    const base = start + PILE.offset + r * PILE.width;
     const position = at(r);
     const p = belief.at[position]!;
     const pileView = view.piles[position]!;
-    put('piles', r, 'size', pileView.size / 12);
-    put('piles', r, 'face_up', pileView.top ? 1 : 0);
-    for (let i = 0; i < IDENTITIES.length; i++) put('piles', r, 'identity', identities[p]![i]!, i);
-    put('piles', r, 'unseen', belief.unseenIn(p) / 9);
-    put('piles', r, 'opponent_hidden', belief.opponentHidden[p]! / 9);
-    put('piles', r, 'ghost', view.seats[position] === 'ghost' ? 1 : 0);
-    put('piles', r, 'empty', pileView.size === 0 ? 1 : 0);
-    if (legalSet.has(POS(r))) put('piles', r, 'legal', 1);
-    if (chosen.has(POS(r))) put('piles', r, 'chosen', 1);
-    if (promptPile === position) put('piles', r, 'prompt', 1);
+    out[base + P.size!] = pileView.size / 12;
+    if (pileView.top) out[base + P.face_up!] = 1;
+    for (let i = 0; i < IDENTITIES.length; i++) out[base + P.identity! + i] = identities[p]![i]!;
+    out[base + P.unseen!] = belief.unseenIn(p) / 9;
+    out[base + P.opponent_hidden!] = belief.opponentHidden[p]! / 9;
+    if (view.seats[position] === 'ghost') out[base + P.ghost!] = 1;
+    if (pileView.size === 0) out[base + P.empty!] = 1;
+    if (LEGAL[POS(r)]) out[base + P.legal!] = 1;
+    if (CHOSEN[POS(r)]) out[base + P.chosen!] = 1;
+    if (promptPile === position) out[base + P.prompt!] = 1;
     if (claim) {
       const made = claim.claims.find((c) => c.from === position);
-      if (made) put('piles', r, 'claimed_for', 1, rel(made.claimant));
-      else put('piles', r, 'unclaimed', 1);
+      if (made) out[base + P.claimed_for! + rel(made.claimant)] = 1;
+      else out[base + P.unclaimed!] = 1;
     }
-    if (history.opponentKnowsTop[p]) put('piles', r, 'opponent_knows_top', 1);
-    if (history.opponentKnowsOrder[p]) put('piles', r, 'opponent_knows_order', 1);
-    history.pileEvents[p]!.forEach((e, i) => {
-      put('piles', r, `event${i}_kind`, 1, PILE_EVENTS.indexOf(e.kind));
-      put('piles', r, `event${i}_by`, 1, e.byMe ? 0 : 1);
-      put('piles', r, `event${i}_age`, AGE(history.turn - e.turn));
-    });
+    if (history.opponentKnowsTop[p]) out[base + P.opponent_knows_top!] = 1;
+    if (history.opponentKnowsOrder[p]) out[base + P.opponent_knows_order!] = 1;
+    const events = history.pileEvents[p]!;
+    for (let i = 0; i < events.length; i++) {
+      const e = events[i]!;
+      const cols = PILE_EVENT_COLUMNS[i]!;
+      out[base + cols.kind + PILE_EVENT_INDEX[e.kind]!] = 1;
+      out[base + cols.by + (e.byMe ? 0 : 1)] = 1;
+      out[base + cols.age] = AGE(history.turn - e.turn);
+    }
   }
 
   // players: me, then the opponent
   const ender = view.roundEnd?.kind === 'empty-pile' ? view.roundEnd.enderSeat : null;
-  [me, opp].forEach((seat, row) => {
-    put('players', row, 'score', (view.scores[seat] ?? 0) / 40);
-    put('players', row, 'hand', view.hands[seat]!.count / 10);
-    put('players', row, 'keep_size', view.keeps[seat]!.cards.length / 15);
+  const Q = PLAYER.col;
+  for (let row = 0; row < 2; row++) {
+    const seat = row === 0 ? me : opp;
+    const base = start + PLAYER.offset + row * PLAYER.width;
+    out[base + Q.score!] = (view.scores[seat] ?? 0) / 40;
+    out[base + Q.hand!] = view.hands[seat]!.count / 10;
+    out[base + Q.keep_size!] = view.keeps[seat]!.cards.length / 15;
     if (seat === opp) {
-      put('players', row, 'known', belief.opponentKnown.size / 10);
-      put('players', row, 'hidden', belief.opponentHidden.reduce((a, b) => a + b, 0) / 10);
+      out[base + Q.known!] = belief.opponentKnown.size / 10;
+      out[base + Q.hidden!] = belief.opponentHidden.reduce((a, b) => a + b, 0) / 10;
     }
-    if (view.duplicityHolder === seat) put('players', row, 'duplicity_holder', 1);
-    if (view.keeps[seat]!.cards.some((c) => c.faceDown)) put('players', row, 'face_down_in_keep', 1);
-    if (view.turn?.seat === seat) put('players', row, 'turn', 1);
-    if (view.frame?.seat === seat) put('players', row, 'frame', 1);
-    if (claim?.claimant === seat) put('players', row, 'fiat_claimant', 1);
-    if (ender === seat) put('players', row, 'ended_round', 1);
-  });
+    if (view.duplicityHolder === seat) out[base + Q.duplicity_holder!] = 1;
+    if (view.keeps[seat]!.cards.some((c) => c.faceDown)) out[base + Q.face_down_in_keep!] = 1;
+    if (view.turn?.seat === seat) out[base + Q.turn!] = 1;
+    if (view.frame?.seat === seat) out[base + Q.frame!] = 1;
+    if (claim?.claimant === seat) out[base + Q.fiat_claimant!] = 1;
+    if (ender === seat) out[base + Q.ended_round!] = 1;
+  }
 
   // the opponent's recent turns, newest first
+  const T = TURN.col;
   history.opponentTurns.forEach((t, row) => {
-    put('turns', row, 'present', 1);
-    put('turns', row, 'age', AGE(history.turn - t.turn));
-    put('turns', row, 'hand_at_start', t.handAtStart / 10);
-    put('turns', row, 'draws', COUNT(t.draws));
-    put('turns', row, 'keep_to_own', COUNT(t.keepToOwn));
-    put('turns', row, 'keep_to_mine', COUNT(t.keepToMine));
-    put('turns', row, 'action_cards', COUNT(t.actionCards));
-    put('turns', row, 'abilities', COUNT(t.abilities));
-    put('turns', row, 'passes', COUNT(t.passes));
-    put('turns', row, 'gained', COUNT(t.gained));
+    const base = start + TURN.offset + row * TURN.width;
+    out[base + T.present!] = 1;
+    out[base + T.age!] = AGE(history.turn - t.turn);
+    out[base + T.hand_at_start!] = t.handAtStart / 10;
+    out[base + T.draws!] = COUNT(t.draws);
+    out[base + T.keep_to_own!] = COUNT(t.keepToOwn);
+    out[base + T.keep_to_mine!] = COUNT(t.keepToMine);
+    out[base + T.action_cards!] = COUNT(t.actionCards);
+    out[base + T.abilities!] = COUNT(t.abilities);
+    out[base + T.passes!] = COUNT(t.passes);
+    out[base + T.gained!] = COUNT(t.gained);
   });
 
   // decision
-  if (prompt) put('decision', 0, 'prompt', 1, PROMPT_KINDS.indexOf(prompt.kind));
-  if (prompt?.mine && prompt.kind === 'choose-pile') put('decision', 0, 'pile_purpose', 1, PILE_PURPOSES.indexOf(prompt.purpose));
-  if (prompt?.mine && prompt.kind === 'choose-player') put('decision', 0, 'player_purpose', 1, PLAYER_PURPOSES.indexOf(prompt.purpose));
-  if (prompt?.mine && prompt.kind === 'reveal-window') put('decision', 0, 'reason', 1, REASONS.indexOf(prompt.reason));
+  const D = DECISION.col;
+  const base = start + DECISION.offset;
+  if (prompt) out[base + D.prompt! + PROMPT_INDEX[prompt.kind]!] = 1;
+  if (prompt?.mine && prompt.kind === 'choose-pile') out[base + D.pile_purpose! + PILE_PURPOSES.indexOf(prompt.purpose)] = 1;
+  if (prompt?.mine && prompt.kind === 'choose-player') out[base + D.player_purpose! + PLAYER_PURPOSES.indexOf(prompt.purpose)] = 1;
+  if (prompt?.mine && prompt.kind === 'reveal-window') out[base + D.reason! + REASONS.indexOf(prompt.reason)] = 1;
   if (view.frame) {
-    put('decision', 0, 'frame', 1, FRAMES.indexOf(view.frame.kind));
-    put('decision', 0, 'frame_remaining', Math.min(view.frame.remaining, 4) / 4);
-    put('decision', 0, 'frame_by', 1, view.frame.seat === me ? 0 : 1);
+    out[base + D.frame! + FRAMES.indexOf(view.frame.kind)] = 1;
+    out[base + D.frame_remaining!] = Math.min(view.frame.remaining, 4) / 4;
+    out[base + D.frame_by! + (view.frame.seat === me ? 0 : 1)] = 1;
   }
   if (view.turn) {
-    put('decision', 0, 'actions_taken', Math.min(view.turn.actionsTaken, 4) / 4);
-    put('decision', 0, 'turn_by', 1, view.turn.seat === me ? 0 : 1);
+    out[base + D.actions_taken!] = Math.min(view.turn.actionsTaken, 4) / 4;
+    out[base + D.turn_by! + (view.turn.seat === me ? 0 : 1)] = 1;
   }
-  if (view.phase === 'post-round') put('decision', 0, 'post_round', 1);
-  if (ender !== null) put('decision', 0, 'ender', 1, ender === me ? 0 : 1);
-  put('decision', 0, 'turn_number', Math.min(view.turnNumber, 40) / 40);
-  put('decision', 0, 'piles_total', view.piles.reduce((n, p) => n + p.size, 0) / 36);
-  if (view.startingSeat === me) put('decision', 0, 'started', 1);
-  SPECIAL_IDS.forEach((id, i) => {
-    if (legalSet.has(id)) put('decision', 0, 'special_legal', 1, i);
-    if (chosen.has(id)) put('decision', 0, 'special_chosen', 1, i);
-  });
-  put('decision', 0, 'prefix_length', prefix.length / 9);
+  if (view.phase === 'post-round') out[base + D.post_round!] = 1;
+  if (ender !== null) out[base + D.ender! + (ender === me ? 0 : 1)] = 1;
+  out[base + D.turn_number!] = Math.min(view.turnNumber, 40) / 40;
+  out[base + D.piles_total!] = view.piles.reduce((n, p) => n + p.size, 0) / 36;
+  if (view.startingSeat === me) out[base + D.started!] = 1;
+  for (let i = 0; i < SPECIAL_IDS.length; i++) {
+    if (LEGAL[SPECIAL_IDS[i]!]) out[base + D.special_legal! + i] = 1;
+    if (CHOSEN[SPECIAL_IDS[i]!]) out[base + D.special_chosen! + i] = 1;
+  }
+  out[base + D.prefix_length!] = prefix.length / 9;
   if (claim) {
-    put('decision', 0, 'fiat_claimant', 1, rel(claim.claimant));
-    put('decision', 0, 'fiat_claims_left', claim.queue.length / 4);
+    out[base + D.fiat_claimant! + rel(claim.claimant)] = 1;
+    out[base + D.fiat_claims_left!] = claim.queue.length / 4;
   }
   return out;
 }

@@ -126,6 +126,34 @@ def fixture(policy, raw, rows=64, seed=0):
   return obs, legal, raw(obs, legal), policy(obs, legal)
 
 
+def policy_file(saved, run, step, fingerprint, evals=None):
+  """A saved policy as the server's weights file: (header, tensors)."""
+  network = saved.get('network', 'mlp')
+  header = {
+      'format': 'keeps-policy',
+      'version': 1,
+      'run': run,
+      'step': step,
+      'decisions': saved.get('decisions'),
+      'network': network,
+      'observationVersion': saved.get('observation', 1),
+      'layers': list(policies.layers_of(saved['params'])) if network == 'mlp' else [],
+      'observationSize': keeps.bridge().observation_size,
+      'numActions': saved['num_actions'],
+      'fingerprint': fingerprint,
+      'postprocess': {'threshold': rnad.FineTuning().policy_threshold,
+                      'discretization': rnad.FineTuning().policy_discretization},
+      'evals': evals,
+  }
+  if network == 'entity':
+    header['layout'] = saved['layout']
+    # Every Haiku parameter, named module/parameter (the TypeScript forward pass looks them up by name).
+    tensors = [(f'{module}/{name}', value) for module, group in sorted(saved['params'].items()) for name, value in sorted(group.items())]
+  else:
+    tensors = network_tensors(saved['params'], policies.layers_of(saved['params']))
+  return header, tensors
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('policy', nargs='?', help='a policy-<step>.pkl saved by training')
@@ -140,6 +168,7 @@ def main():
     parser.error('give a policy to export (or --restamp)')
 
   policy, saved = policies.load(args.policy)
+  keeps.set_observation(saved.get('observation', 1))
   current = keeps.bridge().fingerprint
   # Policies saved before training recorded the fingerprint were trained with the encoder as it is now.
   fingerprint = saved.get('fingerprint', current)
@@ -147,30 +176,23 @@ def main():
     raise SystemExit(f'this policy was trained with encoder {fingerprint}; the encoder is now {current}')
   step = saved.get('learner_steps', int(re.search(r'(\d+)\.pkl$', args.policy).group(1)))
   run = os.path.basename(os.path.dirname(os.path.abspath(args.policy)))
-  header = {
-      'format': 'keeps-policy',
-      'version': 1,
-      'run': run,
-      'step': step,
-      'decisions': saved.get('decisions'),
-      'layers': list(saved['layers']),
-      'observationSize': keeps.bridge().observation_size,
-      'numActions': saved['num_actions'],
-      'fingerprint': fingerprint,
-      'postprocess': {'threshold': rnad.FineTuning().policy_threshold,
-                      'discretization': rnad.FineTuning().policy_discretization},
-      'evals': evals_for(args.policy, step),
-  }
-  write(args.out, header, network_tensors(saved['params'], saved['layers']))
+  header, tensors = policy_file(saved, run, step, fingerprint, evals_for(args.policy, step))
+  write(args.out, header, tensors)
 
-  net = policies.network(saved['layers'], saved['num_actions'])
+  net = policies.build(saved)
   params = saved['params']
-  raw = lambda o, l: np.asarray(net.apply(params, rnad.EnvStep(obs=o, legal=l)))
+  entity = saved.get('network', 'mlp') == 'entity'
+
+  def raw(o, l):
+    out = net.apply(params, rnad.EnvStep(obs=o, legal=l))
+    return np.asarray(out[0] if entity else out)
+
   obs, legal, raw_probs, probs = fixture(policy, raw)
   write(args.fixture, {'format': 'keeps-policy-parity', 'run': run, 'step': step, 'fingerprint': fingerprint},
         [('obs', obs), ('legal', legal.astype(np.float32)), ('raw', raw_probs), ('probs', probs)])
   print(json.dumps({'weights': os.path.relpath(args.out, REPO), 'bytes': os.path.getsize(args.out),
-                    'fixture': os.path.relpath(args.fixture, REPO), 'rows': len(obs), **header}, indent=1))
+                    'fixture': os.path.relpath(args.fixture, REPO), 'rows': len(obs),
+                    **{k: v for k, v in header.items() if k != 'layout'}}, indent=1))
 
 
 if __name__ == '__main__':

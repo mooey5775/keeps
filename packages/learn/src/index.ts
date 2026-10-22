@@ -2,6 +2,7 @@ export * from './actions.ts';
 export * from './benchmark.ts';
 export * from './belief.ts';
 export * from './bot.ts';
+export * from './entity.ts';
 export * from './env.ts';
 export * from './fingerprint.ts';
 export * from './history.ts';

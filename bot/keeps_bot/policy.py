@@ -15,6 +15,7 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
+from keeps_bot import networks
 from keeps_bot import rnad
 
 
@@ -28,6 +29,14 @@ def network(layers, num_actions):
     return rnad._legal_policy(logit, env_step.legal)
 
   return hk.without_apply_rng(hk.transform(forward))
+
+
+def build(saved):
+  """The Haiku network a saved policy was trained with (R-NaD's MLP, or the entity network)."""
+  if saved.get('network', 'mlp') == 'entity':
+    return hk.without_apply_rng(hk.transform(networks.entity(saved['layout'], saved['num_actions'])))
+  net = network(layers_of(saved['params']), saved['num_actions'])
+  return net
 
 
 def layers_of(params):
@@ -50,14 +59,17 @@ def load(path):
   """(policy function, saved info). The function maps (obs [B, O], legal [B, A]) to probabilities [B, A]."""
   with open(path, 'rb') as f:
     saved = pickle.load(f)
-  saved['layers'] = layers_of(saved['params'])
-  net = network(saved['layers'], saved['num_actions'])
+  if saved.get('network', 'mlp') == 'mlp':
+    saved['layers'] = layers_of(saved['params'])
+  net = build(saved)
+  entity = saved.get('network', 'mlp') == 'entity'
   params = jax.device_put(saved['params'])
   finetune = rnad.FineTuning()
 
   @jax.jit
   def probabilities(params, obs, legal):
-    pi = net.apply(params, rnad.EnvStep(obs=obs, legal=legal))
+    out = net.apply(params, rnad.EnvStep(obs=obs, legal=legal))
+    pi = out[0] if entity else out
     return finetune.post_process_policy(pi, legal)
 
   return (lambda obs, legal: np.asarray(probabilities(params, jnp.asarray(obs), jnp.asarray(legal)))), saved

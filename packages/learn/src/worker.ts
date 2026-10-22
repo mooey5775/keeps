@@ -49,7 +49,7 @@ function step(actions: Int32Array): void {
     }
     const p = env.currentPlayer;
     player[i] = p;
-    obs.set(env.observation(p), i * OBSERVATION_SIZE);
+    env.observeInto(p, obs, i * OBSERVATION_SIZE);
     for (const a of env.legalActions()) legal[i * NUM_ACTIONS + a] = 1;
   }
 }

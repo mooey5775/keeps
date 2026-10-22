@@ -2,6 +2,7 @@ import { eventsFor, legalCommands, viewFor, type Command, type GameState, type S
 import { Decision, NUM_ACTIONS } from './actions.ts';
 import { Belief } from './belief.ts';
 import { encodeObservation } from './observation.ts';
+import { encodeObservation2 } from './observation2.ts';
 import { sample, type Policy } from './policy.ts';
 
 // Plays one seat of a two-player game with a trained policy, exactly as in
@@ -28,7 +29,8 @@ export class BotPlayer {
     this.policy = policy;
     this.seat = seat;
     this.random = random;
-    this.belief = new Belief(seat);
+    // Observation v2 reads the sound belief (v1 policies were trained on the old one).
+    this.belief = new Belief(seat, { sound: policy.observation >= 2 });
   }
 
   /**
@@ -54,8 +56,9 @@ export class BotPlayer {
     const legal = new Uint8Array(NUM_ACTIONS);
     for (;;) {
       legal.fill(0);
-      for (const id of decision.next(prefix)) legal[id] = 1;
-      const obs = encodeObservation(view, this.belief, prefix);
+      const ids = decision.next(prefix);
+      for (const id of ids) legal[id] = 1;
+      const obs = this.policy.observation === 2 ? encodeObservation2(view, this.belief, prefix, ids) : encodeObservation(view, this.belief, prefix);
       this.onObservation?.(obs);
       const probabilities = this.policy.probabilities(obs, legal);
       prefix.push(sample(probabilities, this.random));

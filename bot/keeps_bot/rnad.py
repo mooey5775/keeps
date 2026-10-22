@@ -16,6 +16,8 @@
 Vendored from OpenSpiel v1.5 (open_spiel/python/algorithms/rnad/rnad.py);
 R-NaD isn't in later OpenSpiel releases or in any OpenSpiel wheel.
 Changes for current JAX: jnp.clip takes min=/max= (was a_min=/a_max=).
+Changes for Keeps: the network comes from RNaDSolver._network_function() (R-NaD's MLP by
+default), so keeps_bot.train can supply the entity network.
 """
 
 import enum
@@ -747,26 +749,8 @@ class RNaDSolver(policy_lib.Policy):
     self._game = pyspiel.load_game(self.config.game_name)
     self._ex_state = self._play_chance(self._game.new_initial_state())
 
-    # The network.
-    def network(
-        env_step: EnvStep
-    ) -> Tuple[chex.Array, chex.Array, chex.Array, chex.Array]:
-      mlp_torso = hk.nets.MLP(
-          self.config.policy_network_layers, activate_final=True
-      )
-      torso = mlp_torso(env_step.obs)
-
-      mlp_policy_head = hk.nets.MLP([self._game.num_distinct_actions()])
-      logit = mlp_policy_head(torso)
-
-      mlp_policy_value = hk.nets.MLP([1])
-      v = mlp_policy_value(torso)
-
-      pi = _legal_policy(logit, env_step.legal)
-      log_pi = legal_log_policy(logit, env_step.legal)
-      return pi, v, log_pi, logit
-
-    self.network = hk.without_apply_rng(hk.transform(network))
+    # The network. (Keeps: built by _network_function(), so a subclass can supply another.)
+    self.network = hk.without_apply_rng(hk.transform(self._network_function()))
 
     # The machinery related to updating parameters/learner.
     self._entropy_schedule = EntropySchedule(
@@ -885,6 +869,29 @@ class RNaDSolver(policy_lib.Policy):
     }
     return (params, params_target, params_prev, params_prev_, optimizer,
             optimizer_target), logs
+
+  def _network_function(self):
+    """The network, as a function of an EnvStep (Keeps: overridable; this is R-NaD's MLP)."""
+
+    def network(
+        env_step: EnvStep
+    ) -> Tuple[chex.Array, chex.Array, chex.Array, chex.Array]:
+      mlp_torso = hk.nets.MLP(
+          self.config.policy_network_layers, activate_final=True
+      )
+      torso = mlp_torso(env_step.obs)
+
+      mlp_policy_head = hk.nets.MLP([self._game.num_distinct_actions()])
+      logit = mlp_policy_head(torso)
+
+      mlp_policy_value = hk.nets.MLP([1])
+      v = mlp_policy_value(torso)
+
+      pi = _legal_policy(logit, env_step.legal)
+      log_pi = legal_log_policy(logit, env_step.legal)
+      return pi, v, log_pi, logit
+
+    return network
 
   def __getstate__(self):
     """To serialize the agent."""

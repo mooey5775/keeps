@@ -1,6 +1,7 @@
 import { NUM_ACTIONS } from './actions.ts';
+import { EntityNetwork } from './entity.ts';
+import { observationSize, type ObservationVersion } from './env.ts';
 import { encoderFingerprint } from './fingerprint.ts';
-import { OBSERVATION_SIZE } from './observation.ts';
 
 // A trained policy network, as exported by bot/keeps_bot/export.py: an MLP
 // torso (ReLU after every layer) and a linear policy head, then R-NaD's
@@ -14,6 +15,9 @@ export interface PolicyInfo {
   run: string;
   step: number;
   decisions: number | null;
+  /** 'mlp' (R-NaD's, observation v1) or 'entity' (observation v2). Older files: 'mlp'. */
+  network?: 'mlp' | 'entity';
+  observationVersion?: ObservationVersion;
   layers: number[];
   observationSize: number;
   numActions: number;
@@ -53,26 +57,33 @@ interface Linear {
 
 export class Policy {
   readonly info: PolicyInfo;
+  /** The observation version this policy reads. */
+  readonly observation: ObservationVersion;
   private readonly torso: Linear[];
-  private readonly head: Linear;
+  private readonly head: Linear | null;
+  private readonly entity: EntityNetwork | null;
 
-  private constructor(info: PolicyInfo, torso: Linear[], head: Linear) {
+  private constructor(info: PolicyInfo, torso: Linear[], head: Linear | null, entity: EntityNetwork | null) {
     this.info = info;
+    this.observation = info.observationVersion ?? 1;
     this.torso = torso;
     this.head = head;
+    this.entity = entity;
   }
 
   /**
    * Loads exported weights. Refuses weights trained with a different encoder
    * (pass `fingerprint` to skip recomputing the current one).
    */
-  static load(bytes: Uint8Array, fingerprint: string = encoderFingerprint()): Policy {
+  static load(bytes: Uint8Array, fingerprint?: string): Policy {
     const { header, tensors } = readTensors(bytes);
     if (header.format !== 'keeps-policy' || header.version !== 1) throw new Error('not a version 1 Keeps policy');
     const info = header as unknown as PolicyInfo;
-    if (info.observationSize !== OBSERVATION_SIZE || info.numActions !== NUM_ACTIONS) {
+    const version = info.observationVersion ?? 1;
+    if (info.observationSize !== observationSize(version) || info.numActions !== NUM_ACTIONS) {
       throw new Error(`policy is for ${info.observationSize} observations and ${info.numActions} actions`);
     }
+    fingerprint ??= encoderFingerprint(version);
     if (info.fingerprint !== fingerprint) {
       throw new Error(`policy was trained with encoder ${info.fingerprint}, but the encoder is now ${fingerprint}`);
     }
@@ -82,14 +93,18 @@ export class Policy {
       if (!w || !b) throw new Error(`policy is missing ${name}`);
       return { inputs: w.shape[0]!, outputs: w.shape[1]!, w: w.data, b: b.data };
     };
-    return new Policy(info, info.layers.map((_, i) => linear(`torso.${i}`)), linear('policy'));
+    if (info.network === 'entity') {
+      return new Policy(info, [], null, new EntityNetwork(tensors, (header as unknown as { layout: ConstructorParameters<typeof EntityNetwork>[1] }).layout));
+    }
+    return new Policy(info, info.layers.map((_, i) => linear(`torso.${i}`)), linear('policy'), null);
   }
 
   /** The network's policy over the legal actions (the softmax, before post-processing). */
   raw(obs: Float32Array, legal: ArrayLike<number>): Float32Array {
+    if (this.entity) return legalPolicy(this.entity.logits(obs), legal);
     let x = obs;
     for (const layer of this.torso) x = forward(layer, x, true);
-    return legalPolicy(forward(this.head, x, false), legal);
+    return legalPolicy(forward(this.head!, x, false), legal);
   }
 
   /** The policy as the bot plays it: post-processed like R-NaD at test time. */

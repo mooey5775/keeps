@@ -51,13 +51,8 @@ def benchmark(policy_path, opponents, deals, shards):
   """
   _, saved = policies.load(policy_path)
   weights = policy_path + '.bench.bin'
-  header = {'format': 'keeps-policy', 'version': 1, 'run': 'eval', 'step': saved.get('learner_steps', 0),
-            'decisions': saved.get('decisions'), 'layers': list(saved['layers']),
-            'observationSize': keeps.bridge().observation_size, 'numActions': saved['num_actions'],
-            'fingerprint': keeps.bridge().fingerprint,
-            'postprocess': {'threshold': rnad.FineTuning().policy_threshold,
-                            'discretization': rnad.FineTuning().policy_discretization}, 'evals': None}
-  export.write(weights, header, export.network_tensors(saved['params'], saved['layers']))
+  header, tensors = export.policy_file(saved, 'eval', saved.get('learner_steps', 0), keeps.bridge().fingerprint)
+  export.write(weights, header, tensors)
   per = -(-deals // shards)
   jobs = {(o, k): subprocess.Popen(['node', BENCHMARK, weights, o, str(min(per, deals - k * per)), f'bench-{o}', str(k * per)],
                                    stdout=subprocess.PIPE, text=True)
@@ -130,6 +125,11 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
+  # The run's observation version, for the environment servers and workers the matches use.
+  config_path = os.path.join(run_dir, 'config.json')
+  if os.path.exists(config_path):
+    with open(config_path) as f:
+      keeps.set_observation(json.load(f).get('obs', 1))
   writer = SummaryWriter(os.path.join(run_dir, 'tb', 'eval'))
   log_path = os.path.join(run_dir, 'evals.jsonl')
   done = set()

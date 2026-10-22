@@ -30,12 +30,26 @@ REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 SERVER = os.path.join(REPO, 'packages', 'learn', 'src', 'server.ts')
 
 
+# The observation version the environment servers encode (1 or 2; see
+# packages/learn/src/env.ts). Set it with set_observation() before any server starts.
+OBSERVATION = 1
+
+
+def set_observation(version):
+  """Chooses the observation version; only before the first environment server starts."""
+  global OBSERVATION
+  if _bridges and version != OBSERVATION:
+    raise RuntimeError('environment servers already run observation v%d' % OBSERVATION)
+  OBSERVATION = version
+
+
 class Bridge:
   """A Node process running the environment server; one per Python process."""
 
   def __init__(self):
+    self.observation_version = OBSERVATION
     self._proc = subprocess.Popen(
-        ['node', SERVER],
+        ['node', SERVER, str(OBSERVATION)],
         cwd=os.path.dirname(SERVER),
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
@@ -46,6 +60,7 @@ class Bridge:
     self._pending_free = []
     info = self.call([{'op': 'info'}])[0]
     self.observation_size = info['observationSize']
+    self.layout = info.get('layout')  # observation v2's layout (blocks and columns), else None
     self.num_actions = info['numActions']
     self.action_names = info['actionNames']
     self.fingerprint = info['fingerprint']  # the encoder's (see packages/learn/src/fingerprint.ts)

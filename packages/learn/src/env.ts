@@ -48,6 +48,7 @@ export class RoundEnv {
   /** The ids chosen so far for the current move. */
   prefix: number[] = [];
   private decision: Decision | null = null;
+  private legalCache: { decision: Decision; length: number; ids: number[] } | null = null;
   /** Each player's belief, kept up to date from their log (built on first use). */
   private beliefs: (Belief | null)[] = [null, null];
   /** What each player has been shown, extended as events happen. */
@@ -97,6 +98,18 @@ export class RoundEnv {
     return this.terminal ? TERMINAL : playerOfSeat(this.decider());
   }
 
+  /** Observation v2 written into `out` at `start` (no allocation; for the self-play worker). */
+  observeInto(player: number, out: Float32Array, start: number): void {
+    if (this.version !== 2) {
+      out.set(this.observation(player), start);
+      return;
+    }
+    const view = this.view(player);
+    const belief = (this.beliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!, { sound: true })).update(this.log(player)).observe(view);
+    const moving = !this.terminal && this.currentPlayer === player;
+    encodeObservation2(view, belief, moving ? this.prefix : [], moving ? this.legalActions() : [], out, start);
+  }
+
   /** What `player` observes now (see observation.ts); the chosen ids count only for the player to move. */
   observation(player: number): Float32Array {
     const view = this.view(player);
@@ -126,7 +139,13 @@ export class RoundEnv {
   }
 
   legalActions(): number[] {
-    return this.terminal ? [] : this.currentDecision().next(this.prefix);
+    if (this.terminal) return [];
+    // Asked for both the observation's flags and the move list: compute once per step.
+    const decision = this.currentDecision();
+    if (this.legalCache?.decision !== decision || this.legalCache.length !== this.prefix.length) {
+      this.legalCache = { decision, length: this.prefix.length, ids: decision.next(this.prefix) };
+    }
+    return this.legalCache.ids;
   }
 
   step(action: number): void {
