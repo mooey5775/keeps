@@ -125,11 +125,6 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
-  # The run's observation version, for the environment servers and workers the matches use.
-  config_path = os.path.join(run_dir, 'config.json')
-  if os.path.exists(config_path):
-    with open(config_path) as f:
-      keeps.set_observation(json.load(f).get('obs', 1))
   writer = SummaryWriter(os.path.join(run_dir, 'tb', 'eval'))
   log_path = os.path.join(run_dir, 'evals.jsonl')
   done = set()
@@ -140,7 +135,11 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
 
   def get(step):
     if step not in loaded:
-      loaded[step] = policies.load(os.path.join(run_dir, f'policy-{step}.pkl'))[0]
+      policy, saved = policies.load(os.path.join(run_dir, f'policy-{step}.pkl'))
+      # The observation version the policy reads, for the environment servers and workers the
+      # matches start (from the policy itself: the run's config.json may not exist yet).
+      keeps.set_observation(saved.get('observation', 1))
+      loaded[step] = policy
     return loaded[step]
 
   previous = max(done) if done else None
