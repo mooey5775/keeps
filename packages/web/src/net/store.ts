@@ -1,6 +1,7 @@
 import type { Command, PlayerView, TraceEvent } from '@keeps/engine';
 import type { ClientMessage, RoomSummary, ServerMessage, Settings, UndoState } from '@keeps/protocol';
 import { useSyncExternalStore } from 'react';
+import { markReloadedFor, onServerBuild, PAGE_BUILD, reloadedFor } from './build.ts';
 
 // The connection to the game server: one WebSocket per tab, reconnecting
 // automatically and resuming the seat with the token saved for that room.
@@ -210,12 +211,23 @@ class RoomStore {
 
   private receive(message: ServerMessage): void {
     switch (message.t) {
-      case 'welcome':
+      case 'welcome': {
         saveToken(message.code, message.token);
         // From now on, reconnecting means resuming this seat.
         this.hello = { t: 'resume', code: message.code, token: message.token, client: clientId() };
         this.set({ status: 'open', code: message.code, playerId: message.playerId });
+        // The site was updated since this page loaded: reload into the room (the
+        // seat token is saved, so it resumes), rather than run old code against it.
+        const update = onServerBuild(message.build, PAGE_BUILD, reloadedFor());
+        if (update === 'reload' && message.build) {
+          markReloadedFor(message.build);
+          this.close();
+          location.assign(`/r/${message.code}`);
+        } else if (update === 'ask') {
+          this.set({ error: { id: ++this.errorId, message: 'Keeps was updated. Please reload this page.' } });
+        }
         return;
+      }
       case 'room':
         this.set({ room: message.room, ...(message.room.phase === 'lobby' ? { game: null } : {}) });
         return;

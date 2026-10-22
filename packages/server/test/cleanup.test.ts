@@ -208,3 +208,25 @@ describe('rule disputes', () => {
     expect(await get(base, '/health')).toBe(200);
   });
 });
+
+describe('build id', () => {
+  it("tells browsers which build of the site it serves, from the web build's build-id.txt", async () => {
+    const webDir = mkdtempSync(join(tmpdir(), 'keeps-web-'));
+    cleanups.push(() => rmSync(webDir, { recursive: true, force: true }));
+    writeFileSync(join(webDir, 'index.html'), '<!doctype html>');
+    writeFileSync(join(webDir, 'build-id.txt'), 'build-42\n');
+    const { base } = await start({ webDir });
+    const client = new Client(base);
+    await client.open();
+    client.send({ t: 'create', name: 'X' });
+    expect((await client.next('welcome')).build).toBe('build-42');
+  });
+
+  it('says nothing about builds without a web build', async () => {
+    const { base } = await start();
+    const client = new Client(base);
+    await client.open();
+    client.send({ t: 'create', name: 'X' });
+    expect((await client.next('welcome')).build).toBeUndefined();
+  });
+});

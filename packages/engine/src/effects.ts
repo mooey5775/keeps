@@ -16,7 +16,7 @@ import { randomInt } from './rng.ts';
 import {
   leftOf,
   playerSeats,
-  rightOf,
+  rotatedTo,
   SEATS,
   type ActionFrameOp,
   type PileClaim,
@@ -397,9 +397,8 @@ export function resolveEffectAnswer(ctx: Ctx, prompt: EffectPrompt, answer: Effe
       return swapKeepCards(ctx, seat, answer.a, answer.b);
     case 'choose-direction': {
       const before = state.pileAt;
-      const move = answer.direction === 'left' ? leftOf : rightOf;
       const after = [...before] as PerSeat<PileId>;
-      for (const s of SEATS) after[move(s)] = before[s];
+      for (const s of SEATS) after[rotatedTo(s, answer.direction)] = before[s];
       state.pileAt = after;
       tracer.emit({ type: 'pile-rotate', seat, direction: answer.direction });
       return;

@@ -44,6 +44,8 @@ export interface RoomDeps {
   saveReplay?: (code: string, startedAt: number, log: ReplayLog) => void;
   /** Product analytics (PostHog in production). */
   tracker?: Tracker;
+  /** The site build being served, sent to browsers so an outdated page reloads. */
+  build?: string;
 }
 
 /** Where a connection comes from: its IP and the browser's anonymous id. */
@@ -142,7 +144,7 @@ export class Room {
     this.touch();
     if (player.host) this.track('room_created', player);
     this.track('player_joined', player, { spectator: this.game !== null, players: this.players.length });
-    send({ t: 'welcome', code: this.code, token: player.token, playerId: player.id });
+    send(this.welcome(player));
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
     return player;
@@ -159,10 +161,14 @@ export class Room {
     player.client = validClient(from.client) ?? player.client;
     this.touch();
     this.track('player_resumed', player, { in_game: this.game !== null });
-    send({ t: 'welcome', code: this.code, token: player.token, playerId: player.id });
+    send(this.welcome(player));
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
     return player;
+  }
+
+  private welcome(player: Player): ServerMessage {
+    return { t: 'welcome', code: this.code, token: player.token, playerId: player.id, ...(this.deps.build ? { build: this.deps.build } : {}) };
   }
 
   /** Ends the room: tells everyone still connected it's gone. */

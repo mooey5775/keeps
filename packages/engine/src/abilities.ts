@@ -12,6 +12,11 @@ import { assertNever } from './trace.ts';
 
 const ONCE_PER_TURN = ['acquisition', 'juggling', 'sanction'] as const satisfies readonly CardId[];
 
+/** Acquisition: the two piles it draws from, in order (`first` is the side drawn from first). */
+export function acquisitionOrder(seat: Seat, first: 'left' | 'right'): [Seat, Seat] {
+  return first === 'left' ? [leftOf(seat), rightOf(seat)] : [rightOf(seat), leftOf(seat)];
+}
+
 /** Actions an ability costs. Blunder costs two consecutive actions; the rest cost one. */
 export function abilityCost(choice: AbilityChoice): number {
   return choice.card === 'blunder' ? 2 : 1;
@@ -71,7 +76,7 @@ export function useAbility(ctx: Ctx, seat: Seat, choice: AbilityChoice): void {
       const seq = tracer.emit({ type: 'discard', seat, cards: [choice.discard], from: 'hand' });
       // Each draw finishes (including any HOT card it reveals) before the next,
       // and each pile is looked up when it is drawn from (ruling Q-08).
-      const [first, second] = choice.first === 'left' ? [leftOf(seat), rightOf(seat)] : [rightOf(seat), leftOf(seat)];
+      const [first, second] = acquisitionOrder(seat, choice.first);
       tracer.within(seq, () => {
         push(ctx, { op: 'draw', seat, from: second });
         push(ctx, { op: 'draw', seat, from: first });

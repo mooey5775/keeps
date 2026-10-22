@@ -19,6 +19,16 @@ export function rightOf(seat: Seat): Seat {
   return ((seat + 3) % 4) as Seat;
 }
 
+/** Pandemonium: rotating `direction`, the pile in front of `seat` moves in front of this seat. */
+export function rotatedTo(seat: Seat, direction: 'left' | 'right'): Seat {
+  return direction === 'left' ? leftOf(seat) : rightOf(seat);
+}
+
+/** Pandemonium: rotating `direction`, the pile that ends up in front of `seat` comes from this seat. */
+export function rotatedFrom(seat: Seat, direction: 'left' | 'right'): Seat {
+  return direction === 'left' ? rightOf(seat) : leftOf(seat);
+}
+
 /** Ghosts have a pile but no hand, keep, or actions. */
 export type SeatKind = 'player' | 'ghost';
 

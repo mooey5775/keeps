@@ -1,4 +1,8 @@
-import { CARDS, leftOf, rightOf, type CardId, type Command, type PlayerView, type Seat } from '@keeps/engine';
+import { abilityCost, acquisitionOrder, CARDS, rotatedFrom, rotatedTo, type CardId, type Command, type PlayerView, type Seat } from '@keeps/engine';
+
+// Labels describe moves; they never re-derive a rule. Anything a label
+// predicts (which pile you'll get, what an ability costs) comes from an
+// engine helper that the rules themselves use.
 
 // Turns the view's legal commands into things the table can show and click.
 //
@@ -127,9 +131,8 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 };
               case 'acquisition': {
                 // Name the piles: "left" and "right" mean little when the seats aren't
-                // drawn around a table (phones). Same convention as the engine.
-                const seat = me ?? (0 as Seat);
-                const [first, second] = choice.first === 'left' ? [leftOf(seat), rightOf(seat)] : [rightOf(seat), leftOf(seat)];
+                // drawn around a table (phones).
+                const [first, second] = acquisitionOrder(me ?? (0 as Seat), choice.first);
                 return {
                   command,
                   refs: [...source, `hand:${choice.discard}`],
@@ -146,9 +149,9 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 return {
                   command,
                   refs: [...source, `pile:${choice.pile}`],
-                  label: `Blunder (2 actions): put it face up on ${pileOf(choice.pile)}`,
+                  label: `Blunder (${plural(abilityCost(choice), 'action')}): put it face up on ${pileOf(choice.pile)}`,
                   cards: ['blunder'],
-                  groups: ['Blunder (2 actions): put it on a pile…'],
+                  groups: [`Blunder (${plural(abilityCost(choice), 'action')}): put it on a pile…`],
                 };
               default:
                 return choice satisfies never;
@@ -219,12 +222,9 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
       case 'choose-direction': {
         // Say what each choice does for you, not which way it turns: "left" and
         // "right" mean little when the seats aren't drawn around a table (phones).
-        // Passing left, every pile moves to the player on its left, so you get
-        // the pile of the player on your right, and yours goes to your left.
         const seat = me ?? (0 as Seat);
-        const left = ((seat + 1) % 4) as Seat;
-        const right = ((seat + 3) % 4) as Seat;
-        const [from, to] = answer.direction === 'left' ? [right, left] : [left, right];
+        const from = rotatedFrom(seat, answer.direction);
+        const to = rotatedTo(seat, answer.direction);
         const size = view.piles[from]!.size;
         const yours = me === null ? `${names.possessive(seat)} pile goes` : 'yours goes';
         return {

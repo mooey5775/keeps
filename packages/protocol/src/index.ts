@@ -58,7 +58,8 @@ export type ClientMessage =
 
 export type ServerMessage =
   /** You are in a room; keep the token to resume after a disconnect. */
-  | { t: 'welcome'; code: string; token: string; playerId: string }
+  /** `build`: the site build the server serves; a page from another build reloads. */
+  | { t: 'welcome'; code: string; token: string; playerId: string; build?: string }
   | { t: 'room'; room: RoomSummary }
   | {
       t: 'game';

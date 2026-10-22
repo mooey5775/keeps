@@ -1,7 +1,8 @@
 // End-to-end smoke test of the whole stack in real browsers: the built web
 // client served by the real server, driven through headless Chrome.
 // Run: pnpm e2e (from the repo root; it builds the web client first).
-import { existsSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createKeepsServer } from '../src/server.ts';
 import { launch, open, sleep, type Browser, type Page } from './browser.ts';
@@ -263,6 +264,30 @@ try {
     if ((await guest.text()).includes('Your name')) throw new Error('asked for the name again');
     await host.waitForText('Bo');
     return [host, guest];
+  });
+
+  await check('a page left open across a deploy reloads into its room once, then asks', async () => {
+    // A second server with the same page but a different build id: as if the site was deployed
+    // after this page loaded. (The page can't become newer here, so after its one reload it asks.)
+    const otherDir = mkdtempSync(join(tmpdir(), 'keeps-deployed-'));
+    cpSync(webDir, otherDir, { recursive: true });
+    writeFileSync(join(otherDir, 'build-id.txt'), 'a-newer-build');
+    const deployed = await createKeepsServer({ port: 0, webDir: otherDir, cardsDir: join(root, 'cards') });
+    try {
+      const other = `http://localhost:${(deployed.http.address() as { port: number }).port}`;
+      const page = await open(b, other);
+      await page.type('input[placeholder="Name"]', 'Ada');
+      await page.click('Create a room');
+      await page.waitFor('location.pathname.startsWith("/r/")', 'the room page');
+      await page.waitForText('Keeps was updated. Please reload this page.');
+      // Still in the room (resumed after the reload), not a new one.
+      await page.waitForText('1 of 4');
+      if ([...deployed.rooms.values()].length !== 1) throw new Error(`expected one room, found ${deployed.rooms.size}`);
+      return [page];
+    } finally {
+      await deployed.close();
+      rmSync(otherDir, { recursive: true, force: true });
+    }
   });
 
   await check('same browser: a second tab joins as a new player; tabs never steal a seat silently', async () => {

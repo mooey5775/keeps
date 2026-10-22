@@ -71,8 +71,13 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       })
     : null;
 
+  // The web build's id (written by its Vite build), so outdated pages reload.
+  const buildFile = options.webDir ? join(options.webDir, 'build-id.txt') : null;
+  const build = buildFile && existsSync(buildFile) ? readFileSync(buildFile, 'utf8').trim() : undefined;
+
   const deps: RoomDeps = {
     tracker,
+    ...(build ? { build } : {}),
     token: () => randomBytes(18).toString('base64url'),
     id: () => randomBytes(6).toString('base64url'),
     seed: () => randomBytes(12).toString('hex'),
