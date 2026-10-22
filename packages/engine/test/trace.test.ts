@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, eventsFor, formatTrace, Tracer } from '../src/index.ts';
+import { buildPosition, describe as describeEvent, eventsFor, formatTrace, Tracer } from '../src/index.ts';
 
 function setup() {
   const state = buildPosition({});
@@ -99,5 +99,15 @@ describe('trace', () => {
         '#3    R1 T0     deal  ← #1  [server only]',
       ].join('\n'),
     );
+  });
+});
+
+describe('rarely rendered trace text', () => {
+  it('describes a Shackled turn and a swap involving a hidden card', () => {
+    expect(describeEvent({ type: 'shackled', seat: 1, remaining: 0 })).toBe('S1 is Shackled: 0 actions left this turn');
+    expect(describeEvent({ type: 'shackled', seat: 1, remaining: 1 })).toBe('S1 is Shackled: 1 action left this turn');
+    expect(
+      describeEvent({ type: 'keep-swap', seat: 0, a: { seat: 1, index: 0, card: null }, b: { seat: 2, index: 1, card: 'dagger' } }),
+    ).toBe('swap a face-down card (keep S1) ⇄ Dagger (keep S2)');
   });
 });

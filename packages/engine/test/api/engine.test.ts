@@ -1,13 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  apply,
-  buildPosition,
-  checkRestInvariants,
-  legalCommands,
-  newGame,
-  type Command,
-} from '../src/index.ts';
-import { actionCommand, draw, promptFor } from './helpers.ts';
+import { apply, buildPosition, checkRestInvariants, legalCommands, newGame, type Command } from '../../src/index.ts';
+import { actionCommand, draw, promptFor } from '../helpers.ts';
 
 function rejection(result: ReturnType<typeof apply>) {
   if (result.ok) throw new Error('expected the command to be rejected');

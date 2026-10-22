@@ -1,6 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import { apply, buildPosition, legalCommands } from '../../src/index.ts';
-import { act, actionCommand, actionsLeft, draw, hotTarget, payloads, promptFor, types } from '../helpers.ts';
+import {
+  abilityNames,
+  act,
+  actionCommand,
+  actionsLeft,
+  draw,
+  hotTarget,
+  payloads,
+  promptFor,
+  respond,
+  types,
+} from '../helpers.ts';
+
+// Playing cards: HOT cards, Keep and non-Keep cards, and who makes each choice.
 
 describe('HOT cards', () => {
   it('R-05 a drawn HOT Keep card is played immediately, without using an action', () => {
@@ -80,6 +93,21 @@ describe('HOT cards', () => {
     const { events } = draw(start, 0);
     expect(events.find((e) => e.payload.type === 'draw')!.visibility).toBe('all');
   });
+
+  it('Requisition taking Invocation: it is played at once and invokes', () => {
+    const start = buildPosition({ hands: { 0: ['requisition'] }, piles: { 2: ['chalice', 'invocation'], 3: ['dagger'] }, turn: 0 });
+    const looked = respond(act(start, 0, { action: 'play', card: 'requisition' }).state, 0, { kind: 'choose-pile', pile: 2 });
+    const taken = respond(looked.state, 0, { kind: 'choose-pile-card', index: 1 });
+    const invoked = respond(taken.state, 0, { kind: 'choose-pile', pile: 3 });
+    expect(promptFor(invoked.state, 0, 'hot-target').card).toBe('dagger');
+  });
+
+  it('Epiphany taking Revelation from a pile top: it is played at once', () => {
+    const start = buildPosition({ hands: { 0: ['epiphany'] }, piles: { 1: ['revelation', 'chalice'] }, turn: 0 });
+    const played = act(start, 0, { action: 'play', card: 'epiphany' });
+    const taken = respond(played.state, 0, { kind: 'choose-top-card', pile: 1 });
+    expect(promptFor(taken.state, 0, 'choose-pile').purpose).toBe('revelation');
+  });
 });
 
 describe('playing cards', () => {
@@ -109,25 +137,58 @@ describe('playing cards', () => {
     expect(state.discard).toEqual(['pluck', 'hocus-pocus']);
     expect(state.hands[0]).toEqual([]);
   });
+});
 
-  it('Hocus Pocus costs one action and grants two (three actions this turn)', () => {
+describe('who decides', () => {
+  it("a HOT Keep card drawn by another player's trigger is placed by that player", () => {
+    // S0 plays Chalice into S1's keep; S1's Interest draws Juggling, so S1 chooses its keep.
     const start = buildPosition({
-      hands: { 0: ['hocus-pocus'] },
-      piles: { 0: ['chalice', 'dagger', 'medallion', 'scepter'] },
+      hands: { 0: ['chalice'] },
+      keeps: { 1: ['interest'] },
+      piles: { 1: ['juggling'] },
       turn: 0,
     });
-    const played = act(start, 0, { action: 'play', card: 'hocus-pocus' });
-    expect(payloads(played.events, 'extra-actions')).toEqual([
-      { type: 'extra-actions', seat: 0, count: 2, source: 'hocus-pocus' },
-    ]);
-    expect(actionsLeft(played.state)).toBe(2);
+    const { state } = act(start, 0, { action: 'play', card: 'chalice', target: 1 });
+    expect(state.prompts.map((p) => [p.seat, p.kind])).toEqual([[1, 'hot-target']]);
+    const placed = hotTarget(state, 1, 3);
+    expect(placed.state.keeps[3]).toEqual([{ id: 'juggling' }]);
+    // Back to S0's turn.
+    promptFor(placed.state, 0, 'action');
+  });
 
-    let state = played.state;
-    for (let i = 0; i < 3; i++) {
-      expect(state.turn?.seat).toBe(0);
-      state = draw(state, 0).state;
-    }
-    expect(state.hands[0]).toEqual(['chalice', 'dagger', 'medallion']);
-    expect(state.turn?.seat).toBe(1);
+  it('a Keep card stolen with Legerdemain is placed by the thief, into any keep', () => {
+    const start = buildPosition({ hands: { 0: ['legerdemain'], 3: ['duplicity'], }, turn: 0 });
+    const stolen = respond(act(start, 0, { action: 'play', card: 'legerdemain' }).state, 0, { kind: 'choose-player', seat: 3 });
+    expect(promptFor(stolen.state, 0, 'hot-target').card).toBe('duplicity');
+  });
+
+  it('a stolen Duplicity, played as HOT, still makes its player hide a Keep card', () => {
+    const start = buildPosition({ hands: { 0: ['legerdemain', 'chalice'], 3: ['duplicity'] }, turn: 0 });
+    const stolen = respond(act(start, 0, { action: 'play', card: 'legerdemain' }).state, 0, { kind: 'choose-player', seat: 3 });
+    const placed = hotTarget(stolen.state, 0, 0);
+    expect(promptFor(placed.state, 0, 'duplicity-hide').options).toEqual(['chalice']);
+  });
+
+  it('an invoked Fiat starts the pile claims with the player who invoked it', () => {
+    const start = buildPosition({ piles: { 0: ['invocation'], 2: ['fiat'] }, turn: 0 });
+    const invoked = respond(draw(start, 0).state, 0, { kind: 'choose-pile', pile: 2 });
+    const placed = hotTarget(invoked.state, 0, 3);
+    expect(placed.state.keeps[3]).toEqual([{ id: 'fiat' }]);
+    expect(promptFor(placed.state, 0, 'claim-pile').claimant).toBe(0);
+  });
+
+  it('extra actions reached through a trigger belong to the trigger’s owner, not the turn player', () => {
+    // S0's Chalice → S1's Interest draws Invocation (HOT) → S1 invokes Hocus Pocus: S1 gets two actions.
+    const start = buildPosition({
+      hands: { 0: ['chalice'] },
+      keeps: { 1: ['interest', 'sanction'] },
+      piles: { 1: ['invocation'], 2: ['hocus-pocus'], 3: ['dagger'] },
+      turn: 0,
+    });
+    const played = act(start, 0, { action: 'play', card: 'chalice', target: 1 });
+    const invoked = respond(played.state, 1, { kind: 'choose-pile', pile: 2 });
+    expect(invoked.state.stack.at(-1)).toMatchObject({ op: 'action-frame', seat: 1, kind: 'hocus-pocus', remaining: 2 });
+    // It's still S0's turn, so S1's Sanction ("on your turn") can't be used.
+    expect(abilityNames(invoked.state, 1)).toEqual([]);
   });
 });

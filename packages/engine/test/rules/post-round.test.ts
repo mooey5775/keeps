@@ -1,93 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { buildPosition } from '../../src/index.ts';
-import {
-  abilityNames,
-  act,
-  actionChoices,
-  draw,
-  hotTarget,
-  lastLaughAfterEnding,
-  payloads,
-  promptFor,
-  types,
-} from '../helpers.ts';
+import { abilityNames, act, draw, hotTarget, lastLaughAfterEnding, payloads, respond, types } from '../helpers.ts';
 
-
-describe('Last Laugh', () => {
-  it('gives its owner one action after the round ends, right before scoring (Last Laugh 1)', () => {
-    const start = buildPosition({
-      keeps: { 0: ['last-laugh'], 1: ['faberge-egg'] },
-      hands: { 0: ['chalice', 'dagger'] },
-      turn: 0,
-    });
-    const one = act(start, 0, { action: 'play', card: 'chalice', target: 0 });
-    const ended = draw(one.state, 0);
-    expect(types(ended.events)).toEqual(['action', 'empty-draw', 'round-end', 'last-laugh', 'prompt']);
-    expect(ended.state.stack.at(-1)).toMatchObject({ op: 'action-frame', seat: 0, kind: 'last-laugh', remaining: 1, restricted: true });
-
-    const { state, events } = act(ended.state, 0, { action: 'play', card: 'dagger', target: 0 });
-    expect(payloads(events, 'score')).toEqual([{ type: 'score', scores: [8, 6, 0, 0], winner: 0, tiedWith: [] }]);
-    expect(state.phase).toBe('round-over');
-  });
-
-  it('is optional: its owner may pass', () => {
-    const ended = lastLaughAfterEnding([]);
-    expect(actionChoices(ended, 0)).toContainEqual({ action: 'pass' });
-    const { state, events } = act(ended, 0, { action: 'pass' });
-    expect(types(events)).toEqual(['action', 'score', 'mark']);
-    expect(state.phase).toBe('round-over');
-  });
-
-  it('works for whoever owns it, not just the player who ended the round', () => {
-    const start = buildPosition({ keeps: { 2: ['last-laugh'] }, hands: { 2: ['chalice'] }, turn: 0 });
-    const { state } = draw(start, 0);
-    promptFor(state, 2, 'action');
-    expect(act(state, 2, { action: 'play', card: 'chalice', target: 2 }).state.marks).toEqual([0, 0, 1, 0]);
-  });
-
-  it("C-23 Last Laugh's action can't use Acquisition, Sanction, or Juggling", () => {
-    const ended = lastLaughAfterEnding(['acquisition', 'sanction', 'juggling', 'tithes'], ['chalice']);
-    // It is still S0's turn, so only the restriction stops these.
-    expect(ended.turn?.seat).toBe(0);
-    expect(abilityNames(ended, 0)).toEqual(['tithes']);
-  });
-
-  it('can use Tithes, whose discard can make Purity count (Purity 3)', () => {
-    const ended = lastLaughAfterEnding(['purity', 'tithes', 'chalice']);
-    const { events } = act(ended, 0, { action: 'ability', card: 'tithes' });
-    expect(payloads(events, 'score')[0]).toMatchObject({ winner: 0, scores: [20, 0, 0, 0] });
-  });
-
-  it('Hocus Pocus during Last Laugh grants two more restricted actions (Last Laugh 3)', () => {
-    const ended = lastLaughAfterEnding(['sanction'], ['hocus-pocus', 'chalice', 'dagger']);
-    const hocus = act(ended, 0, { action: 'play', card: 'hocus-pocus' });
-    expect(hocus.state.stack.at(-1)).toMatchObject({ kind: 'hocus-pocus', remaining: 2, restricted: true });
-    expect(abilityNames(hocus.state, 0)).toEqual([]);
-    const one = act(hocus.state, 0, { action: 'play', card: 'chalice', target: 0 });
-    const two = act(one.state, 0, { action: 'play', card: 'dagger', target: 0 });
-    expect(payloads(two.events, 'score')[0]).toMatchObject({ scores: [8, 0, 0, 0] });
-  });
-});
-
-describe('restricted actions (Retribution and Last Laugh)', () => {
-  const ability = (card: 'acquisition' | 'sanction' | 'juggling') => {
-    // Before the round ends, on S0's own turn, the ability is available.
-    const live = buildPosition({ keeps: { 0: ['last-laugh', card] }, hands: { 0: ['chalice'] }, turn: 0 });
-    expect(abilityNames(live, 0)).toContain(card);
-    // During Last Laugh's action it is not.
-    const ended = lastLaughAfterEnding([card], ['chalice']);
-    expect(abilityNames(ended, 0)).not.toContain(card);
-    // Nor during Retribution's actions.
-    const struck = buildPosition({ keeps: { 1: ['retribution', card] }, hands: { 0: ['dagger'], 1: ['chalice'] }, turn: 0 });
-    const { state } = act(struck, 0, { action: 'play', card: 'dagger', target: 1 });
-    promptFor(state, 1, 'action');
-    expect(abilityNames(state, 1)).not.toContain(card);
-  };
-
-  it("C-07 Acquisition can't be used with Retribution or Last Laugh actions", () => ability('acquisition'));
-  it("C-34 Sanction can't be used with Retribution or Last Laugh actions", () => ability('sanction'));
-  it("C-35 Juggling can't be used with Retribution or Last Laugh actions", () => ability('juggling'));
-});
+// What may still happen after a round ends, before it is scored (C-02 to C-05).
 
 describe('after the round ends', () => {
   it('C-02 no more actions happen except Last Laugh and what it triggers', () => {
@@ -148,27 +63,51 @@ describe('after the round ends', () => {
   });
 });
 
-describe('token victory', () => {
-  it('C-09 is instant and total: no Last Laugh, no Retribution, and the next round begins', () => {
+describe('post-round actions', () => {
+  it('Interest still draws from a non-empty pile after the round ends', () => {
     const start = buildPosition({
-      keeps: { 1: ['count-token', 'fool-token', 'retribution', 'last-laugh'] },
-      hands: { 0: ['friar-token'] },
+      keeps: { 0: ['last-laugh'], 2: ['interest'] },
+      hands: { 0: ['chalice'] },
+      piles: { 2: ['dagger'] },
       turn: 0,
     });
-    const { state, events } = act(start, 0, { action: 'play', card: 'friar-token', target: 1 });
-    expect(types(events)).toEqual(['action', 'play', 'round-end', 'mark']);
-    expect(state.marks).toEqual([0, 1, 0, 0]);
+    const ended = draw(start, 0).state;
+    const { state } = act(ended, 0, { action: 'play', card: 'chalice', target: 2 });
+    expect(state.hands[2]).toEqual(['dagger']);
     expect(state.phase).toBe('round-over');
   });
 
-  it('C-22 Last Laugh does not trigger when the round ends by token victory', () => {
+  it('Legerdemain as the Last Laugh action steals and plays a card before scoring', () => {
     const start = buildPosition({
-      keeps: { 0: ['count-token', 'fool-token'], 2: ['last-laugh'] },
-      hands: { 0: ['friar-token'], 2: ['faberge-egg'] },
+      keeps: { 0: ['last-laugh'], 1: ['faberge-egg'] },
+      hands: { 0: ['legerdemain'], 1: ['chalice'] },
       turn: 0,
     });
-    const { state, events } = act(start, 0, { action: 'play', card: 'friar-token', target: 0 });
-    expect(types(events)).not.toContain('last-laugh');
-    expect(state.prompts).toEqual([]);
+    const ended = draw(start, 0).state;
+    const stolen = respond(act(ended, 0, { action: 'play', card: 'legerdemain' }).state, 0, { kind: 'choose-player', seat: 1 });
+    const { events } = hotTarget(stolen.state, 0, 0);
+    // S0 has 2 coins, S1 has 3: S1 still wins, but the Chalice counted.
+    expect(payloads(events, 'score')[0]).toMatchObject({ scores: [4, 6, 0, 0], winner: 1 });
+  });
+
+  it('a HOT card drawn during the Last Laugh action is played before scoring', () => {
+    const start = buildPosition({ keeps: { 2: ['last-laugh', 'sanction'] }, piles: { 2: ['blunder'] }, turn: 0, seats: ['player', 'ghost', 'player', 'ghost'] });
+    const ended = draw(start, 0).state;
+    // Sanction is restricted during Last Laugh, so S2 draws normally.
+    expect(abilityNames(ended, 2)).toEqual([]);
+    const { state, events } = draw(ended, 2);
+    expect(state.keeps[2].map((c) => c.id)).toEqual(['last-laugh', 'sanction', 'blunder']);
+    expect(payloads(events, 'score')[0]).toMatchObject({ scores: [0, null, -20, null], winner: 0 });
+  });
+
+  it('revealing in the last window before scoring can change the winner', () => {
+    const start = buildPosition({
+      keeps: { 0: ['duplicity', { id: 'faberge-egg', faceDown: { placedBy: 0 } }], 1: ['chalice'] },
+      turn: 0,
+    });
+    const ended = draw(start, 0);
+    const first = respond(ended.state, 0, { kind: 'reveal-window', reveal: false });
+    const { events } = respond(first.state, 0, { kind: 'reveal-window', reveal: true });
+    expect(payloads(events, 'score')[0]).toMatchObject({ scores: [6, 4, 0, 0], winner: 0 });
   });
 });

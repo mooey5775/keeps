@@ -331,7 +331,14 @@ These are defaults the engine will implement unless you overrule them. Each one 
 
 ## Test plan
 
-Vitest + fast-check. Test files live by category. **Every test name includes its spec id**, so coverage is greppable.
+Vitest + fast-check. **Every test name includes its spec id**, so coverage is greppable. Tests live where you'd look for the rule they check:
+
+- `test/cards/`: one file per card, holding every test about that card, its clarifications included. The three Tokens share `tokens.test.ts` and the six plain Coin cards share `coin-cards.test.ts`. `cards.test.ts` fails if a card has no section here.
+- `test/rules/`: rules that span cards: turns, playing cards (HOT, who decides), restricted actions, trigger order, granted actions (Q-17), piles, round end, post-round, and rounds.
+- `test/property/`: random, exhaustive, and metamorphic tests over whole games.
+- `test/puzzles/`: the official puzzles.
+- `test/api/`: `apply()` itself and malformed input.
+- `test/*.test.ts`: one file per engine module (setup, scoring, view, trace, replay, invariants, …).
 
 ### Spec manifest and coverage meta-test
 
@@ -408,7 +415,7 @@ Specific behaviors you asked to have tested explicitly, beyond the clarification
 
 ### Per-card tests (`test/cards/`)
 
-Each of the 36 cards gets at least: the basic effect, edge targets (empty piles, empty hands, ghosts, self), interaction with HOT, and traces. That's on top of the C-* tests.
+Each of the 36 cards gets at least: the basic effect, edge targets (empty piles, empty hands, ghosts, self), interaction with HOT, and traces. A card's C-* tests live in its file too, unless the clarification spans cards (those are in `test/rules/`).
 
 ### Puzzles (P-*)
 

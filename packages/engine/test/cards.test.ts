@@ -1,9 +1,10 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CARD_IDS, CARDS, CHARACTERS, hasRules, isCoinCard, type CardId } from '../src/index.ts';
 
 const CARD_IMAGE_DIR = join(import.meta.dirname, '../../../cards');
+const CARD_TEST_DIR = join(import.meta.dirname, 'cards');
 
 const ids = (pred: (id: CardId) => boolean) => CARD_IDS.filter(pred);
 
@@ -75,5 +76,13 @@ describe('card data', () => {
 
   it('only gives coin values to Keep cards', () => {
     for (const id of ids(isCoinCard)) expect(CARDS[id].keep, id).toBe(true);
+  });
+
+  it('has a section in test/cards for every card', () => {
+    const source = readdirSync(CARD_TEST_DIR)
+      .map((file) => readFileSync(join(CARD_TEST_DIR, file), 'utf8'))
+      .join('\n');
+    const missing = CARD_IDS.filter((id) => !source.includes(`describe('${CARDS[id].name}'`));
+    expect(missing).toEqual([]);
   });
 });

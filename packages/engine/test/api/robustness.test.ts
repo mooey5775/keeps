@@ -1,10 +1,60 @@
 import { describe, expect, it } from 'vitest';
-import { apply, buildPosition, legalCommands, newGame, type Answer, type Command, type GameState, type Seat } from '../../src/index.ts';
+import {
+  apply,
+  buildPosition,
+  legalCommands,
+  newGame,
+  pick,
+  playerSeats,
+  seedRng,
+  type Answer,
+  type Command,
+  type GameState,
+  type Seat,
+} from '../../src/index.ts';
 import { act, actionCommand, draw, promptFor } from '../helpers.ts';
 
 // apply() must reject anything that isn't exactly a legal command, report
 // why, and leave the given state untouched. Commands arrive from browsers,
-// so they can be stale, malformed, or deliberately wrong.
+// so they can be stale, malformed, or deliberately wrong. It must never
+// throw on bad input: a thrown exception would take down the server's
+// message handler.
+
+function neverThrows(state: GameState, seat: number, command: unknown): string | null {
+  try {
+    const result = apply(state, seat as never, command as Command);
+    return result.ok ? null : result.error.code;
+  } catch (error) {
+    return `THROWS: ${(error as Error).message}`;
+  }
+}
+
+/** Every legal answer with one field replaced (or removed), for every junk value. */
+function mutations(command: Command): unknown[] {
+  if (command.type !== 'answer') return [];
+  const out: unknown[] = [];
+  const answer = command.answer as Record<string, unknown>;
+  for (const key of Object.keys(answer)) {
+    if (key === 'kind') continue;
+    for (const junk of JUNK) {
+      const copy = structuredClone(command) as { answer: Record<string, unknown> };
+      if (junk === undefined) delete copy.answer[key];
+      else copy.answer[key] = junk;
+      out.push(copy);
+    }
+  }
+  if (command.answer.kind === 'action') {
+    for (const key of Object.keys(command.answer.choice)) {
+      for (const junk of JUNK) {
+        const copy = structuredClone(command) as { answer: { choice: Record<string, unknown> } };
+        if (junk === undefined) delete copy.answer.choice[key];
+        else copy.answer.choice[key] = junk;
+        out.push(copy);
+      }
+    }
+  }
+  return out;
+}
 
 function rejected(state: GameState, seat: Seat, command: Command): string {
   const before = JSON.stringify(state);
@@ -19,6 +69,8 @@ function answer(state: GameState, seat: Seat, kind: Answer['kind'], body: object
   const prompt = promptFor(state, seat, kind);
   return { type: 'answer', promptId: prompt.id, answer: { kind, ...body } as Answer };
 }
+
+const JUNK: unknown[] = [undefined, null, 0, -1, 99, 'x', true, [], {}, [0, 0], { seat: 0 }, { seat: 1, index: 0 }];
 
 describe('malformed action choices', () => {
   const start = () =>
@@ -157,6 +209,60 @@ describe('malformed effect answers', () => {
     const start = buildPosition({ keeps: { 1: ['duplicity', { id: 'chalice', faceDown: { placedBy: 1 } }] }, piles: { 0: ['dagger'] }, turn: 0 });
     expect(rejected(start, 0, { type: 'reveal-duplicity' })).toBe('illegal');
     expect(apply(start, 1, { type: 'reveal-duplicity' }).ok).toBe(true);
+  });
+});
+
+describe('malformed commands never throw', () => {
+  it('top-level shapes: null, primitives, and missing or null answers', () => {
+    const { state } = newGame({ players: 2, seed: 'shapes', firstSeat: 0 });
+    const id = state.prompts[0]!.id;
+    const shapes: unknown[] = [
+      null,
+      undefined,
+      5,
+      'draw',
+      [],
+      {},
+      { type: 'answer' },
+      { type: 'answer', promptId: id },
+      { type: 'answer', promptId: id, answer: null },
+      { type: 'answer', promptId: id, answer: 7 },
+      { type: 'answer', promptId: id, answer: { kind: 'action' } },
+      { type: 'answer', promptId: id, answer: { kind: 'action', choice: null } },
+      { type: 'answer', promptId: { id }, answer: {} },
+      { type: 'answer', promptId: id, answer: { kind: 'order-pile' } },
+      { type: 'answer', promptId: id, answer: { kind: 'choose-keep-pair' } },
+    ];
+    const results = shapes.map((shape) => neverThrows(state, 0, shape));
+    expect(results.filter((r) => r?.startsWith('THROWS'))).toEqual([]);
+    expect(results.every((r) => r !== null)).toBe(true);
+  });
+
+  it('every field of every legal answer, replaced with junk, across random games', () => {
+    const crashes = new Set<string>();
+    for (let game = 0; game < 25; game++) {
+      const rng = seedRng(`malformed-${game}`);
+      let state = newGame({ players: 4, seed: `malformed-${game}`, marksToWin: 2 }).state;
+      for (let step = 0; step < 250 && state.phase !== 'game-over'; step++) {
+        for (const prompt of state.prompts) {
+          const sample = legalCommands(state, prompt.seat).find((c) => c.type === 'answer' && c.promptId === prompt.id);
+          if (!sample) continue;
+          for (const bad of mutations(sample)) {
+            const outcome = neverThrows(state, prompt.seat, bad);
+            if (outcome?.startsWith('THROWS')) {
+              const kind = sample.type === 'answer' ? sample.answer.kind : sample.type;
+              crashes.add(`${kind}: ${outcome}`);
+            }
+          }
+        }
+        const options = playerSeats(state).flatMap((seat) => legalCommands(state, seat).map((command) => ({ seat, command })));
+        const choice = pick(rng, options);
+        const result = apply(state, choice.seat, choice.command);
+        if (!result.ok) throw new Error(result.error.message);
+        state = result.state;
+      }
+    }
+    expect([...crashes].sort()).toEqual([]);
   });
 });
 

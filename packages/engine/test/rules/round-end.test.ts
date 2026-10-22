@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { apply, buildPosition, legalCommands, type KeepCard, type PerSeat, type Seat } from '../../src/index.ts';
-import { act, draw, ok, payloads, types } from '../helpers.ts';
+import { draw, ok, payloads, promptFor, types } from '../helpers.ts';
+
+// Ending a round, scoring it, and rounds cut short in the middle of a decision.
 
 /** `ender` draws from their (empty) pile, ending the round with the given keeps. */
 function endRound(ender: Seat, keeps: Partial<Record<Seat, readonly KeepCard['id'][]>>, seats?: PerSeat<'player' | 'ghost'>) {
@@ -82,36 +84,62 @@ describe('round end', () => {
     const start = buildPosition({ keeps: { 1: ['chalice'] }, marksToWin: 1, turn: 0 });
     expect(draw(start, 0).state.phase).toBe('game-over');
   });
+
+  it('a tie with a ghost seat between: the ghost is skipped when looking left of the ender', () => {
+    const start = buildPosition({
+      seats: ['player', 'ghost', 'player', 'player'],
+      keeps: { 0: ['chalice'], 2: ['dagger'], 3: ['scepter'] },
+      turn: 0,
+    });
+    // Left of S0: S1 (ghost, skipped), S2. S2 wins over S3 and S0.
+    expect(payloads(draw(start, 0).events, 'score')[0]).toMatchObject({ winner: 2, tiedWith: [3, 0] });
+  });
+
+  it('a half-coin settles what would otherwise be a tie', () => {
+    const start = buildPosition({ keeps: { 1: ['chalice'], 2: ['dagger', 'royal-favor'] }, turn: 0 });
+    expect(payloads(draw(start, 0).events, 'score')[0]).toMatchObject({ scores: [0, 4, 5, 0], winner: 2, tiedWith: [] });
+  });
+
+  it('drawing your last card does not end the round; the next draw from that pile does', () => {
+    const start = buildPosition({ piles: { 0: ['chalice'] }, turn: 0 });
+    const last = draw(start, 0);
+    expect(last.state.phase).toBe('playing');
+    expect(types(draw(last.state, 0).events)).toContain('round-end');
+  });
 });
 
-describe('token victory', () => {
-  it('collecting all three Tokens in a keep wins the round instantly, with actions left', () => {
+describe('a round that ends mid-decision', () => {
+  it('a token win revealed while a drawn HOT card awaits its keep ends the round cleanly', () => {
+    // S1 holds Duplicity; the face-down Friar Token completes S0's Tokens.
     const start = buildPosition({
-      keeps: { 0: ['count-token', 'fool-token'], 1: ['faberge-egg'] },
-      hands: { 0: ['friar-token'] },
-      turn: 0,
+      keeps: { 0: ['fool-token', 'count-token', { id: 'friar-token', faceDown: { placedBy: 0 } }], 1: ['duplicity'] },
+      piles: { 1: ['sanction', 'shackles'] },
+      turn: 1,
     });
-    const { state, events } = act(start, 0, { action: 'play', card: 'friar-token', target: 0 });
-    expect(types(events)).toEqual(['action', 'play', 'round-end', 'mark']);
+    const drawn = draw(start, 1);
+    expect(promptFor(drawn.state, 1, 'hot-target').card).toBe('sanction');
+
+    const result = apply(drawn.state, 1, { type: 'reveal-duplicity' });
+    const { state, events } = ok(result);
     expect(payloads(events, 'round-end')).toEqual([{ type: 'round-end', reason: 'tokens', winner: 0 }]);
-    expect(state.roundEnd).toEqual({ kind: 'tokens', winner: 0 });
-    expect(state.marks).toEqual([1, 0, 0, 0]);
     expect(state.phase).toBe('round-over');
+    expect(state.prompts).toEqual([]);
+    // The abandoned HOT card is still in S1's hand; it's redealt next round.
+    expect(state.hands[1]).toEqual(['sanction']);
+    const next = ok(apply(state, 0, { type: 'next-round' })).state;
+    expect(next.hands.flat()).toEqual([]);
   });
 
-  it("completing the set in another player's keep gives them the win", () => {
+  it('a token win revealed during Offering gives leaves the gifts ungiven', () => {
     const start = buildPosition({
-      keeps: { 1: ['count-token', 'fool-token'] },
-      hands: { 0: ['friar-token'] },
+      hands: { 0: ['offering'], 1: ['chalice'], 2: ['dagger'] },
+      keeps: { 0: ['fool-token', 'count-token', { id: 'friar-token', faceDown: { placedBy: 0 } }], 3: ['duplicity'] },
       turn: 0,
     });
-    const { state } = act(start, 0, { action: 'play', card: 'friar-token', target: 1 });
-    expect(state.marks).toEqual([0, 1, 0, 0]);
-  });
-
-  it('next round after a token victory starts with the token winner', () => {
-    const start = buildPosition({ keeps: { 3: ['count-token', 'fool-token'] }, hands: { 0: ['friar-token'] }, turn: 0 });
-    const won = act(start, 0, { action: 'play', card: 'friar-token', target: 3 }).state;
-    expect(ok(apply(won, 0, { type: 'next-round' })).state.turn?.seat).toBe(3);
+    const played = ok(apply(start, 0, { type: 'answer', promptId: promptFor(start, 0, 'action').id, answer: { kind: 'action', choice: { action: 'play', card: 'offering' } } }));
+    const { state } = ok(apply(played.state, 3, { type: 'reveal-duplicity' }));
+    expect(state.roundEnd).toEqual({ kind: 'tokens', winner: 0 });
+    expect(state.hands[1]).toEqual(['chalice']);
+    expect(state.hands[2]).toEqual(['dagger']);
   });
 });

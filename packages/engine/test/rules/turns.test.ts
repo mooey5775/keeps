@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { apply, buildPosition, legalCommands } from '../../src/index.ts';
-import { act, actionsLeft, draw, ok, payloads, promptFor, types } from '../helpers.ts';
+import { actionsLeft, draw, ok, payloads, promptFor, types } from '../helpers.ts';
 
 describe('turns', () => {
   it('R-03 a turn is exactly two actions, then play passes to the left', () => {
@@ -95,16 +95,35 @@ describe('turns', () => {
       'round-start', 'pile-dealt', 'pile-dealt', 'pile-dealt', 'pile-dealt', 'turn-start', 'prompt',
     ]);
   });
+});
 
-  it('a Shackled player starts their turn with one action', () => {
-    const start = buildPosition({
-      keeps: { 1: ['shackles'] },
-      piles: { 0: ['chalice', 'dagger'], 1: ['scepter', 'timepiece'] },
-      turn: 0,
+describe('turn order', () => {
+  it('play passes left around four players and keeps going around', () => {
+    let state = buildPosition({
+      piles: { 0: ['chalice', 'dagger', 'scepter', 'medallion'], 1: ['timepiece', 'faberge-egg', 'joker', 'pluck'], 2: ['prayer', 'requisition', 'epiphany', 'offering'], 3: ['providence', 'resurrection', 'purity', 'interest'] },
+      turn: 2,
     });
-    const s1Turn = draw(draw(start, 0).state, 0);
-    expect(payloads(s1Turn.events, 'turn-start')).toEqual([{ type: 'turn-start', seat: 1, actions: 1 }]);
-    const after = act(s1Turn.state, 1, { action: 'draw' });
-    expect(after.state.turn?.seat).toBe(2);
+    const order: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      const seat = state.turn!.seat;
+      order.push(seat);
+      state = draw(draw(state, seat).state, seat).state;
+    }
+    expect(order).toEqual([2, 3, 0, 1, 2, 3]);
+  });
+
+  it("three players with the ghost at seat 0 skip seat 0", () => {
+    let state = buildPosition({
+      seats: ['ghost', 'player', 'player', 'player'],
+      piles: { 1: ['chalice', 'dagger'], 2: ['timepiece', 'faberge-egg'], 3: ['joker', 'pluck', 'prayer', 'epiphany'] },
+      turn: 3,
+    });
+    const order: number[] = [];
+    for (let i = 0; i < 4; i++) {
+      const seat = state.turn!.seat;
+      order.push(seat);
+      state = draw(draw(state, seat).state, seat).state;
+    }
+    expect(order).toEqual([3, 1, 2, 3]);
   });
 });

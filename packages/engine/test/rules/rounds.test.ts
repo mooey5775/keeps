@@ -137,48 +137,11 @@ describe('ending the game', () => {
   });
 });
 
-describe('turn order', () => {
-  it('play passes left around four players and keeps going around', () => {
-    let state = buildPosition({
-      piles: { 0: ['chalice', 'dagger', 'scepter', 'medallion'], 1: ['timepiece', 'faberge-egg', 'joker', 'pluck'], 2: ['prayer', 'requisition', 'epiphany', 'offering'], 3: ['providence', 'resurrection', 'purity', 'interest'] },
-      turn: 2,
-    });
-    const order: number[] = [];
-    for (let i = 0; i < 6; i++) {
-      const seat = state.turn!.seat;
-      order.push(seat);
-      state = draw(draw(state, seat).state, seat).state;
-    }
-    expect(order).toEqual([2, 3, 0, 1, 2, 3]);
-  });
-
-  it("three players with the ghost at seat 0 skip seat 0", () => {
-    let state = buildPosition({
-      seats: ['ghost', 'player', 'player', 'player'],
-      piles: { 1: ['chalice', 'dagger'], 2: ['timepiece', 'faberge-egg'], 3: ['joker', 'pluck', 'prayer', 'epiphany'] },
-      turn: 3,
-    });
-    const order: number[] = [];
-    for (let i = 0; i < 4; i++) {
-      const seat = state.turn!.seat;
-      order.push(seat);
-      state = draw(draw(state, seat).state, seat).state;
-    }
-    expect(order).toEqual([3, 1, 2, 3]);
-  });
-
-  it('a tie with a ghost seat between: the ghost is skipped when looking left of the ender', () => {
-    const start = buildPosition({
-      seats: ['player', 'ghost', 'player', 'player'],
-      keeps: { 0: ['chalice'], 2: ['dagger'], 3: ['scepter'] },
-      turn: 0,
-    });
-    // Left of S0: S1 (ghost, skipped), S2. S2 wins over S3 and S0.
-    expect(payloads(draw(start, 0).events, 'score')[0]).toMatchObject({ winner: 2, tiedWith: [3, 0] });
-  });
-
-  it('a half-coin settles what would otherwise be a tie', () => {
-    const start = buildPosition({ keeps: { 1: ['chalice'], 2: ['dagger', 'royal-favor'] }, turn: 0 });
-    expect(payloads(draw(start, 0).events, 'score')[0]).toMatchObject({ scores: [0, 4, 5, 0], winner: 2, tiedWith: [] });
+describe('game options', () => {
+  it('a game to a single mark is allowed, and ends after one round', () => {
+    const { state } = newGame({ players: 2, seed: 'one-mark', marksToWin: 1, firstSeat: 0 });
+    expect(state.config.marksToWin).toBe(1);
+    expect(() => newGame({ players: 2, seed: 1, marksToWin: 0 })).toThrow(RangeError);
+    expect(() => newGame({ players: 2, seed: 1, marksToWin: 1.5 })).toThrow(RangeError);
   });
 });
