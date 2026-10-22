@@ -10,10 +10,11 @@ with a 95% interval from the per-deal scores.
   # follow a training run: evaluate each new policy as it's saved, for the dashboard
   PYTHONPATH= .venv/bin/python -m keeps_bot.evaluate --watch first
 
-Watching evaluates each new policy against the random player, the untrained
-network (step 0), the previously evaluated policy and the one from about half
-as many steps ago, and writes the results to runs/<run>/tb/eval (TensorBoard)
-and runs/<run>/evals.jsonl.
+Watching evaluates every --every steps' policy (the newest, if it falls behind)
+against the random player, the previously evaluated policy and the one from
+about half as many steps ago, and writes the results to runs/<run>/tb/eval
+(TensorBoard) and runs/<run>/evals.jsonl. (It used to play the untrained
+network too; that tracked the random player within a point or two.)
 """
 
 import os
@@ -84,7 +85,7 @@ def _step_of(path):
   return int(re.search(r'policy-(\d+)\.pkl$', path).group(1))
 
 
-def watch(run, deals, poll):
+def watch(run, deals, poll, every):
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
@@ -104,7 +105,7 @@ def watch(run, deals, poll):
   previous = max(done) if done else None
   while True:
     steps = sorted(_step_of(p) for p in glob.glob(os.path.join(run_dir, 'policy-*.pkl')))
-    todo = [s for s in steps if s not in done and s > 0]
+    todo = [s for s in steps if s not in done and s > 0 and s % every == 0]
     if not todo:
       time.sleep(poll)
       continue
@@ -112,8 +113,6 @@ def watch(run, deals, poll):
     started = time.time()
     current = get(step)
     opponents = {'random': policies.uniform}
-    if 0 in steps:
-      opponents['step0'] = get(0)
     if previous is not None:
       opponents['previous'] = get(previous)
     evaluated = sorted(done | {0})
@@ -138,7 +137,7 @@ def watch(run, deals, poll):
     done.add(step)
     previous = step
     # Keep only the policies later evals may still use.
-    loaded = {s: p for s, p in loaded.items() if s in (0, step)}
+    loaded = {s: p for s, p in loaded.items() if s == step}
 
 
 def main():
@@ -148,9 +147,10 @@ def main():
   parser.add_argument('--watch', metavar='RUN', help='evaluate each new policy of a training run')
   parser.add_argument('--deals', type=int, default=1000)
   parser.add_argument('--poll', type=float, default=10, help='seconds between checks for new policies')
+  parser.add_argument('--every', type=int, default=1000, help='evaluate only policies whose step is a multiple of this')
   args = parser.parse_args()
   if args.watch:
-    watch(args.watch, args.deals, args.poll)
+    watch(args.watch, args.deals, args.poll, args.every)
   else:
     print(json.dumps(match(resolve(args.policy), resolve(args.opponent), args.deals)))
 
