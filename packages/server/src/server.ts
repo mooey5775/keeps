@@ -2,13 +2,14 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
+import { Policy } from '@keeps/learn';
 import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
 import { buildDispute, RateLimiter } from './dispute.ts';
 import { replayFileName, ReplayStore, type DiskSpace } from './replays.ts';
-import { Room, type RoomDeps, type Send } from './room.ts';
+import { Room, type BotDeps, type RoomDeps, type Send } from './room.ts';
 
 export interface ServerOptions {
   port: number;
@@ -30,6 +31,10 @@ export interface ServerOptions {
   adminToken?: string;
   /** Settings the browser may read from /config.json (the public PostHog project key). */
   publicConfig?: { posthogKey?: string; posthogHost?: string };
+  /** The bot's trained weights (packages/learn/weights/bot.bin). Without them, there is no bot. */
+  botWeights?: string;
+  /** Milliseconds the bot waits before each move (default: about a second). */
+  botDelay?: () => number;
 }
 
 export interface KeepsServer {
@@ -75,7 +80,10 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const buildFile = options.webDir ? join(options.webDir, 'build-id.txt') : null;
   const build = buildFile && existsSync(buildFile) ? readFileSync(buildFile, 'utf8').trim() : undefined;
 
+  const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay) : { deps: undefined, status: 'off (no weights configured)' };
+
   const deps: RoomDeps = {
+    ...(bot.deps ? { bot: bot.deps } : {}),
     tracker,
     ...(build ? { build } : {}),
     token: () => randomBytes(18).toString('base64url'),
@@ -98,6 +106,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     now: Date.now(),
     rooms: [...rooms.values()].map((r) => r.info()),
     visitors: visitors.top(),
+    bot: bot.status,
   });
 
   const http = createServer((req, res) => {
@@ -191,6 +200,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
           const player = room.join(message.name, send, { ip, client: message.client ?? null });
           visitors.record(ip, player.name, Date.now());
           playerId = player.id;
+          if (message.bot === true) room.handle(player.id, { t: 'add-bot' });
           return;
         }
         case 'join': {
@@ -335,4 +345,33 @@ function sendFile(res: ServerResponse, file: string | null, cache: string): void
   }
   res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream', 'cache-control': cache });
   res.end(readFileSync(file));
+}
+
+/**
+ * Loads the bot. Weights trained with a different observation encoder are
+ * refused: the network would read its inputs wrong and play nonsense (legal
+ * moves, but silently bad). Then the server runs without the bot and says why,
+ * at startup and on the admin page, rather than taking human games down too.
+ */
+function loadBot(path: string, delay?: () => number): { deps: BotDeps | undefined; status: string } {
+  try {
+    const policy = Policy.load(readFileSync(path));
+    const { run, step, fingerprint } = policy.info;
+    console.log(`Bot: ${run} step ${step} (encoder ${fingerprint})`);
+    return {
+      deps: {
+        policy,
+        schedule: (fn, ms) => {
+          const timer = setTimeout(fn, ms);
+          return () => clearTimeout(timer);
+        },
+        delay: delay ?? (() => 800 + Math.random() * 400),
+      },
+      status: `on: ${run} step ${step}`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`BOT DISABLED: ${message}`);
+    return { deps: undefined, status: `DISABLED: ${message}` };
+  }
 }

@@ -7,6 +7,15 @@ packages/learn/test/fixtures/bot-parity.bin (decision points from self-play with
 the probabilities JAX gives them, which the TypeScript forward pass must
 reproduce).
 
+After an encoder change that leaves observations the same up to float rounding
+(check by running the old and new encoders on the same rounds), the shipped
+weights can be re-stamped with the new fingerprint instead of retrained:
+
+  PYTHONPATH= .venv/bin/python -m keeps_bot.export --restamp
+
+Don't re-stamp after a real change to what the network sees: it would play
+nonsense (legally) without any error.
+
 File format (both files): b'KPNN', a little-endian uint32 header length, the
 JSON header (space-padded to a multiple of 4 bytes), then float32 tensors. The
 header lists each tensor's name, shape and offset (in floats) and carries the
@@ -33,6 +42,26 @@ from keeps_bot import selfplay
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 WEIGHTS = os.path.join(REPO, 'packages', 'learn', 'weights', 'bot.bin')
 FIXTURE = os.path.join(REPO, 'packages', 'learn', 'test', 'fixtures', 'bot-parity.bin')
+
+
+def read(path):
+  with open(path, 'rb') as f:
+    data = f.read()
+  assert data[:4] == b'KPNN', f'{path} is not a KPNN file'
+  (length,) = struct.unpack('<I', data[4:8])
+  return json.loads(data[8:8 + length]), data[8 + length:]
+
+
+def restamp(paths, fingerprint):
+  for path in paths:
+    header, body = read(path)
+    old = header['fingerprint']
+    header['fingerprint'] = fingerprint
+    head = json.dumps(header).encode()
+    head += b' ' * (-len(head) % 4)
+    with open(path, 'wb') as f:
+      f.write(b'KPNN' + struct.pack('<I', len(head)) + head + body)
+    print(f'{os.path.relpath(path, REPO)}: encoder {old} -> {fingerprint}')
 
 
 def write(path, header, tensors):
@@ -98,10 +127,16 @@ def fixture(policy, raw, rows=64, seed=0):
 
 def main():
   parser = argparse.ArgumentParser()
-  parser.add_argument('policy', help='a policy-<step>.pkl saved by training')
+  parser.add_argument('policy', nargs='?', help='a policy-<step>.pkl saved by training')
+  parser.add_argument('--restamp', action='store_true',
+                      help="record the current encoder's fingerprint in the shipped weights (see above)")
   parser.add_argument('--out', default=WEIGHTS)
   parser.add_argument('--fixture', default=FIXTURE)
   args = parser.parse_args()
+  if args.restamp:
+    return restamp([args.out, args.fixture], keeps.bridge().fingerprint)
+  if not args.policy:
+    parser.error('give a policy to export (or --restamp)')
 
   policy, saved = policies.load(args.policy)
   current = keeps.bridge().fingerprint

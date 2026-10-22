@@ -21,6 +21,8 @@ export interface RoomPlayer {
   host: boolean;
   /** Seat at the table once a game starts; null in the lobby or for spectators. */
   seat: Seat | null;
+  /** A computer player (two-player games only). */
+  bot?: boolean;
 }
 
 export interface RoomSummary {
@@ -30,6 +32,8 @@ export interface RoomSummary {
   settings: Settings;
   /** The receiving player's id. */
   you: string;
+  /** Whether this server can add a bot player. */
+  botAvailable: boolean;
 }
 
 export interface UndoState {
@@ -45,7 +49,8 @@ export interface UndoState {
 
 /** `client` is an anonymous id for the browser (for analytics), optional. */
 export type ClientMessage =
-  | { t: 'create'; name: string; client?: string }
+  /** `bot`: add a bot player to the new room straight away. */
+  | { t: 'create'; name: string; client?: string; bot?: boolean }
   | { t: 'join'; code: string; name: string; client?: string }
   | { t: 'resume'; code: string; token: string; client?: string }
   | { t: 'settings'; settings: Settings }
@@ -54,6 +59,9 @@ export type ClientMessage =
   | { t: 'propose-undo' }
   | { t: 'vote-undo'; accept: boolean }
   | { t: 'back-to-lobby' }
+  /** Host, in the lobby: add a bot player (the room must be for two). */
+  | { t: 'add-bot' }
+  | { t: 'remove-bot' }
   | { t: 'leave' };
 
 export type ServerMessage =

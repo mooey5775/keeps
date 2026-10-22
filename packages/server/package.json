@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@keeps/engine": "workspace:*",
+    "@keeps/learn": "workspace:*",
     "@keeps/protocol": "workspace:*",
     "posthog-node": "^5.56.2",
     "ws": "^8.22.0"

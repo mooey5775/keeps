@@ -57,6 +57,9 @@ importers:
       '@keeps/engine':
         specifier: workspace:*
         version: link:../engine
+      '@keeps/learn':
+        specifier: workspace:*
+        version: link:../learn
       '@keeps/protocol':
         specifier: workspace:*
         version: link:../protocol

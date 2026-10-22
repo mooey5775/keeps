@@ -19,6 +19,8 @@ export interface AdminSnapshot {
   now: number;
   rooms: RoomInfo[];
   visitors: Visitor[];
+  /** Whether the bot is on, and which policy (or why it's off). */
+  bot: string;
 }
 
 /**
@@ -98,7 +100,7 @@ function ago(ms: number): string {
   return `${(s / 86400).toFixed(1)}d ago`;
 }
 
-export function renderAdmin({ startedAt, now, rooms, visitors }: AdminSnapshot): string {
+export function renderAdmin({ startedAt, now, rooms, visitors, bot }: AdminSnapshot): string {
   const live = rooms.filter((r) => r.game && r.game.phase !== 'game-over');
   const connected = rooms.reduce((n, r) => n + r.players.filter((p) => p.connected).length, 0);
   const roomRows = rooms
@@ -108,7 +110,7 @@ export function renderAdmin({ startedAt, now, rooms, visitors }: AdminSnapshot):
         .map((p) => {
           const marks = r.game && p.seat !== null ? ` · ${r.game.marks[p.seat]} marks` : '';
           const turn = r.game?.turnSeat === p.seat && p.seat !== null ? ' ◀ turn' : '';
-          return `<li class="${p.connected ? 'on' : 'off'}">${escape(p.name)}${p.host ? ' (host)' : ''}${p.seat === null && r.game ? ' (watching)' : ''}${marks}${turn} <code>${escape(p.ip ?? '?')}</code></li>`;
+          return `<li class="${p.connected ? 'on' : 'off'}">${escape(p.name)}${p.bot ? ' (bot)' : ''}${p.host ? ' (host)' : ''}${p.seat === null && r.game ? ' (watching)' : ''}${marks}${turn} <code>${escape(p.ip ?? '?')}</code></li>`;
         })
         .join('');
       const status = r.game
@@ -131,7 +133,7 @@ export function renderAdmin({ startedAt, now, rooms, visitors }: AdminSnapshot):
   code { color: #b3a283; } .stats span { margin-right: 24px; } .muted { color: #b3a283; }
 </style></head><body>
 <h1>Keeps admin</h1>
-<p class="stats"><span><b>${live.length}</b> games in progress</span><span><b>${rooms.length}</b> rooms</span><span><b>${connected}</b> connected</span><span class="muted">server up ${ago(now - startedAt).replace(' ago', '')} · refreshes every 10s · <a href="/admin.json" style="color:#d2a94d">JSON</a></span></p>
+<p class="stats"><span><b>${live.length}</b> games in progress</span><span><b>${rooms.length}</b> rooms</span><span><b>${connected}</b> connected</span><span${bot.startsWith('DISABLED') ? ' style="color:#e06c5a"' : ''}>bot ${escape(bot)}</span><span class="muted">server up ${ago(now - startedAt).replace(' ago', '')} · refreshes every 10s · <a href="/admin.json" style="color:#d2a94d">JSON</a></span></p>
 <h2>Rooms</h2>
 ${rooms.length ? `<table><tr><th>Room</th><th>Status</th><th>Players</th><th>Last activity</th><th>Created</th></tr>${roomRows}</table>` : '<p class="muted">No rooms.</p>'}
 <h2>Visitors since the server started (by connections)</h2>

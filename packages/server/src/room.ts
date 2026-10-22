@@ -2,6 +2,7 @@ import {
   apply,
   coinsLabel,
   eventsFor,
+  legalCommands,
   newGame,
   playerSeats,
   scores,
@@ -21,6 +22,7 @@ import {
   type Settings,
   type UndoState,
 } from '@keeps/protocol';
+import { BotPlayer, type Policy } from '@keeps/learn';
 import type { Tracker } from './analytics.ts';
 import type { OnlineDisputeInfo } from './dispute.ts';
 
@@ -46,7 +48,20 @@ export interface RoomDeps {
   tracker?: Tracker;
   /** The site build being served, sent to browsers so an outdated page reloads. */
   build?: string;
+  /** The bot, if this server has one. */
+  bot?: BotDeps;
 }
+
+export interface BotDeps {
+  policy: Policy;
+  /** Runs `fn` after `ms` milliseconds; returns a function that cancels it. */
+  schedule: (fn: () => void, ms: number) => () => void;
+  /** How long the bot waits before each move, so people can follow it. */
+  delay: () => number;
+}
+
+/** Analytics id for the bot's own events (one person for every bot game). */
+const BOT_ANALYTICS_ID = 'keeps-bot';
 
 /** Where a connection comes from: its IP and the browser's anonymous id. */
 export interface ConnectionInfo {
@@ -66,6 +81,8 @@ interface Player {
   /** Anonymous id of the player's browser, if it sent one. */
   client: string | null;
   joinedAt: number;
+  /** A computer player: never connected, never host. */
+  bot: boolean;
 }
 
 /** A room as the admin page shows it. */
@@ -75,7 +92,7 @@ export interface RoomInfo {
   createdAt: number;
   lastActivity: number;
   settings: Settings;
-  players: { name: string; seat: Seat | null; host: boolean; connected: boolean; ip: string | null; joinedAt: number }[];
+  players: { name: string; seat: Seat | null; host: boolean; connected: boolean; ip: string | null; joinedAt: number; bot: boolean }[];
   game: {
     startedAt: number;
     round: number;
@@ -96,6 +113,8 @@ interface Game {
   history: { state: GameState; events: number }[];
   undo: { proposedBy: string; accepted: string[] } | null;
   roundStartedAt: number;
+  /** The bot players at the table (none in an all-human game). */
+  bots: BotPlayer[];
 }
 
 export class Room {
@@ -104,6 +123,8 @@ export class Room {
   private players: Player[] = [];
   private settings: Settings = { ...DEFAULT_SETTINGS };
   private game: Game | null = null;
+  /** Cancels the bot's pending move, if one is scheduled. */
+  private botTimer: (() => void) | null = null;
   readonly createdAt: number;
   lastActivity: number;
 
@@ -133,12 +154,14 @@ export class Room {
       id: this.deps.id(),
       name: this.uniqueName(name),
       token: this.deps.token(),
-      host: this.players.length === 0,
+      // The first person in (a bot never hosts).
+      host: !this.players.some((p) => p.host),
       seat: null,
       send,
       ip: from.ip ?? null,
       client: validClient(from.client),
       joinedAt: this.deps.now(),
+      bot: false,
     };
     this.players.push(player);
     this.touch();
@@ -173,6 +196,7 @@ export class Room {
 
   /** Ends the room: tells everyone still connected it's gone. */
   close(): void {
+    this.cancelBot();
     for (const p of this.players) {
       p.send?.({ t: 'gone' });
       p.send = null;
@@ -226,12 +250,21 @@ export class Room {
         if (!player.host) return 'Only the host can do that.';
         if (!this.game) return null;
         if (this.game.state.phase !== 'game-over') return 'The game is still going.';
+        this.cancelBot();
         this.game = null;
         for (const p of this.players) p.seat = null;
         this.broadcastRoom();
         return null;
       case 'leave':
         this.leave(player);
+        return null;
+      case 'add-bot':
+        return this.addBot(player);
+      case 'remove-bot':
+        if (!player.host) return 'Only the host can remove the bot.';
+        if (this.game) return 'The game has already started.';
+        for (const bot of this.players.filter((p) => p.bot)) this.remove(bot);
+        this.broadcastRoom();
         return null;
       case 'create':
       case 'join':
@@ -247,6 +280,7 @@ export class Room {
     if (this.game) return 'The game has already started.';
     const count = this.players.length;
     if (count < 2 || count > 4) return 'Keeps needs 2 to 4 players.';
+    if (count !== 2 && this.players.some((p) => p.bot)) return 'The bot only plays two-player games.';
 
     const seed = this.deps.seed();
     const preview = newGame({ players: count as 2 | 3 | 4, seed, marksToWin: this.settings.marksToWin });
@@ -270,7 +304,8 @@ export class Room {
     };
     const { state, events } = chosen ? newGame(options) : preview;
     const startedAt = this.deps.now();
-    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt };
+    const bots = this.players.filter((p) => p.bot).map((p) => new BotPlayer(this.deps.bot!.policy, p.seat!, this.deps.random));
+    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots };
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
     const seated = this.seatedPlayers();
     this.track('game_started', player, {
@@ -280,9 +315,11 @@ export class Room {
       ...(chosen ? { first_player_name: chosen.name } : {}),
       player_names: seated.map((p) => p.name),
       player_ips: seated.map((p) => p.ip),
+      ...this.botProperties(),
     });
     this.broadcastRoom();
     for (const p of this.players) this.sendGame(p, true);
+    this.scheduleBot();
     return null;
   }
 
@@ -304,7 +341,78 @@ export class Room {
     this.deps.saveReplay?.(this.code, game.startedAt, game.log);
     this.trackCommand(game, before, result.events);
     for (const p of this.players) this.sendGame(p, false, result.events);
+    this.scheduleBot();
     return null;
+  }
+
+  // -- The bot ---------------------------------------------------------------
+
+  private addBot(player: Player): string | null {
+    if (!player.host) return 'Only the host can add the bot.';
+    if (this.game) return 'The game has already started.';
+    if (!this.deps.bot) return "The bot isn't available on this server.";
+    if (this.players.some((p) => p.bot)) return 'The bot is already here.';
+    if (this.players.length >= 2) return 'The bot only plays two-player games.';
+    this.players.push({
+      id: this.deps.id(),
+      name: this.uniqueName('Bot'),
+      token: this.deps.token(),
+      host: false,
+      seat: null,
+      send: null,
+      ip: null,
+      client: null,
+      joinedAt: this.deps.now(),
+      bot: true,
+    });
+    this.track('bot_added', player);
+    this.broadcastRoom();
+    return null;
+  }
+
+  /** If the game is waiting on the bot, plays its move after a short delay. */
+  private scheduleBot(): void {
+    const game = this.game;
+    const deps = this.deps.bot;
+    if (!game || !deps || this.botTimer) return;
+    const bot = game.bots.find((b) => b.wantsToMove(game.state));
+    if (!bot) return;
+    const state = game.state;
+    this.botTimer = deps.schedule(() => {
+      this.botTimer = null;
+      // Something happened meanwhile (e.g. a free Duplicity reveal): look again.
+      if (this.game !== game || game.state !== state) return this.scheduleBot();
+      this.playBot(game, bot);
+    }, deps.delay());
+  }
+
+  private playBot(game: Game, bot: BotPlayer): void {
+    const player = this.playerAt(bot.seat);
+    if (!player) return;
+    let error: string | null;
+    try {
+      error = this.command(player, bot.choose(game.state, game.events));
+    } catch (thrown) {
+      error = String(thrown instanceof Error ? thrown.stack : thrown);
+    }
+    if (error === null) return;
+    // Never leave the game stuck on the bot: log it and play any legal move.
+    console.error(`room ${this.code}: the bot failed (${error}); playing a random legal move`);
+    const legal = legalCommands(game.state, bot.seat).filter((c) => c.type !== 'reveal-duplicity' && c.type !== 'next-round');
+    const fallback = legal[Math.floor(this.deps.random() * legal.length)];
+    if (fallback) this.command(player, fallback);
+  }
+
+  private cancelBot(): void {
+    this.botTimer?.();
+    this.botTimer = null;
+  }
+
+  /** Analytics properties naming the bot in a game against it. */
+  private botProperties(): Record<string, unknown> {
+    if (!this.game?.bots.length) return {};
+    const { run, step } = this.deps.bot!.policy.info;
+    return { vs_bot: true, bot_policy: `${run}-${step}` };
   }
 
   /** Analytics for what a command did: cards played, and rounds or the game ending. */
@@ -331,6 +439,7 @@ export class Room {
     const values = scores(state);
     const seated = this.seatedPlayers();
     this.track('round_ended', winner, {
+      ...this.botProperties(),
       round: state.round,
       reason: state.roundEnd?.kind ?? null,
       players: seated.length,
@@ -339,6 +448,7 @@ export class Room {
     });
     if (state.phase === 'game-over') {
       this.track('game_finished', winner, {
+        ...this.botProperties(),
         rounds: state.round,
         players: seated.length,
         player_names: seated.map((p) => p.name),
@@ -359,6 +469,7 @@ export class Room {
   private proposeUndo(player: Player): string | null {
     const game = this.game;
     if (!game || player.seat === null) return 'Only players in a game can propose an undo.';
+    if (game.bots.length > 0) return 'Undo is off in games against the bot.';
     if (game.history.length === 0) return 'There is nothing to undo this round.';
     if (game.undo) return 'An undo vote is already open.';
     game.undo = { proposedBy: player.id, accepted: [] };
@@ -404,7 +515,7 @@ export class Room {
     const game = this.game!;
     const undo = game.undo;
     return {
-      available: player.seat !== null && game.history.length > 0 && !undo,
+      available: player.seat !== null && game.history.length > 0 && !undo && game.bots.length === 0,
       proposedBy: undo?.proposedBy ?? null,
       accepted: undo?.accepted ?? [],
       waitingOn: undo ? this.undoVoters(undo.proposedBy).filter((p) => !undo.accepted.includes(p.id)).map((p) => p.id) : [],
@@ -418,15 +529,23 @@ export class Room {
       // A seated player can't leave a running game; they just disconnect and may resume.
       player.send = null;
     } else {
-      this.players = this.players.filter((p) => p !== player);
-      if (player.host && this.players[0]) this.players[0].host = true;
-      // The chosen first player is gone: back to a random one.
-      if (this.settings.firstPlayer !== 'random' && this.settings.firstPlayer.player === player.id) {
-        this.settings = { ...this.settings, firstPlayer: 'random' };
-      }
+      this.remove(player);
+      // A bot doesn't stay in a lobby without people.
+      if (!this.game && this.players.every((p) => p.bot)) for (const bot of [...this.players]) this.remove(bot);
     }
     this.broadcastRoom();
     if (this.game?.undo) this.settleUndo();
+  }
+
+  /** Takes a player out of the lobby, passing on the host role and the first-player choice. */
+  private remove(player: Player): void {
+    this.players = this.players.filter((p) => p !== player);
+    const next = this.players.find((p) => !p.bot);
+    if (player.host && next) next.host = true;
+    // The chosen first player is gone: back to a random one.
+    if (this.settings.firstPlayer !== 'random' && this.settings.firstPlayer.player === player.id) {
+      this.settings = { ...this.settings, firstPlayer: 'random' };
+    }
   }
 
   private uniqueName(raw: unknown): string {
@@ -453,7 +572,7 @@ export class Room {
   private track(event: string, player: Player, properties: Record<string, unknown> = {}): void {
     this.deps.tracker?.capture(
       event,
-      { id: player.client ?? `player:${player.id}`, name: player.name, ip: player.ip },
+      { id: player.bot ? BOT_ANALYTICS_ID : (player.client ?? `player:${player.id}`), name: player.name, ip: player.ip },
       { room: this.code, ...properties },
     );
   }
@@ -484,9 +603,10 @@ export class Room {
         name: p.name,
         seat: p.seat,
         host: p.host,
-        connected: p.send !== null,
+        connected: p.bot || p.send !== null,
         ip: p.ip,
         joinedAt: p.joinedAt,
+        bot: p.bot,
       })),
       game: game && {
         startedAt: game.startedAt,
@@ -509,11 +629,20 @@ export class Room {
     const players: RoomPlayer[] = this.players.map((p) => ({
       id: p.id,
       name: p.name,
-      connected: p.send !== null,
+      // A bot is always there.
+      connected: p.bot || p.send !== null,
       host: p.host,
       seat: p.seat,
+      ...(p.bot ? { bot: true } : {}),
     }));
-    return { code: this.code, phase: this.game ? ('game' as const) : ('lobby' as const), players, settings: this.settings, you: player.id };
+    return {
+      code: this.code,
+      phase: this.game ? ('game' as const) : ('lobby' as const),
+      players,
+      settings: this.settings,
+      you: player.id,
+      botAvailable: this.deps.bot !== undefined,
+    };
   }
 
   private broadcastRoom(): void {

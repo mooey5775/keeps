@@ -19,6 +19,7 @@ const server = await createKeepsServer({
   },
   ...(process.env.ADMIN_TOKEN ? { adminToken: process.env.ADMIN_TOKEN } : {}),
   ...(existsSync(webDir) ? { webDir } : {}),
+  botWeights: join(root, 'packages/learn/weights/bot.bin'),
 });
 
 console.log(`Keeps server on http://localhost:${port}${existsSync(webDir) ? '' : ' (API only; web client not built)'}`);
