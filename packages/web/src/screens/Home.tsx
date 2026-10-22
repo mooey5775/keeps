@@ -40,10 +40,10 @@ export function Home() {
   }, [busy, state.status, state.code]);
 
   const trimmed = name.trim();
-  const create = () => {
+  const create = (bot = false) => {
     rememberName(trimmed);
     setBusy(true);
-    roomStore.create(trimmed);
+    roomStore.create(trimmed, { bot });
   };
   const join = () => {
     const room = code.trim().toUpperCase();
@@ -79,8 +79,11 @@ export function Home() {
       <div className="home-actions">
         <span className="home-action-label">New game</span>
         <div>
-          <button type="button" className="primary" disabled={!trimmed || busy} onClick={create}>
+          <button type="button" className="primary" disabled={!trimmed || busy} onClick={() => create()}>
             Create a room
+          </button>{' '}
+          <button type="button" disabled={!trimmed || busy} onClick={() => create(true)}>
+            Play against the bot
           </button>
         </div>
         <span className="home-action-label">Have a code?</span>

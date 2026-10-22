@@ -22,6 +22,8 @@ export interface GameTableProps {
   header?: ReactNode;
   /** The seat drawn at the bottom of the table. Default: the viewer's. */
   bottom?: Seat;
+  /** Seats played by the bot (shown as thinking while it decides). */
+  botSeats?: readonly Seat[];
 }
 
 type Position = 'bottom' | 'left' | 'top' | 'right';
@@ -31,7 +33,7 @@ const DISCARD_PEEK = 3;
 const DISCARD_STEP = 11;
 const POSITIONS: Position[] = ['bottom', 'left', 'top', 'right'];
 
-export function GameTable({ view, log, names, onCommand, side, header, bottom }: GameTableProps) {
+export function GameTable({ view, log, names, onCommand, side, header, bottom, botSeats = [] }: GameTableProps) {
   const me: Seat = view.viewer === 'spectator' ? 0 : view.viewer;
   const anchor = bottom ?? me;
   const uiNames = useMemo(() => makeNames(names, view.viewer), [names, view.viewer]);
@@ -137,11 +139,17 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom }:
               {promptText(p, view, uiNames)}
             </p>
           ))}
-          {otherPrompts.map((p) => (
-            <p key={p.id} className="waiting">
-              {promptText(p, view, uiNames)}
-            </p>
-          ))}
+          {otherPrompts.map((p) =>
+            botSeats.includes(p.seat) ? (
+              <p key={p.id} className="waiting thinking">
+                {capital(uiNames.seat(p.seat))} is thinking…
+              </p>
+            ) : (
+              <p key={p.id} className="waiting">
+                {promptText(p, view, uiNames)}
+              </p>
+            ),
+          )}
         </div>
         <OptionsPanel view={view} options={remaining} picked={picked} onSend={send} onPick={onRef} onClear={() => setPicked([])} />
         {side}

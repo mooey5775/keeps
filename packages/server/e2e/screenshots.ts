@@ -16,7 +16,14 @@ const outDir = join(root, 'screenshots');
 // Only this script's folders: screenshots/ may hold other sets (e.g. before/after comparisons).
 for (const device of ['desktop', 'phone']) rmSync(join(outDir, device), { recursive: true, force: true });
 
-const server = await createKeepsServer({ port: 0, webDir, cardsDir: join(root, 'cards') });
+const server = await createKeepsServer({
+  port: 0,
+  webDir,
+  cardsDir: join(root, 'cards'),
+  botWeights: join(root, 'packages/learn/weights/bot.bin'),
+  // Slow enough to catch the bot thinking.
+  botDelay: () => 2500,
+});
 const base = `http://localhost:${(server.http.address() as { port: number }).port}`;
 
 async function shootAll(device: 'desktop' | 'phone', port: number): Promise<void> {
@@ -111,6 +118,23 @@ async function shootAll(device: 'desktop' | 'phone', port: number): Promise<void
     await second.click('Play here instead');
     await host.waitForText('playing in another tab');
     await shot(host, 'replaced-by-another-tab');
+
+    // Against the bot: one click from home, then the table while it thinks.
+    const vsBot = await visit(me, '/', 'Play against the bot');
+    await vsBot.type('input[placeholder="Name"]', 'Edward');
+    await vsBot.click('Play against the bot');
+    await vsBot.waitForText('only plays two-player games');
+    await shot(vsBot, 'lobby-vs-bot');
+    await vsBot.click('Start the game');
+    await vsBot.waitFor(`document.querySelector('.game') !== null`, 'the game table');
+    for (let i = 0; i < 20 && !(await vsBot.evaluate<boolean>(`document.querySelector('.thinking') !== null`)); i++) {
+      await vsBot.evaluate(`document.querySelector('.options button:not([disabled])')?.click()`);
+      await sleep(300);
+    }
+    await vsBot.waitFor(`document.querySelector('.thinking') !== null`, 'the bot thinking');
+    await shot(vsBot, 'game-vs-bot-thinking');
+    await vsBot.waitFor(`document.querySelector('.thinking') === null`, 'the bot moving');
+    await shot(vsBot, 'game-vs-bot-after-its-move');
 
     const gone = await visit(friend, '/r/ZZZZ', 'Your name');
     await gone.type('input', 'Friend');

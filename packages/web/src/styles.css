@@ -745,6 +745,27 @@ a.buy:hover {
   color: var(--muted);
 }
 
+.remove-bot {
+  margin-left: 10px;
+}
+
+/* The bot deciding its move. */
+.thinking {
+  animation: thinking 1.2s ease-in-out infinite;
+}
+
+@keyframes thinking {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking {
+    animation: none;
+  }
+}
+
 .options {
   display: flex;
   flex-direction: column;

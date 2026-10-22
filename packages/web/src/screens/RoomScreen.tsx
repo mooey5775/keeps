@@ -137,7 +137,9 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
   const link = `${location.origin}/r/${room.code}`;
   const [copied, setCopied] = useState(false);
   const count = room.players.length;
-  const emptySeats = Math.max(0, 4 - count);
+  const hasBot = room.players.some((p) => p.bot);
+  // The bot only plays two-player games: no open seats to fill.
+  const emptySeats = hasBot ? 0 : Math.max(0, 4 - count);
   const { marksToWin, firstPlayer } = room.settings;
   const firstName = firstPlayer === 'random' ? null : (room.players.find((p) => p.id === firstPlayer.player)?.name ?? null);
 
@@ -168,15 +170,21 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
 
       <section>
         <h3>
-          Players <span className="count">{count} of 4</span>
+          Players <span className="count">{count} of {hasBot ? 2 : 4}</span>
         </h3>
         <ul className="players">
           {room.players.map((p) => (
             <li key={p.id}>
               <span className={`dot ${p.connected ? 'on' : 'off'}`} title={p.connected ? 'connected' : 'disconnected'} />
               {p.name}
+              {p.bot && <span className="badge">bot</span>}
               {p.host && <span className="badge">host</span>}
               {p.id === room.you && <span className="badge">you</span>}
+              {p.bot && host && (
+                <button type="button" className="link remove-bot" onClick={() => roomStore.send({ t: 'remove-bot' })}>
+                  remove
+                </button>
+              )}
             </li>
           ))}
           {Array.from({ length: emptySeats }, (_, i) => (
@@ -186,6 +194,12 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
             </li>
           ))}
         </ul>
+        {host && room.botAvailable && !hasBot && count === 1 && (
+          <button type="button" onClick={() => roomStore.send({ t: 'add-bot' })}>
+            Add the bot
+          </button>
+        )}
+        {hasBot && <p className="hint">The bot only plays two-player games.{count > 2 ? ' Remove it, or one of the others must leave, to start.' : ''}</p>}
       </section>
 
       <section>
@@ -229,7 +243,7 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
       <section className="lobby-start">
         {host ? (
           <>
-            <button type="button" className="primary" disabled={count < 2 || count > 4} onClick={() => roomStore.send({ t: 'start' })}>
+            <button type="button" className="primary" disabled={count < 2 || count > 4 || (hasBot && count !== 2)} onClick={() => roomStore.send({ t: 'start' })}>
               Start the game
             </button>
             {count < 2 && <p className="hint">Waiting for at least one more player to join.</p>}
@@ -315,6 +329,7 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
       view={game.view}
       log={game.log}
       names={game.names}
+      botSeats={room.players.flatMap((p) => (p.bot && p.seat !== null ? [p.seat] : []))}
       onCommand={(command) => roomStore.command(command)}
       side={side}
       header={
@@ -325,8 +340,9 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
           </span>
           <span className="players-inline">
             {room.players.map((p) => (
-              <span key={p.id} className={p.connected ? '' : 'offline'} title={p.connected ? 'connected' : 'disconnected'}>
+              <span key={p.id} className={p.connected ? '' : 'offline'} title={p.bot ? 'bot' : p.connected ? 'connected' : 'disconnected'}>
                 {p.name}
+                {p.bot && <span className="badge">bot</span>}
               </span>
             ))}
           </span>

@@ -14,7 +14,13 @@ if (!existsSync(webDir)) {
   process.exit(2);
 }
 
-const server = await createKeepsServer({ port: 0, webDir, cardsDir: join(root, 'cards') });
+const server = await createKeepsServer({
+  port: 0,
+  webDir,
+  cardsDir: join(root, 'cards'),
+  botWeights: join(root, 'packages/learn/weights/bot.bin'),
+  botDelay: () => 100,
+});
 const address = server.http.address();
 if (!address || typeof address === 'string') throw new Error('no server port');
 const base = `http://localhost:${address.port}`;
@@ -237,6 +243,25 @@ try {
     await guest.waitForText('Round 1');
     return [host, guest];
   });
+  await check('against the bot: one click from home, and it takes its turns', async () => {
+    const page = await open(b, base);
+    await page.waitForText('Play against the bot');
+    await page.type('input[placeholder="Name"]', 'Solo');
+    await page.click('Play against the bot');
+    await page.waitForText('only plays two-player games');
+    await page.waitForText('2 of 2');
+    await page.click('Start the game');
+    await page.waitFor(`document.querySelector('.game') !== null`, 'the game table');
+    // Play our turns until the bot has drawn or played in its own.
+    const botMoved = `/Bot (draws|plays)/.test(document.querySelector('.log')?.innerText ?? document.body.innerText)`;
+    for (let i = 0; i < 40 && !(await page.evaluate<boolean>(botMoved)); i++) {
+      await page.evaluate(`document.querySelector('.options button:not([disabled])')?.click()`);
+      await sleep(250);
+    }
+    await page.waitFor(botMoved, 'a move by the bot');
+    return [page];
+  });
+
   await check('joining with a code from the home page goes straight into the lobby', async () => {
     const host = await open(a, base);
     await host.type('input[placeholder="Name"]', 'Ada');

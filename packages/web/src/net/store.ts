@@ -130,8 +130,9 @@ class RoomStore {
     for (const l of this.listeners) l();
   }
 
-  create(name: string): void {
-    this.connect({ t: 'create', name, client: clientId() });
+  /** Creates a room (with `bot`, the bot is added to it straight away). */
+  create(name: string, { bot = false }: { bot?: boolean } = {}): void {
+    this.connect({ t: 'create', name, client: clientId(), ...(bot ? { bot: true } : {}) });
   }
 
   join(code: string, name: string): void {
