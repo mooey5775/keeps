@@ -12,7 +12,9 @@ with a 95% interval from the per-deal scores.
 
 Watching evaluates every --every steps' policy (the newest, if it falls behind)
 against the random player, the previously evaluated policy, the one from about
-half as many steps ago, and the rule-based benchmark players greedy and timer
+half as many steps ago, any fixed --yardstick policies (named after their files,
+e.g. vs_e1-316500: a frozen reference every run is measured against), and the
+rule-based benchmark players greedy and timer
 (packages/learn/src/heuristics.ts, played in TypeScript on the same fixed deals
 each time), and writes the results to runs/<run>/tb/eval (TensorBoard) and
 runs/<run>/evals.jsonl. (It used to play the untrained network too; that
@@ -156,7 +158,7 @@ def _backfill_by_decisions(writer, run_dir, log_path):
   open(marker, 'w').close()
 
 
-def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_deals=1000, shards=4):
+def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_deals=1000, shards=4, yardsticks=()):
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
@@ -169,6 +171,11 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
       done = {json.loads(line)['step'] for line in f}
   loaded = {}
   decisions = {}  # step → decisions played by then (from the policy file)
+  # Fixed reference policies: name (the file's) → (policy, observation version).
+  fixed = {}
+  for path in yardsticks:
+    policy, saved = policies.load(path)
+    fixed[os.path.splitext(os.path.basename(path))[0]] = (policy, saved.get('observation', 1))
 
   def get(step):
     if step not in loaded:
@@ -197,6 +204,10 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
     half = min(evaluated, key=lambda s: abs(s - step / 2))
     if half not in (0, previous):
       opponents['half'] = get(half)
+    for name, (policy, version) in fixed.items():
+      if version != keeps.OBSERVATION:  # a match runs both policies on one observation version
+        raise SystemExit(f'yardstick {name} reads observation v{version}; run {run} reads v{keeps.OBSERVATION}')
+      opponents[name] = policy
     entry = {'step': step}
     results = {name: match(current, opponent, deals, seed=f'eval-{step}') for name, opponent in opponents.items()}
     if heuristics:
@@ -234,10 +245,12 @@ def main():
   parser.add_argument('--heuristics', default='greedy,timer', help='benchmark players to play (comma-separated; empty for none)')
   parser.add_argument('--heuristic-deals', type=int, default=1000)
   parser.add_argument('--shards', type=int, default=4, help='Node processes per benchmark player')
+  parser.add_argument('--yardstick', action='append', default=[], metavar='POLICY',
+                      help='a fixed policy file every evaluation also plays (repeatable)')
   args = parser.parse_args()
   if args.watch:
     heuristics = tuple(h for h in args.heuristics.split(',') if h)
-    watch(args.watch, args.deals, args.poll, args.every, heuristics, args.heuristic_deals, args.shards)
+    watch(args.watch, args.deals, args.poll, args.every, heuristics, args.heuristic_deals, args.shards, args.yardstick)
   else:
     print(json.dumps(match(resolve(args.policy), resolve(args.opponent), args.deals)))
 
