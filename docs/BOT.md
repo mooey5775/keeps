@@ -41,6 +41,40 @@ Decisions (2026-10-21):
 | M4 | **Evaluation:** against a random player (duplicate deals, both seats) and against earlier checkpoints | Win rate with confidence intervals; improvement over checkpoints |
 | M5 | **Play it:** export the trained network; run it in TypeScript (a small forward pass); "Play against the bot" | A person can play a round against it in the browser |
 
+## M5: play against the bot
+
+Decisions (2026-10-21):
+
+- **The bot runs on the server**, as a seat in an ordinary room. In the browser it would need its own hand there, so
+  anyone could read it, and that rules out rated games later. As a room seat it gets replays, analytics, disputes and
+  reconnection for free. Cost: a few ms of CPU per bot move, ~3 MB of weights in memory.
+- **2-player rooms only** (that's what it's trained for). Live 2-player games seat players at 0 and 2 like training,
+  each round gives one mark, and the observation has nothing about marks, so rounds 2+ of a longer game are in
+  distribution and maximizing round wins is right for the match.
+- **No undo in games against the bot.**
+- **Entry:** "Play against the bot" on the home page (a room with the bot added), and Add/Remove bot in the lobby of a
+  2-player room.
+- **Weights committed to git as float32** (~2.8 MB for 512×512), replaced when a better policy ships.
+- **The bot waits about a second before each move** (less for the later parts of a multi-step choice) so it can be
+  followed.
+
+Parts:
+
+1. **Export** (`bot/keeps_bot/export.py`): `policy-<step>.pkl` → a weights file whose header records the run, step,
+   network shape, post-processing (drop actions under 3%, round to 32nds), eval results, and the **encoder version**.
+   The server refuses weights whose encoder version differs from its own, so a changed observation can't silently
+   feed the network garbage.
+2. **Inference in TypeScript** (`packages/learn/src/policy.ts`): the forward pass on Float32Arrays, R-NaD's legal
+   softmax and post-processing ported exactly, sampling. A `Bot` picks a command for a seat from the game state: its
+   view and log (it rebuilds its belief from the log, so it holds no state across moves), choosing ids one at a time
+   through `Decision`. The free Duplicity reveal is considered only at its own decisions, as in training.
+3. **Tests:** Python writes (observation, legal, probabilities) triples from a real policy and TypeScript must
+   reproduce them; the bot plays hundreds of rounds without errors or stalls.
+4. **Server:** a bot player (no socket); whenever the engine waits on its seat, a move is scheduled after the delay and
+   applied through the same command path as a human's. Humans start the next round. Analytics tag games with the
+   bot's run and step, so human-vs-bot results measure its strength.
+5. **Web:** the home button, Add/Remove bot in the lobby, a "Bot" badge and a "thinking…" hint at the table.
+
 ## Layout
 
 - `packages/learn/`: action space, observation encoder, belief tracking, round environment, env server (TypeScript).
