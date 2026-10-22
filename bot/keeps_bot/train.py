@@ -41,17 +41,21 @@ LENGTHS = (64, 96, 128, 160, 200, 256, 320)
 class KeepsRNaD(rnad.RNaDSolver):
   """R-NaD fed by the self-play workers instead of OpenSpiel states."""
 
-  def __init__(self, config, workers=14, rounds=128):
-    self._workers, self._rounds = workers, rounds
+  def __init__(self, config, workers=14, rounds=128, groups=2, actors=1):
+    self._workers, self._rounds, self._groups, self._actors = workers, rounds, groups, actors
     self.selfplay = None
+    self.waited = 0.0  # seconds the learner has waited for self-play
     super().__init__(config)
 
   def __getstate__(self):
-    return {**super().__getstate__(), 'workers': self._workers, 'rounds': self._rounds}
+    return {**super().__getstate__(), 'workers': self._workers, 'rounds': self._rounds, 'groups': self._groups,
+            'actors': self._actors}
 
   def __setstate__(self, state):
     self._workers, self._rounds = state['workers'], state['rounds']
+    self._groups, self._actors = state.get('groups', 2), state.get('actors', 1)
     self.selfplay = None
+    self.waited = 0.0
     super().__setstate__(state)
 
   def _policy(self, obs, legal):
@@ -61,11 +65,14 @@ class KeepsRNaD(rnad.RNaDSolver):
     if self.selfplay is None:
       game = keeps.bridge()
       self.selfplay = selfplay.SelfPlay(self._workers, self._rounds, self.config.trajectory_max,
-                                        game.observation_size, game.num_actions, seed=self.config.seed)
+                                        game.observation_size, game.num_actions, seed=self.config.seed,
+                                        groups=self._groups)
       # Self-play runs ahead in the background with the latest parameters, at most two batches ahead.
-      self.selfplay.start(self._policy, queue_max=2 * self.config.batch_size)
+      self.selfplay.start(self._policy, queue_max=2 * self.config.batch_size, threads=self._actors)
     play = self.selfplay
+    started = time.perf_counter()
     episodes = play.wait(self.config.batch_size)
+    self.waited += time.perf_counter() - started
     self.actor_steps = play.decisions
     longest = max(len(e.action) for e in episodes)
     length = next((n for n in LENGTHS if n > longest), LENGTHS[-1])
@@ -77,6 +84,8 @@ def main():
   parser.add_argument('--run', required=True, help='run name (folder under bot/runs)')
   parser.add_argument('--workers', type=int, default=14, help='Node self-play processes')
   parser.add_argument('--rounds', type=int, default=128, help='rounds in play per worker')
+  parser.add_argument('--groups', type=int, default=2, help='worker groups (one policy call per group)')
+  parser.add_argument('--actors', type=int, default=1, help='actor threads, each stepping its share of the groups')
   parser.add_argument('--steps', type=int, default=100_000, help='learner steps')
   parser.add_argument('--batch', type=int, default=256, help='rounds per learner step')
   parser.add_argument('--trajectory', type=int, default=200, help='decisions recorded per round (longer rounds are cut)')
@@ -108,7 +117,7 @@ def main():
     with open(args.resume, 'rb') as f:
       solver = pickle.load(f)
   else:
-    solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds)
+    solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds, groups=args.groups, actors=args.actors)
   with open(os.path.join(run_dir, 'config.json'), 'w') as f:
     json.dump({**vars(args), 'observation_size': keeps.bridge().observation_size, 'device': str(jax.devices()[0])}, f, indent=2)
 
@@ -124,14 +133,14 @@ def main():
   if solver.learner_steps == 0:
     save_policy(0)
   started = time.time()
-  last = (started, 0, 0, 0, 0)
+  last = (started, 0, 0, 0, 0, 0.0)
   while solver.learner_steps < args.steps:
     logs = solver.step()
     step = solver.learner_steps
     play = solver.selfplay
     if step % args.log_every == 0:
       now = time.time()
-      t0, d0, r0, l0, w0 = last
+      t0, d0, r0, l0, w0, idle0 = last
       rounds = play.rounds - r0
       entry = {
           'learner_steps': step,
@@ -142,13 +151,15 @@ def main():
           'round_length': round((play.round_decisions - l0) / max(1, rounds), 1),
           'player0_win_rate': round((play.player0_wins - w0) / max(1, rounds), 3),
           'cut_rate': round(play.rounds_cut / max(1, play.rounds), 4),
+          # Near 1: self-play is the bottleneck; near 0: the learner is.
+          'learner_idle': round((solver.waited - idle0) / max(now - t0, 1e-9), 3),
           'minutes': round((now - started) / 60, 1),
       }
-      last = (now, play.decisions, play.rounds, play.round_decisions, play.player0_wins)
+      last = (now, play.decisions, play.rounds, play.round_decisions, play.player0_wins, solver.waited)
       print(json.dumps(entry), flush=True)
       with open(log_path, 'a') as f:
         f.write(json.dumps(entry) + '\n')
-      for key in ('loss', 'decisions_per_s', 'round_length', 'player0_win_rate', 'cut_rate'):
+      for key in ('loss', 'decisions_per_s', 'round_length', 'player0_win_rate', 'cut_rate', 'learner_idle'):
         writer.add_scalar(f'train/{key}', entry[key], step)
       writer.add_scalar('train/decisions', play.decisions, step)
       writer.flush()
