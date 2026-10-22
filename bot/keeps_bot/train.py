@@ -92,6 +92,8 @@ def main():
   parser.add_argument('--layers', default='256,256')
   parser.add_argument('--lr', type=float, default=5e-5)
   parser.add_argument('--entropy-size', type=int, default=2000, help='learner steps per entropy-schedule iteration')
+  parser.add_argument('--eta', type=float, default=0.2,
+                      help="strength of the pull toward the regularization policy (R-NaD's eta_reward_transform)")
   parser.add_argument('--log-every', type=int, default=10)
   parser.add_argument('--eval-every', type=int, default=250, help='learner steps between saved policies (evaluated by evaluate.py --watch)')
   parser.add_argument('--save-every', type=int, default=2000, help='learner steps between full checkpoints')
@@ -111,6 +113,7 @@ def main():
       learning_rate=args.lr,
       entropy_schedule_repeats=(1,),
       entropy_schedule_size=(args.entropy_size,),
+      eta_reward_transform=args.eta,
       seed=args.seed,
   )
   if args.resume:
