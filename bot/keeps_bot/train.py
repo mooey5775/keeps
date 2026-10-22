@@ -127,8 +127,14 @@ def main():
   else:
     solver = KeepsRNaD(config, workers=args.workers, rounds=args.rounds, groups=args.groups, actors=args.actors)
   with open(os.path.join(run_dir, 'config.json'), 'w') as f:
-    json.dump({**vars(args), 'observation_size': keeps.bridge().observation_size, 'fingerprint': keeps.bridge().fingerprint,
-               'device': str(jax.devices()[0])}, f, indent=2)
+    # The solver's own settings (from the checkpoint, when resuming), not the command line's defaults.
+    c = solver.config
+    actual = {'layers': ','.join(map(str, c.policy_network_layers)), 'batch': c.batch_size, 'lr': c.learning_rate,
+              'entropy_size': c.entropy_schedule_size[-1], 'eta': c.eta_reward_transform, 'trajectory': c.trajectory_max,
+              'seed': c.seed, 'workers': solver._workers, 'rounds': solver._rounds, 'groups': solver._groups,
+              'actors': solver._actors}
+    json.dump({**vars(args), **actual, 'observation_size': keeps.bridge().observation_size,
+               'fingerprint': keeps.bridge().fingerprint, 'device': str(jax.devices()[0])}, f, indent=2)
 
   log_path = os.path.join(run_dir, 'log.jsonl')
   writer = SummaryWriter(os.path.join(run_dir, 'tb', 'train'))
