@@ -14,9 +14,21 @@ Decisions (2026-10-21):
   each pile. It never uses prompt ids, event numbers, or event counts.
 - **Multi-part moves become a sequence of choices** by the same player, each from a fixed set of integer action ids,
   with a legal-move mask.
-- **Duplicity's free reveal** (C-11, "at any time") is offered to its holder at their own decision points and in the
-  engine's reveal windows, which open exactly when a reveal can matter. Revealing during the opponent's decision is
-  not modelled. This is a deliberate simplification, to measure later.
+- **Duplicity's free reveal** (C-11, "at any time") is offered to its holder only at their own decision points and in
+  the engine's reveal windows. Revealing while the opponent is deciding is not modelled, to keep one player acting
+  at a time as OpenSpiel requires.
+
+## Known limitations
+
+- **The bot can't reveal a hidden Shackles to end the opponent's turn (C-14).** The official trick is: Duplicity's
+  holder reveals a face-down Shackles in the turn player's keep after their first action, which ends their turn. That
+  moment is the opponent's decision, not one of the engine's reveal windows (the engine needs none there, because the
+  turn player's next action is already a pause), so the simplification above rules it out. Accepted for the MVP (user,
+  2026-10-21). The fix, if it matters: give the Duplicity holder a reveal-or-pass choice before the turn player's
+  second action whenever a face-down Shackles sits in their keep.
+- Every other reveal timing the clarifications describe (Interest when a Coin card enters, Retribution when the
+  triggering card is played, Last Laugh at round end) happens in a reveal window or on the holder's own decision, so
+  it's available.
 
 ## Milestones
 

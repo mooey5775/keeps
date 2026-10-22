@@ -21,7 +21,9 @@ import { Decision } from './actions.ts';
 // The player to move is whoever the engine is waiting on (in a two-player round
 // that's always one seat). Duplicity's free reveal (C-11, "at any time") is
 // offered to its holder at their own decisions and in the engine's reveal
-// windows, not while the opponent decides: a deliberate simplification.
+// windows, not while the opponent decides: a deliberate simplification. Its one
+// known cost: the holder can't reveal a hidden Shackles after the turn player's
+// first action to end their turn (C-14). See docs/BOT.md, "Known limitations".
 
 export const SEAT_OF_PLAYER: readonly Seat[] = [0, 2];
 export const playerOfSeat = (seat: Seat): number => {
