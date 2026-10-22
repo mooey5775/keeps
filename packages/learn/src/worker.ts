@@ -1,10 +1,10 @@
 import { NUM_ACTIONS } from './actions.ts';
 import { RoundEnv } from './env.ts';
-import { OBSERVATION_SIZE } from './observation.ts';
+import { observationSize, type ObservationVersion } from './env.ts';
 
 // The training worker: many heads-up rounds at once, stepped in lockstep with
 // binary frames, for self-play at speed. (server.ts is the general, JSON
-// interface OpenSpiel's per-state API uses.) Run: node src/worker.ts <rounds> <seed>.
+// interface OpenSpiel's per-state API uses.) Run: node src/worker.ts <rounds> <seed> [observation version].
 //
 // Each slot holds one round; when it ends, the slot deals a new one at once.
 // Protocol, repeated: read M int32 actions (little-endian; -1 = none, as on the
@@ -17,10 +17,12 @@ import { OBSERVATION_SIZE } from './observation.ts';
 
 const M = Number(process.argv[2]);
 const seedBase = process.argv[3] ?? 'w';
+const version = Number(process.argv[4] ?? 1) as ObservationVersion;
+const OBSERVATION_SIZE = observationSize(version);
 if (!Number.isInteger(M) || M <= 0) throw new Error('usage: worker.ts <rounds> <seed>');
 
 let dealt = 0;
-const deal = () => RoundEnv.start(`${seedBase}-${dealt++}`, { checked: false });
+const deal = () => RoundEnv.start(`${seedBase}-${dealt++}`, { checked: false, observation: version });
 const envs = Array.from({ length: M }, deal);
 
 const obsBytes = M * OBSERVATION_SIZE * 4;

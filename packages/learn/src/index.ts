@@ -4,6 +4,8 @@ export * from './belief.ts';
 export * from './bot.ts';
 export * from './env.ts';
 export * from './fingerprint.ts';
+export * from './history.ts';
 export * from './heuristics.ts';
 export * from './observation.ts';
+export * from './observation2.ts';
 export * from './policy.ts';

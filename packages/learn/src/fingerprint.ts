@@ -1,6 +1,5 @@
 import { actionName, NUM_ACTIONS } from './actions.ts';
-import { RoundEnv } from './env.ts';
-import { OBSERVATION_SIZE } from './observation.ts';
+import { observationSize, RoundEnv, type ObservationVersion } from './env.ts';
 
 // A fingerprint of what the network sees: a hash of the observations and legal
 // actions along a few fixed rounds. Any change to the encoding, the beliefs or
@@ -8,7 +7,7 @@ import { OBSERVATION_SIZE } from './observation.ts';
 // were trained with and refuse to run against a different one (they would
 // silently play nonsense).
 
-export function encoderFingerprint(): string {
+export function encoderFingerprint(version: ObservationVersion = 1): string {
   let a = 0x811c9dc5;
   let b = 0x01000193 ^ 0x5bd1e995;
   const mix = (bytes: Uint8Array) => {
@@ -18,14 +17,14 @@ export function encoderFingerprint(): string {
     }
   };
   const text = new TextEncoder();
-  mix(text.encode(`${OBSERVATION_SIZE}:${NUM_ACTIONS}:${Array.from({ length: NUM_ACTIONS }, (_, i) => actionName(i)).join(',')}`));
+  mix(text.encode(`${version === 1 ? '' : `v${version}:`}${observationSize(version)}:${NUM_ACTIONS}:${Array.from({ length: NUM_ACTIONS }, (_, i) => actionName(i)).join(',')}`));
   let x = 1;
   const choose = (n: number) => {
     x = (Math.imul(x, 1103515245) + 12345) >>> 0;
     return x % n;
   };
   for (let round = 0; round < 3; round++) {
-    const env = RoundEnv.start(`fingerprint-${round}`);
+    const env = RoundEnv.start(`fingerprint-${round}`, { observation: version });
     while (!env.terminal) {
       for (const player of [0, 1]) {
         const obs = env.observation(player);

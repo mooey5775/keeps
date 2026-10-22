@@ -1,8 +1,8 @@
 import { createInterface } from 'node:readline';
 import { actionName, NUM_ACTIONS } from './actions.ts';
-import { RoundEnv } from './env.ts';
+import { observationSize, RoundEnv, type ObservationVersion } from './env.ts';
 import { encoderFingerprint } from './fingerprint.ts';
-import { OBSERVATION_SIZE } from './observation.ts';
+import { LAYOUT2 } from './observation2.ts';
 
 // The environment server: Python (OpenSpiel) drives heads-up rounds through it,
 // so the rules exist only in the TypeScript engine. Run: node src/server.ts.
@@ -16,11 +16,13 @@ import { OBSERVATION_SIZE } from './observation.ts';
 //   {"op": "obs", "id", "player"}          → {"obs"}
 //   {"op": "free", "ids": [...]}           → {}
 //   {"op": "describe", "id"}               → {"text"}
-//   {"op": "info"}                         → {"observationSize", "numActions", "actionNames", "fingerprint"}
+//   {"op": "info"}                         → {"observationSize", "observationVersion", "layout", "numActions", "actionNames", "fingerprint"}
 // status = {"player", "legal", "terminal", "returns", "obs"}: "player" is the
 // player to move (-4 when the round is over), "obs" their observation.
 // Observations are little-endian float32 arrays, base64-encoded.
 
+// Observation version: node src/server.ts [version] (default 1).
+const version = Number(process.argv[2] ?? 1) as ObservationVersion;
 const envs = new Map<number, RoundEnv>();
 let fingerprint: string | undefined;
 let nextId = 1;
@@ -58,7 +60,7 @@ function run(op: Op): object {
   switch (op.op) {
     case 'new': {
       const id = nextId++;
-      const env = RoundEnv.start(op.seed, { checked: false });
+      const env = RoundEnv.start(op.seed, { checked: false, observation: version });
       envs.set(id, env);
       return { id, ...status(env) };
     }
@@ -80,10 +82,12 @@ function run(op: Op): object {
       return {};
     case 'info':
       return {
-        observationSize: OBSERVATION_SIZE,
+        observationSize: observationSize(version),
+        observationVersion: version,
+        layout: version === 2 ? LAYOUT2 : null,
         numActions: NUM_ACTIONS,
         actionNames: Array.from({ length: NUM_ACTIONS }, (_, i) => actionName(i)),
-        fingerprint: (fingerprint ??= encoderFingerprint()),
+        fingerprint: (fingerprint ??= encoderFingerprint(version)),
       };
     case 'describe': {
       const env = get(op.id);

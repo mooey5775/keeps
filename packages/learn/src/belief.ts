@@ -7,6 +7,7 @@ import {
   type Seat,
   type TraceEvent,
 } from '@keeps/engine';
+import { History, type PileMap } from './history.ts';
 
 // What one player can know about the hidden cards in a heads-up round, built only
 // from what they've been shown (their view and their own log), so it can't leak.
@@ -53,8 +54,10 @@ interface PhysicalPile {
   placed: Set<CardId>;
 }
 
-export class Belief {
+export class Belief implements PileMap {
   readonly me: Seat;
+  /** What has happened, anchored to cards and piles (observation v2). */
+  readonly history = new History();
   readonly opponent: Seat;
   /** Which physical pile sits at each position. */
   at: number[] = [0, 1, 2, 3];
@@ -85,9 +88,29 @@ export class Belief {
   /** Derived from `origin` (recomputed when it changes): evidence, identity weights, origins by character. */
   private derived: { counts: number[][]; weights: { assignment: Identity[]; weight: number }[]; byCharacter: Map<string, number[]>; identities?: number[][] } | null = null;
 
-  constructor(me: Seat) {
+  /**
+   * Sound origin inference (observation v2 and later). Off, the belief behaves
+   * exactly as observation v1 was trained with: it also concluded a card's pile
+   * of origin when probabilities rounded to certainty, which can be wrong and
+   * then contradicts the rest of the evidence (rare: about once in 36,000 rounds).
+   */
+  readonly sound: boolean;
+
+  constructor(me: Seat, { sound = false }: { sound?: boolean } = {}) {
     this.me = me;
     this.opponent = ((me + 2) % 4) as Seat;
+    this.sound = sound;
+  }
+
+  /** An independent copy (what this player has seen and concluded, so far). */
+  clone(): Belief {
+    const copy = new Belief(this.me, { sound: this.sound });
+    for (const [key, value] of Object.entries(this)) {
+      if (key === 'history' || key === 'me' || key === 'opponent' || key === 'sound') continue;
+      (copy as unknown as Record<string, unknown>)[key] = structuredClone(value);
+    }
+    (copy as unknown as { history: History }).history = this.history.clone();
+    return copy;
   }
 
   /** Reads the player's log from where it left off (a new round starts over). */
@@ -116,10 +139,21 @@ export class Belief {
     return this.at[position]!;
   }
 
+  /** The physical pile at a position now (for History). */
+  physicalAt(position: Seat): number {
+    return this.at[position]!;
+  }
+
+  /** How many cards the opponent holds, by our count (for History). */
+  opponentHandTally(): number {
+    return this.opponentKnown.size + Math.round(this.opponentHidden.reduce((a, b) => a + b, 0));
+  }
+
   private apply(e: TraceEvent['payload']): void {
     if (this.fiat && e.type !== 'pile-claim' && e.type !== 'prompt') this.finishFiat();
     // A HOT card's keep prompt can come between its draw and its play; anything else ends "just taken".
     if (e.type !== 'prompt' && e.type !== 'play') this.justHidden = null;
+    this.history.record(e, this);
     switch (e.type) {
       case 'round-start':
         this.reset();
@@ -414,7 +448,11 @@ export class Belief {
       // A HOT card is played the moment it enters a hand: it's the one just taken.
       const just = this.justHidden;
       weights = [0, 1, 2, 3].map((p) => (p === just ? 1 : 0));
+      if (this.sound) this.learnOrigin(card, just);
     } else {
+      // Only probable: spread over the piles their hidden cards came from. Never learn an
+      // origin from this (the hidden counts are expectations, so a weight that rounds to 1
+      // isn't certainty, and a wrong origin would contradict the rest of the evidence).
       const origins = this.originProbabilities(card);
       weights = this.opponentHidden.map((h, p) => h * origins[p]!);
       const sum = weights.reduce((a, b) => a + b, 0);
@@ -423,8 +461,11 @@ export class Belief {
     weights.forEach((w, p) => {
       this.opponentHidden[p] = Math.max(0, this.opponentHidden[p]! - w);
     });
-    const certain = weights.findIndex((w) => w > 1 - 1e-9);
-    if (certain >= 0) this.learnOrigin(card, certain);
+    if (!this.sound) {
+      // v1's behaviour, kept so v1 observations are exactly what v1 policies were trained on.
+      const certain = weights.findIndex((w) => w > 1 - 1e-9);
+      if (certain >= 0) this.learnOrigin(card, certain);
+    }
   }
 
   // -- Beliefs --------------------------------------------------------------
@@ -507,7 +548,9 @@ export class Belief {
       const own = assignment.indexOf(CARDS[card].character);
       const inMask = counts[mask]![x]!;
       const unknown = 12 - counts[own]![x]! - inMask;
-      const toMask = unknown > 0 ? (3 - inMask) / unknown : 0;
+      // Clamped: contradictory evidence (it shouldn't happen) must still give probabilities.
+      const share = unknown > 0 ? (3 - inMask) / unknown : 0;
+      const toMask = this.sound ? Math.min(1, Math.max(0, share)) : share;
       out[mask]! += weight * toMask;
       out[own]! += weight * (1 - toMask);
     }

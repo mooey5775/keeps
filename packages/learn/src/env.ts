@@ -12,7 +12,12 @@ import {
 } from '@keeps/engine';
 import { Decision } from './actions.ts';
 import { Belief } from './belief.ts';
-import { encodeObservation } from './observation.ts';
+import { encodeObservation, OBSERVATION_SIZE } from './observation.ts';
+import { encodeObservation2, OBSERVATION2_SIZE } from './observation2.ts';
+
+/** Observation versions: 1 (observation.ts), 2 (observation2.ts). */
+export type ObservationVersion = 1 | 2;
+export const observationSize = (version: ObservationVersion): number => (version === 2 ? OBSERVATION2_SIZE : OBSERVATION_SIZE);
 
 // One heads-up round as a two-player, zero-sum, turn-based game: the shape
 // OpenSpiel expects. Player 0 sits at seat 0 and player 1 at seat 2 (two players
@@ -51,7 +56,11 @@ export class RoundEnv {
   /** Off: the engine skips legality and invariant checks (commands come from its own legal list). For training speed. */
   readonly checked: boolean;
 
-  private constructor(state: GameState, events: TraceEvent[], checked: boolean) {
+  /** Which observation `observation()` encodes. */
+  readonly version: ObservationVersion;
+
+  private constructor(state: GameState, events: TraceEvent[], checked: boolean, version: ObservationVersion = 1) {
+    this.version = version;
     this.state = state;
     this.events = events;
     this.checked = checked;
@@ -59,15 +68,17 @@ export class RoundEnv {
   }
 
   /** A fresh round, dealt from `seed`. */
-  static start(seed: string, { checked = true }: { checked?: boolean } = {}): RoundEnv {
+  static start(seed: string, { checked = true, observation = 1 }: { checked?: boolean; observation?: ObservationVersion } = {}): RoundEnv {
     const { state, events } = newGame({ players: 2, seed, marksToWin: 1 });
-    return new RoundEnv(state, events, checked);
+    return new RoundEnv(state, events, checked, observation);
   }
 
   /** A copy that can be stepped independently (states never change in place). */
   clone(): RoundEnv {
-    const copy = new RoundEnv(this.state, [...this.events], this.checked);
+    const copy = new RoundEnv(this.state, [...this.events], this.checked, this.version);
     copy.prefix = [...this.prefix];
+    // What each player has seen goes beyond the log (views at earlier decisions): copy it.
+    copy.beliefs = this.beliefs.map((b) => b?.clone() ?? null);
     return copy;
   }
 
@@ -89,8 +100,9 @@ export class RoundEnv {
   /** What `player` observes now (see observation.ts); the chosen ids count only for the player to move. */
   observation(player: number): Float32Array {
     const view = this.view(player);
-    const belief = (this.beliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!)).update(this.log(player)).observe(view);
+    const belief = (this.beliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!, { sound: this.version >= 2 })).update(this.log(player)).observe(view);
     const moving = !this.terminal && this.currentPlayer === player;
+    if (this.version === 2) return encodeObservation2(view, belief, moving ? this.prefix : [], moving ? this.legalActions() : []);
     return encodeObservation(view, belief, moving ? this.prefix : []);
   }
 
