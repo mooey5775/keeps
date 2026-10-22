@@ -30,6 +30,14 @@ def network(layers, num_actions):
   return hk.without_apply_rng(hk.transform(forward))
 
 
+def layers_of(params):
+  """The torso's layer sizes, read from the weights (a saved label can be wrong; the weights can't)."""
+  sizes = []
+  while f'mlp/~/linear_{len(sizes)}' in params:
+    sizes.append(int(params[f'mlp/~/linear_{len(sizes)}']['w'].shape[1]))
+  return tuple(sizes)
+
+
 def save(path, params, layers, num_actions, **info):
   """Writes the policy atomically (the evaluator may be watching for it)."""
   tmp = path + '.tmp'
@@ -42,6 +50,7 @@ def load(path):
   """(policy function, saved info). The function maps (obs [B, O], legal [B, A]) to probabilities [B, A]."""
   with open(path, 'rb') as f:
     saved = pickle.load(f)
+  saved['layers'] = layers_of(saved['params'])
   net = network(saved['layers'], saved['num_actions'])
   params = jax.device_put(saved['params'])
   finetune = rnad.FineTuning()

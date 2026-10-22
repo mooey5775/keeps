@@ -142,7 +142,7 @@ def main():
 
   def save_policy(step):
     play = solver.selfplay
-    policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, config.policy_network_layers, num_actions,
+    policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, solver.config.policy_network_layers, num_actions,
                   learner_steps=step, decisions=play.decisions if play else 0, fingerprint=keeps.bridge().fingerprint)
 
   if solver.learner_steps == 0:
