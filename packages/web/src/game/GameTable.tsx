@@ -25,6 +25,10 @@ export interface GameTableProps {
 }
 
 type Position = 'bottom' | 'left' | 'top' | 'right';
+
+/** How many cards under the top of the discard peek out, and by how much (enough to show their title band). */
+const DISCARD_PEEK = 3;
+const DISCARD_STEP = 11;
 const POSITIONS: Position[] = ['bottom', 'left', 'top', 'right'];
 
 export function GameTable({ view, log, names, onCommand, side, header, bottom }: GameTableProps) {
@@ -78,13 +82,21 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom }:
             <div className="discard">
               <span className="label">Discard ({view.discard.length})</span>
               {view.discard.length > 0 ? (
-                <Card
-                  id={view.discard.at(-1)!}
-                  size="sm"
-                  clickable={discardChoices}
-                  onClick={() => setShowDiscard(true)}
-                  label="Show the discard pile"
-                />
+                <div className="discard-stack" style={{ paddingTop: `${Math.min(view.discard.length - 1, DISCARD_PEEK) * DISCARD_STEP}px` }}>
+                  {/* The few cards under the top one peek out above it, oldest highest, like a loose pile. */}
+                  {view.discard.slice(-1 - DISCARD_PEEK, -1).map((card, i) => (
+                    <span key={`${card}-${i}`} className="discard-under" style={{ top: `${i * DISCARD_STEP}px` }}>
+                      <Card id={card} size="sm" />
+                    </span>
+                  ))}
+                  <Card
+                    id={view.discard.at(-1)!}
+                    size="sm"
+                    clickable={discardChoices}
+                    onClick={() => setShowDiscard(true)}
+                    label="Show the discard pile"
+                  />
+                </div>
               ) : (
                 <div className="empty-slot">empty</div>
               )}

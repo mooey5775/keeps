@@ -552,6 +552,20 @@ a.buy:hover {
   gap: 4px;
 }
 
+.discard-stack {
+  position: relative;
+}
+
+.discard-under {
+  position: absolute;
+  left: 0;
+}
+
+/* Only their title strips show; dim them a little so the top card reads as the top. */
+.discard-under .card img {
+  filter: brightness(0.8);
+}
+
 .label {
   color: var(--muted);
   font-size: 0.8em;

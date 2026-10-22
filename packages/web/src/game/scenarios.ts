@@ -30,6 +30,16 @@ export const SCENARIOS: Scenario[] = [
     },
   },
   {
+    name: 'discard',
+    title: 'A discard pile',
+    spec: {
+      hands: { 0: ['dagger'] },
+      discard: ['pluck', 'pickpocket', 'tithes', 'invocation', 'pandemonium', 'revelation'],
+      piles: { 0: ['?'], 1: ['?'], 2: ['?'], 3: ['?'] },
+      turn: 0,
+    },
+  },
+  {
     name: 'acquisition',
     title: 'Acquisition',
     spec: {
