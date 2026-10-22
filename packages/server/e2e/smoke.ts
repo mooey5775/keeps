@@ -154,6 +154,8 @@ try {
         const buttons = [...document.querySelectorAll('button')].filter((b) => !b.disabled);
         const curtain = buttons.find((b) => b.innerText.includes('show my cards'));
         if (curtain) { curtain.click(); return 'curtain'; }
+        const handoff = buttons.find((b) => b.innerText.startsWith('Hide my cards'));
+        if (handoff) { handoff.click(); return 'handoff'; }
         const confirm = buttons.find((b) => b.innerText === 'Confirm order');
         if (confirm) { confirm.click(); return 'order-pile'; }
         const options = buttons.filter((b) => b.classList.contains('option'));
@@ -172,6 +174,33 @@ try {
     // The log keeps following the newest lines.
     const gap = await page.evaluate<number>(`(() => { const el = document.querySelector('.log'); return el ? el.scrollHeight - el.scrollTop - el.clientHeight : 0; })()`);
     if (gap > 24) throw new Error(`the log is not scrolled to its newest line (${gap}px above the end)`);
+    return [page];
+  });
+
+  await check('pass-and-play: after your last action you still see your cards, until you hand over', async () => {
+    const page = await open(a, `${base}/hotseat`);
+    await page.click('Start');
+    await page.click('show my cards');
+    await page.waitForText('Your turn');
+    const first = (await page.text()).match(/Pass and play · (.+?)’s view/)![1]!;
+    const handCount = () => page.evaluate<number>(`document.querySelectorAll('.hand-cards .card').length`);
+    // Play the turn out: draw, or answer whatever the drawn card asks.
+    for (let i = 0; i < 12 && !(await page.text()).includes('Hide my cards'); i++) {
+      if ((await page.text()).includes('Draw from your pile')) await page.click('Draw from your pile');
+      else await page.evaluate(`document.querySelector('.options .option')?.click()`);
+      await sleep(150);
+    }
+    const text = await page.text();
+    if (!text.includes('Hide my cards and pass to')) throw new Error('no handoff after the turn');
+    // Still this player's own view, with their cards, and nothing to click.
+    if (!text.includes(`${first}’s view`)) throw new Error('the view changed before the handoff');
+    if ((await handCount()) === 0 && !text.includes('no cards')) throw new Error('hand not shown');
+    if ((await page.evaluate<number>(`document.querySelectorAll('.options .option').length`)) !== 0) throw new Error('options still offered after the turn');
+    await page.click('Hide my cards');
+    await page.waitForText('Pass to');
+    if ((await page.evaluate<number>(`document.querySelectorAll('.card').length`)) !== 0) throw new Error('cards visible behind the curtain');
+    await page.click('show my cards');
+    await page.waitFor(`!document.body.innerText.includes('${first}’s view')`, 'the next player’s view');
     return [page];
   });
 

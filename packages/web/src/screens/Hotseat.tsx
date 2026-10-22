@@ -6,6 +6,9 @@ import { navigate } from '../router.ts';
 
 // Pass-and-play on one device: the engine runs in the browser, and the table
 // shows whoever has a decision to make, behind a "pass the device" curtain.
+// When the decision moves to someone else, the player who just acted keeps
+// seeing their cards (read-only) until they hand the device over, so they can
+// see what their last move did (the card they drew, say).
 
 interface Local {
   state: GameState;
@@ -32,10 +35,19 @@ function decider(state: GameState): Seat {
 export function Hotseat() {
   const [game, setGame] = useState<Local | null>(null);
   const [setup, setSetup] = useState(['', '']);
+  /** Whose cards are on screen; null behind the curtain. */
   const [shown, setShown] = useState<Seat | null>(null);
 
   const seat = game ? decider(game.state) : 0;
-  const view = useMemo(() => (game ? viewFor(game.state, seat) : null), [game, seat]);
+  const over = game?.state.phase === 'round-over' || game?.state.phase === 'game-over';
+  // Someone else must decide now, but the last player hasn't handed over yet.
+  const reviewing = shown !== null && shown !== seat && !over;
+  const viewer = reviewing ? shown : seat;
+  const view = useMemo(() => {
+    if (!game) return null;
+    const full = viewFor(game.state, viewer);
+    return reviewing ? { ...full, legal: [] } : full;
+  }, [game, viewer, reviewing]);
 
   if (!game || !view) {
     return (
@@ -73,6 +85,8 @@ export function Hotseat() {
   const onCommand = (command: Command) => {
     const result = apply(game.state, seat, command);
     if (!result.ok) return alert(result.error.message);
+    // A new round starts behind the curtain, for whoever goes first.
+    if (command.type === 'next-round') setShown(null);
     setGame({
       ...game,
       state: result.state,
@@ -81,7 +95,7 @@ export function Hotseat() {
     });
   };
 
-  if (shown !== seat && game.state.phase !== 'round-over' && game.state.phase !== 'game-over') {
+  if (shown === null && !over) {
     return (
       <main className="home curtain">
         <h2>Pass to {game.names[seat]}</h2>
@@ -95,13 +109,29 @@ export function Hotseat() {
   return (
     <GameTable
       view={view}
-      log={eventsFor(game.events, seat)}
+      log={eventsFor(game.events, viewer)}
       names={game.names}
       onCommand={onCommand}
-      side={<DisputeButton context={() => ({ mode: 'hotseat', replay: game.log })} />}
+      side={
+        <>
+          {reviewing && (
+            <div className="handoff">
+              <p>
+                {game.state.turn?.seat === seat && game.state.prompts[0]?.kind === 'action' && view.frame?.kind === 'turn'
+                  ? 'Your turn is over.'
+                  : `${game.names[seat]} must decide now.`}
+              </p>
+              <button type="button" className="primary" onClick={() => setShown(null)}>
+                Hide my cards and pass to {game.names[seat]}
+              </button>
+            </div>
+          )}
+          <DisputeButton context={() => ({ mode: 'hotseat', replay: game.log })} />
+        </>
+      }
       header={
         <div className="table-header">
-          <span>Pass and play · {game.names[seat]}’s view</span>
+          <span>Pass and play · {game.names[viewer]}’s view</span>
           <button type="button" className="link" onClick={() => setGame(null)}>
             Quit
           </button>
