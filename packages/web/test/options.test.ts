@@ -1,7 +1,8 @@
 import { apply, buildPosition, PUZZLES, puzzleState, viewFor, YOU, type PlayerView } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
-import { humanize } from '../src/game/log.ts';
-import { click, clickable, describeOptions, makeNames, narrow, type Ref } from '../src/game/options.ts';
+import { humanize, logLines } from '../src/game/log.ts';
+import { click, clickable, describeOptions, GROUP_ABOVE, makeNames, narrow, panelItems, shownCards, type Ref } from '../src/game/options.ts';
+import { SCENARIOS, scenarioState } from '../src/game/scenarios.ts';
 
 const names = makeNames(['Ada', 'Bo', 'Cy', 'Di'], 0);
 const optionsOf = (view: PlayerView) => describeOptions(view, names);
@@ -53,7 +54,7 @@ describe('options', () => {
 
   it('uses abilities from the keep: Juggling picks two piles', () => {
     const view = viewFor(buildPosition({ keeps: { 0: ['juggling'] }, piles: { 1: ['chalice'] }, turn: 0 }), 0);
-    expect(clicks(view, ['keepcard:0:0', 'pile:1', 'pile:3'])).toBe('Juggling: swap the pile in front of Bo with the pile in front of Di');
+    expect(clicks(view, ['keepcard:0:0', 'pile:1', 'pile:3'])).toBe("Juggling: swap Bo's pile (1 card) with Di's pile (0 cards)");
   });
 
   it('clicking something unrelated starts over from it', () => {
@@ -117,5 +118,145 @@ describe('log text', () => {
     const logNames = makeNames(['Ada', 'Bo', null, 'Di'], 'spectator');
     expect(humanize('S0 draws Chalice from pile@S1', logNames)).toBe("Ada draws Chalice from Bo's pile");
     expect(humanize('S3 plays Dagger → keep(S2)', logNames)).toBe("Di plays Dagger → ghost 2's keep");
+  });
+});
+
+const scenario = (name: string) => viewFor(scenarioState(SCENARIOS.find((s) => s.name === name)!), 0);
+
+describe('sandbox scenarios', () => {
+  it('each reaches a decision for Ann, with every option labelled', () => {
+    for (const s of SCENARIOS) {
+      const view = viewFor(scenarioState(s), 0);
+      expect(view.legal.length, s.name).toBeGreaterThan(0);
+      for (const o of optionsOf(view)) expect(o.label, s.name).not.toMatch(/undefined|null|NaN/);
+    }
+  });
+});
+
+describe('the side panel folds many options into groups', () => {
+  it('a busy turn shows one button per card and ability, and choosing one is like clicking it', () => {
+    const view = scenario('turn');
+    const options = optionsOf(view);
+    expect(options.length).toBeGreaterThan(30);
+    const items = panelItems(options, []);
+    const labels = items.map((i) => (i.kind === 'group' ? i.label : i.option.label));
+    expect(labels).toEqual([
+      'Draw from your pile',
+      'Play Dagger…',
+      'Play Chalice…',
+      'Play Medallion…',
+      'Play Fool Token…',
+      'Juggling: swap two piles…',
+      'Sanction: draw from any pile…',
+      'Acquisition: discard a card, draw two…',
+      'Blunder (2 actions): put it on a pile…',
+    ]);
+    // "Play Dagger…" picks the Dagger, exactly as clicking it in the hand does.
+    const dagger = items.find((i) => i.kind === 'group' && i.label === 'Play Dagger…');
+    expect(dagger).toMatchObject({ kind: 'group', ref: 'hand:dagger', count: 4 });
+    // The Dagger's four keeps, plus discarding it to Acquisition: few enough to list as they are.
+    const daggerItems = panelItems(narrow(options, ['hand:dagger']), ['hand:dagger']);
+    expect(daggerItems.map((i) => (i.kind === 'option' ? i.option.label : i.label))).toEqual([
+      'Play Dagger into your keep',
+      "Play Dagger into Bo's keep",
+      "Play Dagger into Cy's keep",
+      "Play Dagger into Di's keep",
+      "Acquisition: discard Dagger, draw from Bo's pile first, then Di's pile",
+      "Acquisition: discard Dagger, draw from Di's pile first, then Bo's pile",
+    ]);
+  });
+
+  it('a few options stay as they are', () => {
+    const view = viewFor(buildPosition({ hands: { 0: ['dagger'] }, turn: 0 }), 0);
+    const options = optionsOf(view);
+    expect(options.length).toBeLessThanOrEqual(GROUP_ABOVE);
+    expect(panelItems(options, []).every((i) => i.kind === 'option')).toBe(true);
+  });
+
+  it('Acquisition: one button opens it; each choice names the pile drawn from first', () => {
+    const options = optionsOf(scenario('acquisition'));
+    const top = panelItems(options, []);
+    expect(top.find((i) => i.kind === 'group' && i.ref === 'keepcard:0:0')).toMatchObject({ label: 'Acquisition: discard a card, draw two…', count: 6 });
+    const picked: Ref[] = ['keepcard:0:0'];
+    const step = panelItems(narrow(options, picked), picked).map((i) => (i.kind === 'group' ? i.label : i.option.label));
+    // Bo sits on Ann's left, Di on her right.
+    expect(step.slice(0, 2)).toEqual([
+      "Acquisition: discard Dagger, draw from Bo's pile first, then Di's pile",
+      "Acquisition: discard Dagger, draw from Di's pile first, then Bo's pile",
+    ]);
+    expect(step).toHaveLength(6);
+  });
+});
+
+describe('Providence', () => {
+  it('lights up every played card, and either card of a swap can be clicked first', () => {
+    const view = scenario('providence');
+    const options = optionsOf(view);
+    const cards = new Set(options.flatMap((o) => o.refs));
+    expect(clickable(options, [])).toEqual(cards);
+    expect(clicks(view, ['keepcard:2:2', 'keepcard:0:0'])).toBe("Swap Scepter (your keep) with Royal Favor (Cy's keep)");
+    expect(clicks(view, ['keepcard:0:0', 'keepcard:2:2'])).toBe("Swap Scepter (your keep) with Royal Favor (Cy's keep)");
+  });
+
+  it('folds the pairs by card instead of listing every pair', () => {
+    const options = optionsOf(scenario('providence'));
+    expect(options.length).toBeGreaterThan(30);
+    const items = panelItems(options, []);
+    expect(items.length).toBeLessThan(10);
+    expect(items[0]).toMatchObject({ kind: 'group', label: 'Swap Scepter (your keep) with…' });
+  });
+});
+
+describe('cards shown for a decision', () => {
+  it('Requisition shows the pile, and clicking a card takes it', () => {
+    const view = scenario('requisition');
+    const shown = shownCards(view, names)!;
+    expect(shown.title).toBe("Bo's pile, top first: take any card");
+    expect(shown.cards.map((c) => c.card)).toEqual(['dagger', 'royal-favor', 'timepiece', 'interest', 'count-token', 'faberge-egg', 'medallion']);
+    expect(clicks(view, [shown.cards[2]!.ref!])).toBe('Take Timepiece (card 3 from the top)');
+  });
+
+  it('Pluck shows the revealed hands with their owners', () => {
+    const view = scenario('pluck');
+    const shown = shownCards(view, names)!;
+    expect(shown.cards.map((c) => `${c.caption}: ${c.card}`)).toEqual(['Bo: timepiece', 'Bo: providence', 'Cy: retribution', 'Cy: chalice']);
+    expect(clicks(view, [shown.cards[3]!.ref!])).toBe("Take Chalice from Cy's hand");
+  });
+
+  it('Epiphany shows the top cards; a card or its pile chooses it', () => {
+    const view = scenario('epiphany');
+    const shown = shownCards(view, names)!;
+    const blunder = shown.cards.find((c) => c.card === 'blunder')!;
+    expect(blunder.ref).toBe('pile:1');
+    expect(clicks(view, ['pile:1'])).toMatch(/^Take Blunder from Bo's pile/);
+  });
+
+  it('Resurrection shows the discard, newest first; Prayer shows the card it looks at', () => {
+    expect(shownCards(scenario('resurrection'), names)!.cards[0]!.card).toBe('resurrection');
+    const prayer = shownCards(scenario('prayer'), names)!;
+    expect(prayer.cards).toEqual([{ card: 'dagger', ref: null }]);
+  });
+
+  it('a plain turn shows nothing extra', () => {
+    expect(shownCards(scenario('turn'), names)).toBeNull();
+  });
+});
+
+describe('labels', () => {
+  it('Legerdemain says how many cards each player holds', () => {
+    expect(optionsOf(scenario('legerdemain')).map((o) => o.label)).toEqual([
+      'Choose you (0 cards in hand)',
+      'Choose Bo (2 cards in hand)',
+      'Choose Cy (1 card in hand)',
+      'Choose Di (3 cards in hand)',
+    ]);
+  });
+});
+
+describe('log indentation', () => {
+  it('stops indenting after a few levels, so long chains of effects stay readable', () => {
+    const event = (seq: number, depth: number, type: string) => ({ seq, depth, payload: { type, seat: 0 } }) as never;
+    const lines = logLines([event(1, 0, 'turn-start'), ...[1, 2, 3, 4, 5, 6].map((d) => event(d + 1, d, 'draw'))], names);
+    expect(lines.map((l) => l.depth)).toEqual([0, 0, 1, 2, 3, 3, 3]);
   });
 });

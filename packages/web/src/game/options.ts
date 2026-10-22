@@ -1,4 +1,4 @@
-import { CARDS, type CardId, type Command, type PlayerView, type Seat } from '@keeps/engine';
+import { CARDS, leftOf, rightOf, type CardId, type Command, type PlayerView, type Seat } from '@keeps/engine';
 
 // Turns the view's legal commands into things the table can show and click.
 //
@@ -7,7 +7,13 @@ import { CARDS, type CardId, type Command, type PlayerView, type Seat } from '@k
 // the options to the commands involving everything clicked so far; when one
 // option remains and every element it needs has been clicked, it is sent.
 // The side panel always lists the remaining options as buttons, so every
-// command is reachable even without clicking the table.
+// command is reachable even without clicking the table. When there are many,
+// options that start with the same element fold into one button ("Play
+// Dagger…") that picks that element, exactly like clicking it on the table.
+//
+// Cards on display for a decision (the pile you're looking through, the
+// discard, revealed hands) are listed by `shownCards`; the table shows them at
+// readable size, and the ones that are choices carry their own refs.
 
 export type Ref =
   | `hand:${CardId}`
@@ -15,7 +21,9 @@ export type Ref =
   | `keep:${Seat}`
   | `keepcard:${Seat}:${number}`
   | `discard:${CardId}`
-  | `player:${Seat}`;
+  | `player:${Seat}`
+  /** The n-th card in `shownCards` (one with no other place on the table). */
+  | `shown:${number}`;
 
 export interface Option {
   command: Command;
@@ -23,6 +31,13 @@ export interface Option {
   label: string;
   /** Cards to picture on the option's button. */
   cards: CardId[];
+  /** Elements that can begin a selection (default: the first ref). Providence's two cards are equal. */
+  starts?: Ref[];
+  /**
+   * For folding options into groups: `groups[i]` labels the group of options
+   * that share refs[i] as their next element ("Play Dagger…"). Missing: never grouped there.
+   */
+  groups?: string[];
 }
 
 export interface Names {
@@ -47,10 +62,16 @@ function abilityRef(view: PlayerView, seat: Seat, card: CardId): Ref[] {
   return index >= 0 ? [`keepcard:${seat}:${index}`] : [];
 }
 
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 export function describeOptions(view: PlayerView, names: Names): Option[] {
   const me = view.viewer === 'spectator' ? null : view.viewer;
   const prompts = new Map(view.prompts.filter((p) => p.mine).map((p) => [p.id, p]));
-  const pile = (s: Seat) => `the pile in front of ${names.seat(s)}`;
+  /** "your pile", "Bo's pile". */
+  const pileOf = (s: Seat) => `${names.possessive(s)} pile`;
+  /** "Bo's pile (3 cards)". */
+  const pile = (s: Seat) => `${pileOf(s)} (${plural(view.piles[s]!.size, 'card')})`;
+  const shownIndex = shownRefs(view);
 
   return view.legal.map((command): Option => {
     if (command.type === 'next-round') return { command, refs: [], label: 'Start the next round', cards: [] };
@@ -72,6 +93,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 refs: [`hand:${choice.card}`, `hand:${choice.copy}`],
                 label: `Play Joker as ${name(choice.copy)}`,
                 cards: ['joker', choice.copy],
+                groups: ['Play Joker…'],
               };
             }
             if (choice.target !== undefined) {
@@ -80,6 +102,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 refs: [`hand:${choice.card}`, `keep:${choice.target}`],
                 label: `Play ${name(choice.card)} into ${names.possessive(choice.target)} keep`,
                 cards: [choice.card],
+                groups: [`Play ${name(choice.card)}…`],
               };
             }
             return { command, refs: [`hand:${choice.card}`], label: `Play ${name(choice.card)}`, cards: [choice.card] };
@@ -92,16 +115,29 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                   refs: [...source, `pile:${choice.piles[0]}`, `pile:${choice.piles[1]}`],
                   label: `Juggling: swap ${pile(choice.piles[0])} with ${pile(choice.piles[1])}`,
                   cards: ['juggling'],
+                  groups: ['Juggling: swap two piles…', `Juggling: swap ${pileOf(choice.piles[0])} with…`],
                 };
               case 'sanction':
-                return { command, refs: [...source, `pile:${choice.from}`], label: `Sanction: draw from ${pile(choice.from)}`, cards: ['sanction'] };
-              case 'acquisition':
+                return {
+                  command,
+                  refs: [...source, `pile:${choice.from}`],
+                  label: `Sanction: draw from ${pile(choice.from)}`,
+                  cards: ['sanction'],
+                  groups: ['Sanction: draw from any pile…'],
+                };
+              case 'acquisition': {
+                // Name the piles: "left" and "right" mean little when the seats aren't
+                // drawn around a table (phones). Same convention as the engine.
+                const seat = me ?? (0 as Seat);
+                const [first, second] = choice.first === 'left' ? [leftOf(seat), rightOf(seat)] : [rightOf(seat), leftOf(seat)];
                 return {
                   command,
                   refs: [...source, `hand:${choice.discard}`],
-                  label: `Acquisition: discard ${name(choice.discard)}, draw ${choice.first} pile first`,
+                  label: `Acquisition: discard ${name(choice.discard)}, draw from ${pileOf(first)} first, then ${pileOf(second)}`,
                   cards: ['acquisition', choice.discard],
+                  groups: ['Acquisition: discard a card, draw two…', `Acquisition: discard ${name(choice.discard)}…`],
                 };
+              }
               case 'shackles':
                 return { command, refs: source, label: 'Discard Shackles from your keep', cards: ['shackles'] };
               case 'tithes':
@@ -110,8 +146,9 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 return {
                   command,
                   refs: [...source, `pile:${choice.pile}`],
-                  label: `Blunder (2 actions): put it face up on ${pile(choice.pile)}`,
+                  label: `Blunder (2 actions): put it face up on ${pileOf(choice.pile)}`,
                   cards: ['blunder'],
+                  groups: ['Blunder (2 actions): put it on a pile…'],
                 };
               default:
                 return choice satisfies never;
@@ -136,7 +173,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
         const card = prompt?.kind === 'choose-pile-card' ? prompt.cards[answer.index]! : null;
         return {
           command,
-          refs: [],
+          refs: [`shown:${answer.index}`],
           label: card ? `Take ${name(card)} (card ${answer.index + 1} from the top)` : `Take card ${answer.index + 1}`,
           cards: card ? [card] : [],
         };
@@ -168,11 +205,15 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
           const what = !card ? 'a card' : card.faceDown ? (card.id ? `face-down ${name(card.id)}` : 'the face-down card') : name(card.id);
           return `${what} (${names.possessive(ref.seat)} keep)`;
         };
+        const refs: Ref[] = [`keepcard:${answer.a.seat}:${answer.a.index}`, `keepcard:${answer.b.seat}:${answer.b.index}`];
         return {
           command,
-          refs: [`keepcard:${answer.a.seat}:${answer.a.index}`, `keepcard:${answer.b.seat}:${answer.b.index}`],
+          refs,
           label: `Swap ${describe(answer.a)} with ${describe(answer.b)}`,
           cards: [],
+          // Either card can be picked first.
+          starts: refs,
+          groups: [`Swap ${describe(answer.a)} with…`],
         };
       }
       case 'choose-direction': {
@@ -195,12 +236,19 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
       }
       case 'order-pile':
         return { command, refs: [], label: 'Keep this order', cards: [] };
-      case 'choose-player':
-        return { command, refs: [`player:${answer.seat}`], label: `Choose ${names.seat(answer.seat)}`, cards: [] };
-      case 'choose-hand-card':
+      case 'choose-player': {
+        const count = view.hands[answer.seat]!.count;
         return {
           command,
           refs: [`player:${answer.seat}`],
+          label: `Choose ${names.seat(answer.seat)} (${plural(count, 'card')} in hand)`,
+          cards: [],
+        };
+      }
+      case 'choose-hand-card':
+        return {
+          command,
+          refs: [shownIndex(answer.card, answer.seat)],
           label: `Take ${name(answer.card)} from ${names.possessive(answer.seat)} hand`,
           cards: [answer.card],
         };
@@ -219,6 +267,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
           refs: [`hand:${answer.card}`, `keep:${answer.target}`],
           label: `Hide ${name(answer.card)} face down in ${names.possessive(answer.target)} keep`,
           cards: [answer.card],
+          groups: [`Hide ${name(answer.card)}…`],
         };
       case 'reveal-window':
         return { command, refs: [], label: answer.reveal ? 'Reveal the face-down card' : 'Keep it hidden', cards: [] };
@@ -228,9 +277,97 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
   });
 }
 
+/** A card shown for a decision, outside its usual place on the table. */
+export interface ShownCard {
+  card: CardId;
+  /** What clicking it chooses; null if it's only there to look at. */
+  ref: Ref | null;
+  /** Whose it is, or where it is ("Bo", "Cy's pile"). */
+  caption?: string;
+}
+
+/** The cards the viewer is choosing between (or looking at), when they have no readable place on the table. */
+export function shownCards(view: PlayerView, names: Names): { title: string; cards: ShownCard[] } | null {
+  const prompt = view.prompts.find((p) => p.mine);
+  if (!prompt) return null;
+  const pileOf = (s: Seat) => `${names.possessive(s)} pile`;
+  switch (prompt.kind) {
+    case 'choose-pile-card':
+      return {
+        title: `${capitalize(pileOf(prompt.pile))}, top first: take any card`,
+        cards: prompt.cards.map((card, i) => ({ card, ref: `shown:${i}`, caption: `${i + 1}` })),
+      };
+    case 'choose-top-card':
+      return {
+        title: 'The top cards: take one',
+        cards: prompt.options.map((o) => ({ card: o.card, ref: `pile:${o.pile}`, caption: pileOf(o.pile) })),
+      };
+    case 'take-or-discard':
+      return { title: `The top of ${pileOf(prompt.pile)}`, cards: [{ card: prompt.card, ref: null }] };
+    case 'choose-discard-card':
+      return {
+        title: 'The discard pile: take a card',
+        cards: [...view.discard].reverse().map((card) => ({ card, ref: `discard:${card}` })),
+      };
+    case 'choose-hand-card':
+      return {
+        title: 'Their hands: take one card',
+        cards: prompt.options.map((o, i) => ({ card: o.card, ref: `shown:${i}`, caption: capitalize(names.seat(o.seat)) })),
+      };
+    default:
+      return null;
+  }
+}
+
+/** For Pluck: the `shown:` ref of a card in a revealed hand. */
+function shownRefs(view: PlayerView): (card: CardId, seat: Seat) => Ref {
+  const prompt = view.prompts.find((p) => p.mine && p.kind === 'choose-hand-card');
+  const options = prompt?.kind === 'choose-hand-card' ? prompt.options : [];
+  return (card, seat) => `shown:${options.findIndex((o) => o.card === card && o.seat === seat)}`;
+}
+
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 /** Options still possible after clicking `picked` (each must be involved). */
 export function narrow(options: Option[], picked: Ref[]): Option[] {
   return options.filter((o) => picked.every((r) => o.refs.includes(r)));
+}
+
+/** A button in the side panel: one option, or a group of options that share their next element. */
+export type PanelItem = { kind: 'option'; option: Option } | { kind: 'group'; ref: Ref; label: string; count: number };
+
+/** Fold options into groups once there are more than this many. */
+export const GROUP_ABOVE = 6;
+
+/**
+ * The side panel's buttons for the options still possible. With many, options
+ * whose next element is the same (and that say how to label it) fold into one
+ * group button; choosing it picks that element, like clicking it on the table.
+ */
+export function panelItems(options: Option[], picked: Ref[]): PanelItem[] {
+  if (options.length <= GROUP_ABOVE) return options.map((option) => ({ kind: 'option', option }));
+  const next = (o: Option) => {
+    const ref = o.refs.find((r) => !picked.includes(r));
+    const label = ref === undefined ? undefined : o.groups?.[o.refs.indexOf(ref)];
+    return ref !== undefined && label !== undefined ? { ref, label } : null;
+  };
+  const sizes = new Map<Ref, number>();
+  for (const o of options) {
+    const n = next(o);
+    if (n) sizes.set(n.ref, (sizes.get(n.ref) ?? 0) + 1);
+  }
+  const items: PanelItem[] = [];
+  const seen = new Set<Ref>();
+  for (const option of options) {
+    const n = next(option);
+    if (!n || (sizes.get(n.ref) ?? 0) < 2) {
+      items.push({ kind: 'option', option });
+    } else if (!seen.has(n.ref)) {
+      seen.add(n.ref);
+      items.push({ kind: 'group', ref: n.ref, label: n.label, count: sizes.get(n.ref)! });
+    }
+  }
+  return items;
 }
 
 export type ClickResult =
@@ -258,16 +395,16 @@ export function click(options: Option[], picked: Ref[], ref: Ref): ClickResult {
 }
 
 /**
- * Elements worth clicking next. Before anything is picked, only each option's
- * first element (the card to play, the pile to draw from, the ability card),
- * so targets light up only once you've chosen what to do. Clicking any
- * involved element still works.
+ * Elements worth clicking next. Before anything is picked, only the elements
+ * an option can start from (the card to play, the pile to draw from, the
+ * ability card; either card of a Providence swap), so targets light up only
+ * once you've chosen what to do.
  */
 export function clickable(options: Option[], picked: Ref[]): Set<Ref> {
   const set = new Set<Ref>();
   for (const o of narrow(options, picked)) {
     if (picked.length === 0) {
-      if (o.refs[0]) set.add(o.refs[0]);
+      for (const r of o.starts ?? o.refs.slice(0, 1)) set.add(r);
     } else {
       for (const r of o.refs) if (!picked.includes(r)) set.add(r);
     }

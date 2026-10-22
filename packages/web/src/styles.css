@@ -735,8 +735,46 @@ a.buy:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-height: 45vh;
+  max-height: 60vh;
   overflow-y: auto;
+}
+
+/* A button that opens a group of options ("Play Dagger…"). */
+.option.group .group-count {
+  margin-left: auto;
+  padding: 0 0.5em;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 0.8em;
+  color: var(--muted);
+}
+
+/* Cards shown for a decision: the pile you're looking through, the discard, revealed hands. */
+.shown {
+  background: var(--bg-raised);
+  border: 1px solid var(--gold);
+  border-radius: 12px;
+  padding: 8px 12px 12px;
+}
+
+.shown-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.shown-cards figure {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.shown-cards figcaption {
+  font-size: 0.8em;
+  color: var(--muted);
 }
 
 .option {
@@ -754,7 +792,27 @@ a.buy:hover {
 .order-row {
   display: flex;
   align-items: center;
-  gap: 0.5em;
+  gap: 0.6em;
+}
+
+/* Every row and the Confirm button stay in view (no scrolling box). */
+.options.order-pile {
+  max-height: none;
+}
+
+.order-n {
+  width: 1.2em;
+  text-align: right;
+  color: var(--muted);
+}
+
+.order-name {
+  flex: 1;
+}
+
+.order-moves {
+  display: flex;
+  gap: 4px;
 }
 
 .order-row button {

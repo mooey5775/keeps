@@ -2,7 +2,7 @@ import { CARDS, coinsLabel, type CardId, type Command, type PlayerView, type Pro
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from './Card.tsx';
 import { logLines } from './log.ts';
-import { click, clickable, describeOptions, makeNames, narrow, type Option, type Ref } from './options.ts';
+import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from './options.ts';
 import { capital, headline, promptText } from './status.ts';
 
 // The game table: four seats around the center, your hand at the bottom,
@@ -61,6 +61,7 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom }:
   const otherPrompts = view.prompts.filter((p) => !p.mine);
   const title = headline(view, uiNames);
   const discardChoices = options.some((o) => o.refs.some((r) => r.startsWith('discard:')));
+  const shown = useMemo(() => shownCards(view, uiNames), [view, uiNames]);
 
   return (
     <div className="game">
@@ -91,6 +92,19 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom }:
             {title && <div className="headline">{title}</div>}
           </div>
         </div>
+        {shown && (
+          <div className="shown">
+            <span className="label">{shown.title}</span>
+            <div className="shown-cards">
+              {shown.cards.map((c, i) => (
+                <figure key={i}>
+                  <Card id={c.card} size="lg" {...(c.ref ? ref(c.ref) : {})} />
+                  {c.caption && <figcaption>{c.caption}</figcaption>}
+                </figure>
+              ))}
+            </div>
+          </div>
+        )}
         {view.viewer !== 'spectator' && (
           <div className="hand">
             <span className="label">{me === anchor ? 'Your hand' : `${capital(uiNames.possessive(me))} hand`}</span>
@@ -117,7 +131,7 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom }:
             </p>
           ))}
         </div>
-        <OptionsPanel view={view} options={remaining} picked={picked} onSend={send} onClear={() => setPicked([])} />
+        <OptionsPanel view={view} options={remaining} picked={picked} onSend={send} onPick={onRef} onClear={() => setPicked([])} />
         {side}
         <Log events={log} names={logNames} />
       </aside>
@@ -230,10 +244,26 @@ function SeatArea({ seat, position, view, names, refProps }: { seat: Seat; posit
   );
 }
 
-function OptionsPanel({ view, options, picked, onSend, onClear }: { view: PlayerView; options: Option[]; picked: Ref[]; onSend: (c: Command) => void; onClear: () => void }) {
+function OptionsPanel({
+  view,
+  options,
+  picked,
+  onSend,
+  onPick,
+  onClear,
+}: {
+  view: PlayerView;
+  options: Option[];
+  picked: Ref[];
+  onSend: (c: Command) => void;
+  onPick: (r: Ref) => void;
+  onClear: () => void;
+}) {
   const order = view.prompts.find((p): p is Extract<PromptView, { kind: 'order-pile'; mine: true }> => p.mine && p.kind === 'order-pile');
   if (order) return <OrderPile prompt={order} onSend={onSend} />;
   if (options.length === 0) return null;
+  const items = panelItems(options, picked);
+  const swapping = view.prompts.some((p) => p.mine && p.kind === 'choose-keep-pair');
   return (
     <div className="options">
       {picked.length > 0 && (
@@ -241,16 +271,34 @@ function OptionsPanel({ view, options, picked, onSend, onClear }: { view: Player
           ← Cancel selection
         </button>
       )}
-      {options.map((o, i) => (
-        <button key={i} type="button" className="option" onClick={() => onSend(o.command)}>
-          {o.cards.map((c, j) => (
-            <Card key={j} id={c} size="xs" />
-          ))}
-          <span>{o.label}</span>
-        </button>
-      ))}
+      {swapping && picked.length === 0 && <p className="hint">Click the two cards to swap on the table, or choose below.</p>}
+      {items.map((item, i) =>
+        item.kind === 'group' ? (
+          <button key={i} type="button" className="option group" onClick={() => onPick(item.ref)}>
+            {groupCards(options, item.ref).map((c, j) => (
+              <Card key={j} id={c} size="xs" />
+            ))}
+            <span>{item.label}</span>
+            <span className="group-count">{item.count}</span>
+          </button>
+        ) : (
+          <button key={i} type="button" className="option" onClick={() => onSend(item.option.command)}>
+            {item.option.cards.map((c, j) => (
+              <Card key={j} id={c} size="xs" />
+            ))}
+            <span>{item.option.label}</span>
+          </button>
+        ),
+      )}
     </div>
   );
+}
+
+/** The card a group is about, pictured on its button (what every option in it shares). */
+function groupCards(options: Option[], ref: Ref): CardId[] {
+  const members = options.filter((o) => o.refs.includes(ref));
+  const first = members[0]?.cards ?? [];
+  return first.filter((c) => members.every((o) => o.cards.includes(c)));
 }
 
 function OrderPile({ prompt, onSend }: { prompt: Extract<PromptView, { kind: 'order-pile'; mine: true }>; onSend: (c: Command) => void }) {
@@ -266,14 +314,20 @@ function OrderPile({ prompt, onSend }: { prompt: Extract<PromptView, { kind: 'or
       <p className="hint">Top of the pile first.</p>
       {order.map((card, i) => (
         <div key={card} className="order-row">
+          <span className="order-n">{i + 1}</span>
           <Card id={card} size="xs" />
-          <span>{i + 1}.</span>
-          <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label="Move up">
-            ↑
-          </button>
-          <button type="button" disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label="Move down">
-            ↓
-          </button>
+          <span className="order-name">{CARDS[card].name}</span>
+          <span className="order-moves">
+            <button type="button" disabled={i === 0} onClick={() => move(i, -i)} aria-label={`Move ${CARDS[card].name} to the top`} title="Move to the top">
+              ⤒
+            </button>
+            <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${CARDS[card].name} up`}>
+              ↑
+            </button>
+            <button type="button" disabled={i === order.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${CARDS[card].name} down`}>
+              ↓
+            </button>
+          </span>
         </div>
       ))}
       <button type="button" className="primary" onClick={() => onSend({ type: 'answer', promptId: prompt.id, answer: { kind: 'order-pile', order } })}>

@@ -136,6 +136,8 @@ try {
     await page.click('Play Resurrection');
     await page.click('Take Providence from the discard');
     await page.click('Play Providence');
+    // Providence's pairs are folded by card: open Sanction's, then pick the swap.
+    await page.click('Swap Sanction (your keep) with…');
     await page.click('Swap Sanction (your keep) with Purity');
     await page.waitForText('Solved!');
     return [page];

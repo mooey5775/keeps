@@ -13,7 +13,8 @@ if (!existsSync(webDir)) {
   process.exit(2);
 }
 const outDir = join(root, 'screenshots');
-rmSync(outDir, { recursive: true, force: true });
+// Only this script's folders: screenshots/ may hold other sets (e.g. before/after comparisons).
+for (const device of ['desktop', 'phone']) rmSync(join(outDir, device), { recursive: true, force: true });
 
 const server = await createKeepsServer({ port: 0, webDir, cardsDir: join(root, 'cards') });
 const base = `http://localhost:${(server.http.address() as { port: number }).port}`;

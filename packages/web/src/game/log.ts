@@ -14,6 +14,8 @@ const HIDDEN: ReadonlySet<TraceEvent['payload']['type']> = new Set([
   'game-start',
 ]);
 
+const MAX_DEPTH = 3;
+
 export interface LogLine {
   seq: number;
   depth: number;
@@ -30,7 +32,10 @@ export function logLines(events: readonly TraceEvent[], names: Names): LogLine[]
     if (HIDDEN.has(type)) continue;
     const heading = type === 'turn-start' || type === 'round-start' || type === 'round-end' || type === 'game-over';
     if (type === 'turn-start') baseDepth = e.depth + 1;
-    lines.push({ seq: e.seq, depth: heading ? 0 : Math.max(0, e.depth - baseDepth), text: humanize(describe(e.payload), names), heading });
+    // Long chains of effects (a HOT play setting off Interest and Royal Favor)
+    // nest deeply; past a few levels, more indentation only squeezes the text.
+    const depth = heading ? 0 : Math.min(MAX_DEPTH, Math.max(0, e.depth - baseDepth));
+    lines.push({ seq: e.seq, depth, text: humanize(describe(e.payload), names), heading });
   }
   return lines;
 }
