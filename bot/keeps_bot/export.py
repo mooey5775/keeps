@@ -25,7 +25,8 @@ and the encoder fingerprint it was trained with.
 
 import os
 
-os.environ.setdefault('JAX_PLATFORMS', 'cpu')  # the reference probabilities: plain float32, like the server
+if __name__ == '__main__':
+  os.environ.setdefault('JAX_PLATFORMS', 'cpu')  # the reference probabilities: plain float32, like the server
 
 import argparse
 import json

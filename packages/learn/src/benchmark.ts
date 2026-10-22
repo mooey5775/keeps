@@ -45,6 +45,8 @@ export interface MatchResult {
   asSeat0: number;
   asSeat2: number;
   deals: number;
+  /** A's score on each deal (0, 0.5 or 1), for combining shards. */
+  perDeal: number[];
 }
 
 function rng(seed: number): () => number {
@@ -75,13 +77,13 @@ function playRound(seed: string, a: Player, b: Player, seatA: Seat, random: () =
   return state.lastRoundWinner;
 }
 
-/** A against B on `deals` deals, each played from both seats. */
-export function match(a: Player, b: Player, deals: number, seed = 'match'): MatchResult {
-  const random = rng(deals * 7919 + seed.length);
+/** A against B on `deals` deals (numbered from `first`, so shards can split a match), each played from both seats. */
+export function match(a: Player, b: Player, deals: number, seed = 'match', first = 0): MatchResult {
+  const random = rng(deals * 7919 + seed.length + first);
   const perDeal: number[] = [];
   let seat0 = 0;
   let seat2 = 0;
-  for (let i = 0; i < deals; i++) {
+  for (let i = first; i < first + deals; i++) {
     const deal = `${seed}-${i}`;
     const w0 = playRound(deal, a, b, 0, random) === 0 ? 1 : 0;
     const w2 = playRound(deal, a, b, 2, random) === 2 ? 1 : 0;
@@ -91,5 +93,5 @@ export function match(a: Player, b: Player, deals: number, seed = 'match'): Matc
   }
   const mean = perDeal.reduce((x, y) => x + y, 0) / deals;
   const variance = perDeal.reduce((x, y) => x + (y - mean) ** 2, 0) / Math.max(1, deals - 1);
-  return { score: mean, ci95: 1.96 * Math.sqrt(variance / deals), asSeat0: seat0 / deals, asSeat2: seat2 / deals, deals };
+  return { score: mean, ci95: 1.96 * Math.sqrt(variance / deals), asSeat0: seat0 / deals, asSeat2: seat2 / deals, deals, perDeal };
 }

@@ -11,10 +11,12 @@ with a 95% interval from the per-deal scores.
   PYTHONPATH= .venv/bin/python -m keeps_bot.evaluate --watch first
 
 Watching evaluates every --every steps' policy (the newest, if it falls behind)
-against the random player, the previously evaluated policy and the one from
-about half as many steps ago, and writes the results to runs/<run>/tb/eval
-(TensorBoard) and runs/<run>/evals.jsonl. (It used to play the untrained
-network too; that tracked the random player within a point or two.)
+against the random player, the previously evaluated policy, the one from about
+half as many steps ago, and the rule-based benchmark players greedy and timer
+(packages/learn/src/heuristics.ts, played in TypeScript on the same fixed deals
+each time), and writes the results to runs/<run>/tb/eval (TensorBoard) and
+runs/<run>/evals.jsonl. (It used to play the untrained network too; that
+tracked the random player within a point or two.)
 """
 
 import os
@@ -25,15 +27,54 @@ import argparse
 import glob
 import json
 import re
+import subprocess
 import time
 
 import numpy as np
 
+from keeps_bot import export
 from keeps_bot import game as keeps
 from keeps_bot import policy as policies
+from keeps_bot import rnad
 from keeps_bot import selfplay
 
 RUNS = os.path.join(os.path.dirname(__file__), '..', 'runs')
+BENCHMARK = os.path.join(export.REPO, 'packages', 'learn', 'src', 'benchmark-cli.ts')
+
+
+def benchmark(policy_path, opponents, deals, shards):
+  """The policy against TypeScript benchmark players (greedy, timer), each on the same fixed deals every time.
+
+  The policy is exported to the server's weights format and played by the
+  TypeScript bot (the one checked against JAX); each opponent's deals are split
+  across `shards` Node processes, all running at once.
+  """
+  _, saved = policies.load(policy_path)
+  weights = policy_path + '.bench.bin'
+  header = {'format': 'keeps-policy', 'version': 1, 'run': 'eval', 'step': saved.get('learner_steps', 0),
+            'decisions': saved.get('decisions'), 'layers': list(saved['layers']),
+            'observationSize': keeps.bridge().observation_size, 'numActions': saved['num_actions'],
+            'fingerprint': keeps.bridge().fingerprint,
+            'postprocess': {'threshold': rnad.FineTuning().policy_threshold,
+                            'discretization': rnad.FineTuning().policy_discretization}, 'evals': None}
+  export.write(weights, header, export.network_tensors(saved['params'], saved['layers']))
+  per = -(-deals // shards)
+  jobs = {(o, k): subprocess.Popen(['node', BENCHMARK, weights, o, str(min(per, deals - k * per)), f'bench-{o}', str(k * per)],
+                                   stdout=subprocess.PIPE, text=True)
+          for o in opponents for k in range(shards) if k * per < deals}
+  try:
+    out = {key: json.loads(job.communicate()[0]) for key, job in jobs.items()}
+  finally:
+    os.remove(weights)
+  results = {}
+  for o in opponents:
+    parts = [out[(o, k)] for k in range(shards) if (o, k) in out]
+    per_deal = np.array([x for p in parts for x in p['perDeal']])
+    n = len(per_deal)
+    results[o] = {'score': float(per_deal.mean()), 'ci95': float(1.96 * per_deal.std(ddof=1) / np.sqrt(n)),
+                  'as_player0': sum(p['asSeat0'] * p['deals'] for p in parts) / n,
+                  'as_player1': sum(p['asSeat2'] * p['deals'] for p in parts) / n, 'deals': n}
+  return results
 
 
 def match(policy, opponent, deals=1000, seed='eval'):
@@ -85,7 +126,7 @@ def _step_of(path):
   return int(re.search(r'policy-(\d+)\.pkl$', path).group(1))
 
 
-def watch(run, deals, poll, every):
+def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_deals=1000, shards=4):
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
@@ -120,8 +161,10 @@ def watch(run, deals, poll, every):
     if half not in (0, previous):
       opponents['half'] = get(half)
     entry = {'step': step}
-    for name, opponent in opponents.items():
-      result = match(current, opponent, deals, seed=f'eval-{step}')
+    results = {name: match(current, opponent, deals, seed=f'eval-{step}') for name, opponent in opponents.items()}
+    if heuristics:
+      results.update(benchmark(os.path.join(run_dir, f'policy-{step}.pkl'), heuristics, heuristic_deals, shards))
+    for name, result in results.items():
       entry[name] = {**result, **({'opponent_step': previous} if name == 'previous' else {}),
                      **({'opponent_step': half} if name == 'half' else {})}
       writer.add_scalar(f'eval/vs_{name}', result['score'], step)
@@ -148,9 +191,13 @@ def main():
   parser.add_argument('--deals', type=int, default=1000)
   parser.add_argument('--poll', type=float, default=10, help='seconds between checks for new policies')
   parser.add_argument('--every', type=int, default=1000, help='evaluate only policies whose step is a multiple of this')
+  parser.add_argument('--heuristics', default='greedy,timer', help='benchmark players to play (comma-separated; empty for none)')
+  parser.add_argument('--heuristic-deals', type=int, default=1000)
+  parser.add_argument('--shards', type=int, default=4, help='Node processes per benchmark player')
   args = parser.parse_args()
   if args.watch:
-    watch(args.watch, args.deals, args.poll, args.every)
+    heuristics = tuple(h for h in args.heuristics.split(',') if h)
+    watch(args.watch, args.deals, args.poll, args.every, heuristics, args.heuristic_deals, args.shards)
   else:
     print(json.dumps(match(resolve(args.policy), resolve(args.opponent), args.deals)))
 
