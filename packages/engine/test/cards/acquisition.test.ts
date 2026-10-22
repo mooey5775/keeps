@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition } from '../../src/index.ts';
+import { acquisitionOrder, buildPosition, SEATS } from '../../src/index.ts';
 import {
   abilityNames,
   act,
@@ -118,5 +118,20 @@ describe('Acquisition', () => {
     const used = act(start, 0, { action: 'ability', card: 'acquisition', discard: 'scepter', first: 'left' });
     const hocus = act(used.state, 0, { action: 'play', card: 'hocus-pocus' });
     expect(abilityNames(hocus.state, 0)).toEqual([]);
+  });
+
+  it('draws from the piles acquisitionOrder names, from every seat and in either order', () => {
+    for (const seat of SEATS) {
+      for (const first of ['left', 'right'] as const) {
+        const start = buildPosition({
+          keeps: { [seat]: ['acquisition'] },
+          hands: { [seat]: ['chalice'] },
+          piles: { 0: ['dagger'], 1: ['scepter'], 2: ['medallion'], 3: ['timepiece'] },
+          turn: seat,
+        });
+        const { events } = act(start, seat, { action: 'ability', card: 'acquisition', discard: 'chalice', first });
+        expect(payloads(events, 'draw').map((d) => d.from), `S${seat} ${first}`).toEqual(acquisitionOrder(seat, first));
+      }
+    }
   });
 });

@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, legalCommands } from '../../src/index.ts';
+import {
+  buildPosition,
+  leftOf,
+  legalCommands,
+  rightOf,
+  rotatedFrom,
+  rotatedTo,
+  SEATS,
+  type GameState,
+  type Seat,
+} from '../../src/index.ts';
 import { act, actionsLeft, draw, payloads, pileIds, respond } from '../helpers.ts';
 
 describe('Pandemonium', () => {
@@ -34,5 +44,24 @@ describe('Pandemonium', () => {
     const taken = respond(act(start, 0, { action: 'play', card: 'resurrection' }).state, 0, { kind: 'choose-discard-card', card: 'pandemonium' });
     const { state } = respond(taken.state, 0, { kind: 'choose-direction', direction: 'right' });
     expect(actionsLeft(state)).toBe(1);
+  });
+
+  it('moves each pile to rotatedTo(seat), so each seat gets the pile from rotatedFrom(seat)', () => {
+    const start = buildPosition({
+      piles: { 0: ['pandemonium', 'timepiece'], 1: ['chalice'], 2: ['dagger'], 3: ['medallion'] },
+      turn: 0,
+    });
+    const drawn = draw(start, 0).state;
+    const top = (state: GameState, seat: Seat) => pileIds(state, seat)[0];
+    for (const direction of ['left', 'right'] as const) {
+      const { state } = respond(drawn, 0, { kind: 'choose-direction', direction });
+      for (const seat of SEATS) {
+        expect(top(state, rotatedTo(seat, direction)), `${direction} S${seat}`).toBe(top(drawn, seat));
+        expect(top(state, seat), `${direction} S${seat}`).toBe(top(drawn, rotatedFrom(seat, direction)));
+        expect(rotatedFrom(rotatedTo(seat, direction), direction)).toBe(seat);
+      }
+    }
+    expect(SEATS.map((s) => rotatedTo(s, 'left'))).toEqual(SEATS.map(leftOf));
+    expect(SEATS.map((s) => rotatedTo(s, 'right'))).toEqual(SEATS.map(rightOf));
   });
 });

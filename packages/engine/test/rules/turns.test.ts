@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { apply, buildPosition, legalCommands } from '../../src/index.ts';
-import { actionsLeft, draw, ok, payloads, promptFor, types } from '../helpers.ts';
+import { abilityCost, apply, buildPosition, legalCommands, type AbilityChoice } from '../../src/index.ts';
+import { act, actionChoices, actionsLeft, draw, ok, payloads, promptFor, types } from '../helpers.ts';
 
 describe('turns', () => {
   it('R-03 a turn is exactly two actions, then play passes to the left', () => {
@@ -125,5 +125,37 @@ describe('turn order', () => {
       state = draw(draw(state, seat).state, seat).state;
     }
     expect(order).toEqual([3, 1, 2, 3]);
+  });
+});
+
+describe('ability costs', () => {
+  it('every keep ability uses the number of actions abilityCost gives: two for Blunder, one for the rest', () => {
+    const start = buildPosition({
+      keeps: { 0: ['juggling', 'sanction', 'acquisition', 'tithes', 'blunder'] },
+      hands: { 0: ['chalice'] },
+      piles: { 0: ['dagger'], 1: ['scepter'], 2: ['medallion'], 3: ['timepiece'] },
+      turn: 0,
+    });
+    const abilities = actionChoices(start, 0).filter((c): c is AbilityChoice => c.action === 'ability');
+    expect(Object.fromEntries(abilities.map((c) => [c.card, abilityCost(c)]))).toEqual({
+      juggling: 1,
+      sanction: 1,
+      acquisition: 1,
+      tithes: 1,
+      blunder: 2,
+    });
+    for (const choice of abilities) {
+      const { state } = act(start, 0, choice);
+      const label = JSON.stringify(choice);
+      if (abilityCost(choice) === 2) expect(state.turn?.seat, label).toBe(1);
+      else expect(state.turn, label).toMatchObject({ seat: 0, actionsTaken: 1 });
+    }
+  });
+
+  it('discarding Shackles costs one action, a Shackled player’s whole turn', () => {
+    const start = buildPosition({ keeps: { 0: ['shackles'] }, turn: 0 });
+    const choice = { action: 'ability', card: 'shackles' } as const;
+    expect(abilityCost(choice)).toBe(1);
+    expect(act(start, 0, choice).state.turn?.seat).toBe(1);
   });
 });
