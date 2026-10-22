@@ -4,10 +4,19 @@ Run from bot/:
   PYTHONPATH= .venv/bin/python -m keeps_bot.train --run first
 
 Self-play runs in `--workers` Node workers of `--rounds` rounds each (see
-selfplay.py); the network runs on the GPU when JAX has one. Logs go to stdout
-and runs/<run>/log.jsonl; checkpoints (the pickled solver) to
-runs/<run>/checkpoint-<step>.pkl.
+selfplay.py); the network runs on the GPU when JAX has one. Written to runs/<run>/:
+  tb/train            training metrics, for TensorBoard
+  log.jsonl           the same, as JSON lines
+  policy-<step>.pkl   the policy every --eval-every steps (see policy.py), for evaluate.py --watch
+  checkpoint-<step>.pkl  the whole solver every --save-every steps, to resume from
+
+Live dashboard: run `evaluate.py --watch <run>` alongside, and
+`tensorboard --logdir runs/<run>/tb`.
 """
+
+import os
+
+os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')  # share the GPU with the evaluator
 
 import argparse
 import json
@@ -16,8 +25,10 @@ import pickle
 import time
 
 import jax
+from tensorboardX import SummaryWriter
 
 from keeps_bot import game as keeps
+from keeps_bot import policy as policies
 from keeps_bot import rnad
 from keeps_bot import selfplay
 
@@ -51,9 +62,10 @@ class KeepsRNaD(rnad.RNaDSolver):
       game = keeps.bridge()
       self.selfplay = selfplay.SelfPlay(self._workers, self._rounds, self.config.trajectory_max,
                                         game.observation_size, game.num_actions, seed=self.config.seed)
+      # Self-play runs ahead in the background with the latest parameters, at most two batches ahead.
+      self.selfplay.start(self._policy, queue_max=2 * self.config.batch_size)
     play = self.selfplay
-    play.run(self._policy, self.config.batch_size)
-    episodes = play.take(self.config.batch_size)
+    episodes = play.wait(self.config.batch_size)
     self.actor_steps = play.decisions
     longest = max(len(e.action) for e in episodes)
     length = next((n for n in LENGTHS if n > longest), LENGTHS[-1])
@@ -72,7 +84,8 @@ def main():
   parser.add_argument('--lr', type=float, default=5e-5)
   parser.add_argument('--entropy-size', type=int, default=2000, help='learner steps per entropy-schedule iteration')
   parser.add_argument('--log-every', type=int, default=10)
-  parser.add_argument('--save-every', type=int, default=500)
+  parser.add_argument('--eval-every', type=int, default=250, help='learner steps between saved policies (evaluated by evaluate.py --watch)')
+  parser.add_argument('--save-every', type=int, default=2000, help='learner steps between full checkpoints')
   parser.add_argument('--resume', help='checkpoint to continue from')
   parser.add_argument('--seed', type=int, default=0)
   args = parser.parse_args()
@@ -100,29 +113,47 @@ def main():
     json.dump({**vars(args), 'observation_size': keeps.bridge().observation_size, 'device': str(jax.devices()[0])}, f, indent=2)
 
   log_path = os.path.join(run_dir, 'log.jsonl')
+  writer = SummaryWriter(os.path.join(run_dir, 'tb', 'train'))
+  num_actions = keeps.bridge().num_actions
+
+  def save_policy(step):
+    play = solver.selfplay
+    policies.save(os.path.join(run_dir, f'policy-{step}.pkl'), solver.params, config.policy_network_layers, num_actions,
+                  learner_steps=step, decisions=play.decisions if play else 0)
+
+  if solver.learner_steps == 0:
+    save_policy(0)
   started = time.time()
-  last = (started, 0)
+  last = (started, 0, 0, 0, 0)
   while solver.learner_steps < args.steps:
     logs = solver.step()
     step = solver.learner_steps
+    play = solver.selfplay
     if step % args.log_every == 0:
-      play = solver.selfplay
       now = time.time()
-      rate = (play.decisions - last[1]) / max(now - last[0], 1e-9)
-      last = (now, play.decisions)
+      t0, d0, r0, l0, w0 = last
+      rounds = play.rounds - r0
       entry = {
           'learner_steps': step,
           'decisions': play.decisions,
           'loss': float(logs['loss']),
-          'decisions_per_s': round(rate),
+          'decisions_per_s': round((play.decisions - d0) / max(now - t0, 1e-9)),
           'rounds': play.rounds,
+          'round_length': round((play.round_decisions - l0) / max(1, rounds), 1),
+          'player0_win_rate': round((play.player0_wins - w0) / max(1, rounds), 3),
           'cut_rate': round(play.rounds_cut / max(1, play.rounds), 4),
-          'queued': len(play.episodes),
           'minutes': round((now - started) / 60, 1),
       }
+      last = (now, play.decisions, play.rounds, play.round_decisions, play.player0_wins)
       print(json.dumps(entry), flush=True)
       with open(log_path, 'a') as f:
         f.write(json.dumps(entry) + '\n')
+      for key in ('loss', 'decisions_per_s', 'round_length', 'player0_win_rate', 'cut_rate'):
+        writer.add_scalar(f'train/{key}', entry[key], step)
+      writer.add_scalar('train/decisions', play.decisions, step)
+      writer.flush()
+    if step % args.eval_every == 0:
+      save_policy(step)
     if step % args.save_every == 0:
       with open(os.path.join(run_dir, f'checkpoint-{step}.pkl'), 'wb') as f:
         pickle.dump(solver, f)

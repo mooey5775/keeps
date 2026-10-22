@@ -8,6 +8,17 @@ Python side of the heads-up R-NaD bot. See [`docs/BOT.md`](../docs/BOT.md) for t
 - `keeps_bot/selfplay.py`: fast self-play for training. Node workers (`packages/learn/src/worker.ts`) each
   play many rounds at once and exchange binary frames with the actor; finished rounds become episodes.
 - `keeps_bot/train.py`: training. `PYTHONPATH= .venv/bin/python -m keeps_bot.train --run <name>` from `bot/`.
+- `keeps_bot/evaluate.py`: duplicate-deal matches between policies (or against the random player); with
+  `--watch <run>` it evaluates each policy a training run saves, for the dashboard.
+- `keeps_bot/policy.py`: a saved policy (weights only), rebuilt as a function of observation and legal actions.
+
+Training dashboard (from `bot/`, each in its own terminal):
+
+```sh
+PYTHONPATH= .venv/bin/python -m keeps_bot.train --run first
+PYTHONPATH= .venv/bin/python -m keeps_bot.evaluate --watch first
+PYTHONPATH= .venv/bin/tensorboard --logdir runs/first/tb     # http://localhost:6006
+```
 
 Setup (Python 3.13, Node 24, from the repo root):
 

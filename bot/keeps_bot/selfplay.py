@@ -14,6 +14,8 @@ v-trace needs of the acting policy).
 import collections
 import os
 import subprocess
+import threading
+import time
 
 import numpy as np
 
@@ -82,6 +84,8 @@ class SelfPlay:
     self.decisions = 0
     self.rounds = 0
     self.rounds_cut = 0
+    self.round_decisions = 0  # summed over finished rounds
+    self.player0_wins = 0
     self._rng = np.random.default_rng(seed)
     for w in self.workers:
       w.send(np.full(w.m, -1))
@@ -98,6 +102,33 @@ class SelfPlay:
 
   def take(self, count):
     return [self.episodes.popleft() for _ in range(count)]
+
+  def start(self, policy, queue_max):
+    """Plays in a background thread (so the learner can work meanwhile), pausing while `queue_max` episodes wait."""
+    self._error = None
+
+    def loop():
+      try:
+        while not self._stop:
+          if len(self.episodes) >= queue_max:
+            time.sleep(0.001)
+            continue
+          self._step_group(self._groups[self._next], policy)
+          self._next = (self._next + 1) % len(self._groups)
+      except Exception as error:  # surfaced to the learner by wait()
+        self._error = error
+
+    self._stop = False
+    self._thread = threading.Thread(target=loop, daemon=True)
+    self._thread.start()
+
+  def wait(self, count):
+    """The next `count` episodes from the background thread, once played."""
+    while len(self.episodes) < count:
+      if self._error:
+        raise self._error
+      time.sleep(0.001)
+    return self.take(count)
 
   def _step_group(self, group, policy):
     for w in group:
@@ -135,6 +166,8 @@ class SelfPlay:
 
   def _finish(self, w, i, reward):
     n = int(self._len[w][i])
+    self.round_decisions += n
+    self.player0_wins += reward > 0
     cut = n > self.t_max
     n = min(n, self.t_max)
     self.episodes.append(Episode(
@@ -145,6 +178,9 @@ class SelfPlay:
     self._len[w][i] = 0
 
   def close(self):
+    if getattr(self, '_thread', None):
+      self._stop = True
+      self._thread.join()
     for w in self.workers:
       w.close()
 
