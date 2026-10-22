@@ -11,6 +11,8 @@ import {
   type TraceEvent,
 } from '@keeps/engine';
 import { Decision } from './actions.ts';
+import { Belief } from './belief.ts';
+import { encodeObservation } from './observation.ts';
 
 // One heads-up round as a two-player, zero-sum, turn-based game: the shape
 // OpenSpiel expects. Player 0 sits at seat 0 and player 1 at seat 2 (two players
@@ -41,6 +43,8 @@ export class RoundEnv {
   /** The ids chosen so far for the current move. */
   prefix: number[] = [];
   private decision: Decision | null = null;
+  /** Each player's belief, kept up to date from their log (built on first use). */
+  private beliefs: (Belief | null)[] = [null, null];
 
   private constructor(state: GameState, events: TraceEvent[]) {
     this.state = state;
@@ -73,6 +77,14 @@ export class RoundEnv {
 
   get currentPlayer(): number {
     return this.terminal ? TERMINAL : playerOfSeat(this.decider());
+  }
+
+  /** What `player` observes now (see observation.ts); the chosen ids count only for the player to move. */
+  observation(player: number): Float32Array {
+    const view = this.view(player);
+    const belief = (this.beliefs[player] ??= new Belief(SEAT_OF_PLAYER[player]!)).update(this.log(player)).observe(view);
+    const moving = !this.terminal && this.currentPlayer === player;
+    return encodeObservation(view, belief, moving ? this.prefix : []);
   }
 
   view(player: number): PlayerView {
