@@ -44,6 +44,7 @@ class KeepsRNaD(rnad.RNaDSolver):
   def __init__(self, config, workers=14, rounds=128, groups=2, actors=1):
     self._workers, self._rounds, self._groups, self._actors = workers, rounds, groups, actors
     self.selfplay = None
+    self._batcher = None
     self.waited = 0.0  # seconds the learner has waited for self-play
     super().__init__(config)
 
@@ -55,6 +56,7 @@ class KeepsRNaD(rnad.RNaDSolver):
     self._workers, self._rounds = state['workers'], state['rounds']
     self._groups, self._actors = state.get('groups', 2), state.get('actors', 1)
     self.selfplay = None
+    self._batcher = None
     self.waited = 0.0
     super().__setstate__(state)
 
@@ -76,7 +78,10 @@ class KeepsRNaD(rnad.RNaDSolver):
     self.actor_steps = play.decisions
     longest = max(len(e.action) for e in episodes)
     length = next((n for n in LENGTHS if n > longest), LENGTHS[-1])
-    return selfplay.batch(episodes, length, self._game.num_distinct_actions())
+    if self._batcher is None:
+      self._batcher = selfplay.Batcher(self._game.num_distinct_actions())
+    # On the device now, so the batcher can reuse its buffers for the next batch.
+    return jax.block_until_ready(jax.device_put(self._batcher(episodes, length)))
 
 
 def main():

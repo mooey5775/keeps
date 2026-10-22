@@ -197,35 +197,64 @@ class SelfPlay:
       w.close()
 
 
+class Batcher:
+  """Builds R-NaD's [T, B, ...] TimeStep from episodes, in buffers reused from batch to batch.
+
+  A batch is ~100 MB; allocating it fresh every step can cost a second when the
+  machine is short of free memory (each new page has to be reclaimed first), so
+  each padded length keeps one set of buffers, overwritten in full each time.
+  The caller must be done with a batch (e.g. have copied it to the device)
+  before asking for the next one of the same length.
+  """
+
+  def __init__(self, num_actions):
+    self.num_actions = num_actions
+    self._buffers = {}
+
+  def __call__(self, episodes, length):
+    """Episodes padded to `length` the way R-NaD pads finished rounds."""
+    b, a = len(episodes), self.num_actions
+    key = (length, b)
+    if key not in self._buffers:
+      o = episodes[0].obs.shape[1]
+      self._buffers[key] = dict(
+          obs=np.zeros((length, b, o), np.float32), legal=np.zeros((length, b, a), np.int8),
+          player=np.zeros((length, b), np.float32), valid=np.zeros((length, b), np.float32),
+          env_rewards=np.zeros((length, b, 2), np.float32), actor_rewards=np.zeros((length, b, 2), np.float32),
+          action_oh=np.zeros((length, b, a), np.float32), policy=np.zeros((length, b, a), np.float32))
+    buf = self._buffers[key]
+    # Every element is written below (episode data, or padding), so nothing stale survives.
+    buf['legal'][:] = 0
+    buf['action_oh'][:] = 0
+    buf['policy'][:] = 0
+    buf['env_rewards'][:] = 0
+    buf['actor_rewards'][:] = 0
+    for j, e in enumerate(episodes):
+      n = len(e.action)
+      steps = np.arange(n)
+      buf['obs'][:n, j] = e.obs
+      buf['obs'][n:, j] = 0
+      buf['legal'][:n, j] = e.legal
+      buf['legal'][n:, j, 0] = 1  # filler rows need some legal action
+      buf['player'][:n, j] = e.player
+      buf['player'][n:, j] = 0
+      buf['valid'][:n, j] = 1
+      buf['valid'][n:, j] = 0
+      buf['action_oh'][steps, j, e.action] = 1
+      buf['action_oh'][n:, j, 0] = 1
+      # Only the taken action's probability is ever read (v-trace's ratio pi/mu at the action).
+      buf['policy'][steps, j, e.action] = e.prob
+      buf['policy'][n:, j, 0] = 1
+      if e.result is not None:
+        result = (e.result, -e.result)
+        buf['env_rewards'][n:, j] = result  # the terminal state and the padding after it
+        buf['actor_rewards'][n - 1:, j] = result  # rewards after each step: the last one ends the round
+    return rnad.TimeStep(
+        env=rnad.EnvStep(obs=buf['obs'], legal=buf['legal'], player_id=buf['player'], valid=buf['valid'],
+                         rewards=buf['env_rewards']),
+        actor=rnad.ActorStep(action_oh=buf['action_oh'], policy=buf['policy'], rewards=buf['actor_rewards']))
+
+
 def batch(episodes, length, num_actions):
-  """Episodes as R-NaD's [T, B, ...] TimeStep, padded to `length` the way R-NaD pads finished rounds."""
-  b = len(episodes)
-  obs_size = episodes[0].obs.shape[1]
-  obs = np.zeros((length, b, obs_size), np.float32)
-  legal = np.zeros((length, b, num_actions), np.int8)
-  legal[:, :, 0] = 1  # filler rows need some legal action
-  player = np.zeros((length, b), np.float32)
-  valid = np.zeros((length, b), np.float32)
-  env_rewards = np.zeros((length, b, 2), np.float32)
-  actor_rewards = np.zeros((length, b, 2), np.float32)
-  action_oh = np.zeros((length, b, num_actions), np.float32)
-  policy = np.zeros((length, b, num_actions), np.float32)
-  for j, e in enumerate(episodes):
-   n = len(e.action)
-   steps = np.arange(n)
-   obs[:n, j] = e.obs
-   legal[:n, j] = e.legal
-   player[:n, j] = e.player
-   valid[:n, j] = 1
-   action_oh[steps, j, e.action] = 1
-   # Only the taken action's probability is ever read (v-trace's ratio pi/mu at the action).
-   policy[steps, j, e.action] = e.prob
-   action_oh[n:, j, 0] = 1
-   policy[n:, j, 0] = 1
-   if e.result is not None:
-    result = (e.result, -e.result)
-    env_rewards[n:, j] = result  # the terminal state and the padding after it
-    actor_rewards[n - 1:, j] = result  # rewards after each step: the last one ends the round
-  return rnad.TimeStep(
-    env=rnad.EnvStep(obs=obs, legal=legal, player_id=player, valid=valid, rewards=env_rewards),
-    actor=rnad.ActorStep(action_oh=action_oh, policy=policy, rewards=actor_rewards))
+  """A one-off batch (fresh buffers): see Batcher."""
+  return Batcher(num_actions)(episodes, length)
