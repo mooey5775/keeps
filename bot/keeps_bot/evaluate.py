@@ -17,6 +17,12 @@ half as many steps ago, and the rule-based benchmark players greedy and timer
 each time), and writes the results to runs/<run>/tb/eval (TensorBoard) and
 runs/<run>/evals.jsonl. (It used to play the untrained network too; that
 tracked the random player within a point or two.)
+
+Each score is charted twice: by the run's own step (eval/...) and by millions of
+decisions played (eval_by_decisions/...), the axis on which runs of different
+learners compare at equal experience (an R-NaD step is 256 rounds, a VRPO
+iteration 2,048). Evaluations from before that chart existed are added to it once,
+from the decision counts their policy files recorded.
 """
 
 import os
@@ -26,6 +32,7 @@ os.environ.setdefault('XLA_PYTHON_CLIENT_PREALLOCATE', 'false')  # share the GPU
 import argparse
 import glob
 import json
+import pickle
 import re
 import subprocess
 import time
@@ -121,17 +128,47 @@ def _step_of(path):
   return int(re.search(r'policy-(\d+)\.pkl$', path).group(1))
 
 
+def _by_decisions(writer, entry, decisions):
+  """An evaluation's scores on the eval_by_decisions charts (step: millions of decisions played)."""
+  for name, result in entry.items():
+    if isinstance(result, dict) and 'score' in result:
+      writer.add_scalar(f'eval_by_decisions/vs_{name}', result['score'], round(decisions / 1e6))
+
+
+def _backfill_by_decisions(writer, run_dir, log_path):
+  """Charts, by decisions, the evaluations made before that chart existed (once per run)."""
+  marker = os.path.join(run_dir, 'tb', 'eval', '.by_decisions')
+  if os.path.exists(marker) or not os.path.exists(log_path):
+    return
+  with open(log_path) as f:
+    entries = [json.loads(line) for line in f]
+  for entry in entries:
+    decisions = entry.get('decisions')
+    if decisions is None:
+      path = os.path.join(run_dir, f'policy-{entry["step"]}.pkl')
+      if not os.path.exists(path):
+        continue
+      with open(path, 'rb') as f:
+        decisions = pickle.load(f).get('decisions')
+    if decisions is not None:
+      _by_decisions(writer, entry, decisions)
+  writer.flush()
+  open(marker, 'w').close()
+
+
 def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_deals=1000, shards=4):
   from tensorboardX import SummaryWriter
 
   run_dir = os.path.abspath(os.path.join(RUNS, run))
   writer = SummaryWriter(os.path.join(run_dir, 'tb', 'eval'))
   log_path = os.path.join(run_dir, 'evals.jsonl')
+  _backfill_by_decisions(writer, run_dir, log_path)
   done = set()
   if os.path.exists(log_path):
     with open(log_path) as f:
       done = {json.loads(line)['step'] for line in f}
   loaded = {}
+  decisions = {}  # step → decisions played by then (from the policy file)
 
   def get(step):
     if step not in loaded:
@@ -140,6 +177,7 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
       # matches start (from the policy itself: the run's config.json may not exist yet).
       keeps.set_observation(saved.get('observation', 1))
       loaded[step] = policy
+      decisions[step] = saved.get('decisions')
     return loaded[step]
 
   previous = max(done) if done else None
@@ -172,6 +210,9 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
       writer.add_scalar(f'eval_seats/vs_{name}_as_player0', result['as_player0'], step)
       writer.add_scalar(f'eval_seats/vs_{name}_as_player1', result['as_player1'], step)
     entry['seconds'] = round(time.time() - started, 1)
+    if decisions.get(step) is not None:
+      entry['decisions'] = decisions[step]
+      _by_decisions(writer, entry, decisions[step])
     writer.flush()
     with open(log_path, 'a') as f:
       f.write(json.dumps(entry) + '\n')
