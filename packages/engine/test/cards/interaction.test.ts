@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, eventsFor, type CardId, type GameState, type PositionSpec } from '../../src/index.ts';
+import { buildPosition, eventsFor } from '../../src/index.ts';
 import {
   act,
   actionChoices,
@@ -11,20 +11,10 @@ import {
   pileIds,
   promptFor,
   respond,
+  stealing,
   types,
-  type Step,
 } from '../helpers.ts';
 
-/** Builds `spec` with successive seeds until Legerdemain (played by S0 on `victim`) steals `card`. */
-function stealing(spec: PositionSpec, victim: 0 | 1 | 2 | 3, card: CardId): { start: GameState; stolen: Step } {
-  for (let seed = 0; seed < 100; seed++) {
-    const start = buildPosition({ ...spec, seed });
-    const played = act(start, 0, { action: 'play', card: 'legerdemain' });
-    const stolen = respond(played.state, 0, { kind: 'choose-player', seat: victim });
-    if (payloads(stolen.events, 'steal')[0]?.cards?.[0] === card) return { start, stolen };
-  }
-  throw new Error(`no seed under 100 makes Legerdemain steal ${card}`);
-}
 
 describe('Legerdemain', () => {
   it('K-02 the stolen card is played as if HOT, using no action beyond Legerdemain itself', () => {

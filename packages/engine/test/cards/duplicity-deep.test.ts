@@ -1,16 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { apply, buildPosition, keepValue, legalCommands, type CardId, type GameState, type KeepCard, type Seat } from '../../src/index.ts';
-import { abilityNames, act, draw, hotTarget, payloads, promptFor, respond, revealNow } from '../helpers.ts';
+import { apply, buildPosition, keepValue, legalCommands, type GameState } from '../../src/index.ts';
+import { abilityNames, act, draw, hidden, hotTarget, payloads, promptFor, respond, revealNow } from '../helpers.ts';
 
 // Duplicity beyond the clarifications: abilities on revealed cards, who may
 // use them, how often windows open, and reveals while others are deciding.
 
-const hidden = (id: CardId, placedBy: Seat = 0): KeepCard => ({ id, faceDown: { placedBy } });
 const viewScore = (state: GameState) => keepValue(state.keeps[0]);
 
 describe('revealed cards', () => {
   it('a revealed Sanction can be used later the same turn', () => {
-    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('sanction')] }, piles: { 2: ['chalice'] }, turn: 0 });
+    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('sanction', 0)] }, piles: { 2: ['chalice'] }, turn: 0 });
     expect(abilityNames(start, 0)).toEqual([]);
     const revealed = revealNow(start, 0);
     expect(abilityNames(revealed.state, 0)).toEqual(['sanction']);
@@ -30,7 +29,7 @@ describe('revealed cards', () => {
   });
 
   it('a revealed Tithes makes its keep worth more at once', () => {
-    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('tithes'), 'chalice'] }, piles: { 0: ['dagger'] }, turn: 0 });
+    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('tithes', 0), 'chalice'] }, piles: { 0: ['dagger'] }, turn: 0 });
     // Face down, Tithes has no value: just the Chalice's 2 coins.
     expect(viewScore(start)).toBe(4);
     const { state } = revealNow(start, 0);

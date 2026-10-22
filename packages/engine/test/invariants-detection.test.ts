@@ -13,7 +13,7 @@ import {
 // runs them after each command. Each check here breaks one rule on purpose
 // and expects exactly that problem to be reported.
 
-const fresh = (): GameState => newGame({ players: 4, seed: 'detect', firstSeat: 0 }).state;
+const fresh = (): GameState => newGame({ players: 4, seed: 'invariants', firstSeat: 0 }).state;
 const resting = (): GameState => buildPosition({ piles: { 0: ['chalice', 'dagger'] }, hands: { 1: ['joker'] }, turn: 0 });
 
 /** Moves a card out of wherever it is, so conservation stays intact. */

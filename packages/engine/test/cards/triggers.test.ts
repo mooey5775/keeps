@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, type TracePayload } from '../../src/index.ts';
+import { buildPosition } from '../../src/index.ts';
 import {
   abilityNames,
   act,
@@ -10,12 +10,10 @@ import {
   payloads,
   promptFor,
   respond,
+  triggerOrder,
   types,
 } from '../helpers.ts';
 
-type Trigger = Extract<TracePayload, { type: 'trigger' }>;
-const triggerOrder = (events: Parameters<typeof payloads>[0]) =>
-  payloads(events, 'trigger').map((t: Trigger) => `${t.kind}(S${t.seat})`);
 
 describe('Interest', () => {
   it("makes the keep's owner draw when a Coin card enters it", () => {

@@ -1,17 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { apply, buildPosition, eventsFor, legalCommands, type CardId, type KeepCard, type Seat } from '../../src/index.ts';
-import {
-  act,
-  actionsLeft,
-  draw,
-  payloads,
-  promptFor,
-  respond,
-  revealNow,
-  types,
-} from '../helpers.ts';
+import { apply, buildPosition, eventsFor, legalCommands, type CardId, type Seat } from '../../src/index.ts';
+import { act, actionsLeft, draw, hidden, payloads, promptFor, respond, revealNow, types } from '../helpers.ts';
 
-const hidden = (id: CardId, placedBy: Seat = 0): KeepCard => ({ id, faceDown: { placedBy } });
 const canRevealNow = (state: Parameters<typeof legalCommands>[0], seat: Seat) =>
   legalCommands(state, seat).some((c) => c.type === 'reveal-duplicity');
 
@@ -22,7 +12,7 @@ describe('Duplicity', () => {
     expect(promptFor(played.state, 0, 'duplicity-hide').options).toEqual(['chalice']);
     const { state, events } = respond(played.state, 0, { kind: 'duplicity-hide', card: 'chalice', target: 1 });
     expect(state.keeps[0]).toEqual([{ id: 'duplicity' }]);
-    expect(state.keeps[1]).toEqual([hidden('chalice')]);
+    expect(state.keeps[1]).toEqual([hidden('chalice', 0)]);
     expect(state.hands[0]).toEqual(['hocus-pocus']);
     expect(actionsLeft(state)).toBe(1);
     expect(payloads(eventsFor(events, 1), 'place-face-down')).toEqual([
@@ -51,7 +41,7 @@ describe('Duplicity', () => {
   it('follows Duplicity: moving it with Providence moves who may reveal', () => {
     const start = buildPosition({
       hands: { 0: ['providence'] },
-      keeps: { 0: ['duplicity', hidden('chalice')], 3: ['dagger'] },
+      keeps: { 0: ['duplicity', hidden('chalice', 0)], 3: ['dagger'] },
       turn: 0,
     });
     const played = act(start, 0, { action: 'play', card: 'providence' });
@@ -68,7 +58,7 @@ describe('Duplicity', () => {
 describe('revealing', () => {
   it('C-11 costs no action and can happen at any time, even on another player\'s turn', () => {
     const start = buildPosition({
-      keeps: { 0: ['duplicity', hidden('chalice')] },
+      keeps: { 0: ['duplicity', hidden('chalice', 0)] },
       piles: { 1: ['dagger'] },
       turn: 1,
     });
@@ -84,7 +74,7 @@ describe('revealing', () => {
 
   it('C-10 a face-down Token does not count toward a token victory until it is revealed', () => {
     const start = buildPosition({
-      keeps: { 0: ['duplicity', 'count-token', 'fool-token', hidden('friar-token')] },
+      keeps: { 0: ['duplicity', 'count-token', 'fool-token', hidden('friar-token', 0)] },
       piles: { 0: ['chalice'] },
       turn: 0,
     });
@@ -122,7 +112,7 @@ describe('revealing', () => {
 
   it("C-16 revealing a face-down card in a Retribution owner's keep does not trigger it", () => {
     const start = buildPosition({
-      keeps: { 0: ['duplicity'], 1: ['retribution', hidden('chalice')] },
+      keeps: { 0: ['duplicity'], 1: ['retribution', hidden('chalice', 0)] },
       piles: { 0: ['dagger'] },
       turn: 0,
     });
@@ -134,7 +124,7 @@ describe('revealing', () => {
     // Unreachable in real play (Royal Favor is HOT, so never in a hand to hide),
     // but the ruling pins down what a revealed Royal Favor does: nothing.
     const start = buildPosition({
-      keeps: { 0: ['duplicity'], 1: [hidden('royal-favor')] },
+      keeps: { 0: ['duplicity'], 1: [hidden('royal-favor', 0)] },
       piles: { 1: ['dagger'] },
       turn: 0,
     });
@@ -208,7 +198,7 @@ describe('reveal windows during a play', () => {
 describe('a revealed Shackles', () => {
   const shackledPosition = () =>
     buildPosition({
-      keeps: { 0: ['duplicity'], 1: [hidden('shackles')] },
+      keeps: { 0: ['duplicity'], 1: [hidden('shackles', 0)] },
       hands: { 1: ['hocus-pocus'] },
       piles: { 1: ['dagger', 'scepter', 'medallion', 'timepiece'], 2: ['chalice'] },
       turn: 1,
@@ -240,7 +230,7 @@ describe('a revealed Shackles', () => {
   });
 
   it("doesn't change anything when it isn't its owner's turn", () => {
-    const start = buildPosition({ keeps: { 0: ['duplicity'], 1: [hidden('shackles')] }, piles: { 0: ['chalice'] }, turn: 0 });
+    const start = buildPosition({ keeps: { 0: ['duplicity'], 1: [hidden('shackles', 0)] }, piles: { 0: ['chalice'] }, turn: 0 });
     const { state, events } = revealNow(start, 0);
     expect(types(events)).toEqual(['reveal']);
     expect(actionsLeft(state)).toBe(2);
@@ -250,7 +240,7 @@ describe('a revealed Shackles', () => {
 describe('reveal windows at round end', () => {
   it('C-12 a face-down Last Laugh can be revealed at round end to get its action', () => {
     const start = buildPosition({
-      keeps: { 0: ['duplicity', hidden('last-laugh')] },
+      keeps: { 0: ['duplicity', hidden('last-laugh', 0)] },
       hands: { 0: ['chalice'] },
       turn: 0,
     });
@@ -265,7 +255,7 @@ describe('reveal windows at round end', () => {
   it('C-03 can reveal after round end, before Last Laugh or after it', () => {
     const position = () =>
       buildPosition({
-        keeps: { 0: ['duplicity', hidden('chalice')], 1: ['last-laugh', 'dagger'] },
+        keeps: { 0: ['duplicity', hidden('chalice', 0)], 1: ['last-laugh', 'dagger'] },
         turn: 0,
       });
     // Before Last Laugh: S1's action then sees S0's Chalice face-up.
@@ -286,7 +276,7 @@ describe('reveal windows at round end', () => {
 
   it("C-24 Last Laugh (face-up) acts, then the face-down card can still be revealed before scoring", () => {
     const start = buildPosition({
-      keeps: { 0: ['duplicity', 'last-laugh', hidden('faberge-egg')], 1: ['dagger'] },
+      keeps: { 0: ['duplicity', 'last-laugh', hidden('faberge-egg', 0)], 1: ['dagger'] },
       hands: { 0: ['chalice'] },
       turn: 0,
     });
@@ -312,7 +302,7 @@ describe('reveal windows at round end', () => {
   });
 
   it('the free reveal command is not offered once the round is scored', () => {
-    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('chalice')] }, turn: 0 });
+    const start = buildPosition({ keeps: { 0: ['duplicity', hidden('chalice', 0)] }, turn: 0 });
     const ended = draw(start, 0);
     const scored = respond(respond(ended.state, 0, { kind: 'reveal-window', reveal: false }).state, 0, {
       kind: 'reveal-window',

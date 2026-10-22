@@ -1,13 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, type GameState } from '../../src/index.ts';
-import { act, draw, payloads, promptFor, respond } from '../helpers.ts';
+import { buildPosition } from '../../src/index.ts';
+import { act, draw, frames, payloads, promptFor, respond } from '../helpers.ts';
 
 // Ruling Q-17: actions a card grants (Hocus Pocus, played directly, copied
 // by Joker, stolen with Legerdemain, or invoked) are taken after the
 // enclosing play has resolved and queued its triggers.
 
-const frames = (state: GameState) =>
-  state.stack.flatMap((op) => (op.op === 'action-frame' ? [`S${op.seat}:${op.kind}:${op.remaining}`] : []));
 
 describe('granted actions come after the enclosing play (Q-17)', () => {
   it('Q-17 stealing Hocus Pocus from a Retribution owner: the Retribution actions come first', () => {
@@ -19,7 +17,7 @@ describe('granted actions come after the enclosing play (Q-17)', () => {
     });
     const stolen = respond(act(start, 0, { action: 'play', card: 'legerdemain' }).state, 0, { kind: 'choose-player', seat: 1 });
     expect(payloads(stolen.events, 'trigger').map((t) => `${t.kind}:${t.seat}`)).toEqual(['retribution:1']);
-    expect(frames(stolen.state)).toEqual(['S0:turn:1', 'S0:hocus-pocus:2', 'S1:retribution:2']);
+    expect(frames(stolen.state)).toEqual(['S0:turn:1', 'S0:hocus-pocus:2', 'S1:retribution:2!']);
     promptFor(stolen.state, 1, 'action');
 
     // S1 retaliates, then S0 takes the two stolen actions and the last turn action.
@@ -43,7 +41,7 @@ describe('granted actions come after the enclosing play (Q-17)', () => {
     expect(stolen.state.prompts.map((p) => [p.seat, p.kind])).toEqual([[2, 'reveal-window']]);
     // Revealing the hidden Retribution in that window makes S1 retaliate, still before S0's stolen actions.
     const revealed = respond(stolen.state, 2, { kind: 'reveal-window', reveal: true });
-    expect(frames(revealed.state)).toEqual(['S0:turn:1', 'S0:hocus-pocus:2', 'S1:retribution:2']);
+    expect(frames(revealed.state)).toEqual(['S0:turn:1', 'S0:hocus-pocus:2', 'S1:retribution:2!']);
   });
 
   it('Q-17 with nothing triggered, the stolen actions simply follow', () => {

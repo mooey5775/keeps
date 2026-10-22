@@ -1,12 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, keepValue, legalCommands, viewFor, type CardId, type KeepCard, type Seat } from '../../src/index.ts';
-import { act, actionsLeft, draw, hotTarget, payloads, promptFor, respond, revealNow, types } from '../helpers.ts';
+import { buildPosition, keepValue, legalCommands, viewFor } from '../../src/index.ts';
+import {
+  act,
+  actionsLeft,
+  draw,
+  hidden,
+  hotTarget,
+  payloads,
+  promptFor,
+  respond,
+  revealNow,
+  types,
+} from '../helpers.ts';
 
 // More Duplicity: placement variants, which plays open a reveal window,
 // a hidden card that moves, every round-end window, and what a revealed
 // card does afterward. See duplicity.test.ts and duplicity-deep.test.ts.
 
-const hidden = (id: CardId, placedBy: Seat = 3): KeepCard => ({ id, faceDown: { placedBy } });
 const triggerKinds = (events: Parameters<typeof payloads>[0]) => payloads(events, 'trigger').map((t) => `${t.kind}:${t.seat}`);
 
 describe('placement', () => {
@@ -53,7 +63,7 @@ describe('which plays open a reveal window', () => {
   it('a play that only changes the owner’s hand (Pluck) opens one; a revealed Retribution answers it', () => {
     const start = buildPosition({
       hands: { 0: ['pluck'], 1: ['chalice'] },
-      keeps: { 1: [hidden('retribution')], 3: ['duplicity'] },
+      keeps: { 1: [hidden('retribution', 3)], 3: ['duplicity'] },
       piles: { 1: ['dagger', 'scepter'] },
       turn: 0,
     });
@@ -67,7 +77,7 @@ describe('which plays open a reveal window', () => {
   it('Pluck that takes from someone else does not open one for the hidden keep’s owner', () => {
     const start = buildPosition({
       hands: { 0: ['pluck'], 1: ['chalice'], 2: ['dagger'] },
-      keeps: { 1: [hidden('retribution')], 3: ['duplicity'] },
+      keeps: { 1: [hidden('retribution', 3)], 3: ['duplicity'] },
       turn: 0,
     });
     const played = act(start, 0, { action: 'play', card: 'pluck' });
@@ -78,7 +88,7 @@ describe('which plays open a reveal window', () => {
   it('Pickpocket that finds no Coin cards changes nothing, so no window', () => {
     const start = buildPosition({
       hands: { 0: ['pickpocket'], 1: ['prayer'] },
-      keeps: { 1: [hidden('retribution')], 3: ['duplicity'] },
+      keeps: { 1: [hidden('retribution', 3)], 3: ['duplicity'] },
       turn: 0,
     });
     const played = act(start, 0, { action: 'play', card: 'pickpocket' });
@@ -89,7 +99,7 @@ describe('which plays open a reveal window', () => {
   it('Offering: the window opens after every gift is given', () => {
     const start = buildPosition({
       hands: { 0: ['offering'], 1: ['chalice'], 2: ['dagger'] },
-      keeps: { 1: [hidden('retribution')], 3: ['duplicity'] },
+      keeps: { 1: [hidden('retribution', 3)], 3: ['duplicity'] },
       piles: { 1: ['scepter', 'medallion'] },
       turn: 0,
     });
@@ -109,13 +119,13 @@ describe('a hidden card that moves', () => {
     // Revealed in the play's window, the hidden card should behave the same.
     const start = buildPosition({
       hands: { 0: ['providence'] },
-      keeps: { 1: [hidden('retribution')], 2: ['chalice'], 3: ['duplicity'] },
+      keeps: { 1: [hidden('retribution', 3)], 2: ['chalice'], 3: ['duplicity'] },
       piles: { 1: ['dagger', 'scepter'], 2: ['medallion', 'timepiece'] },
       turn: 0,
     });
     const played = act(start, 0, { action: 'play', card: 'providence' });
     const swapped = respond(played.state, 0, { kind: 'choose-keep-pair', a: { seat: 1, index: 0 }, b: { seat: 2, index: 0 } });
-    expect(swapped.state.keeps[2]).toEqual([hidden('retribution')]);
+    expect(swapped.state.keeps[2]).toEqual([hidden('retribution', 3)]);
     const { state, events } = respond(swapped.state, 3, { kind: 'reveal-window', reveal: true });
     expect(triggerKinds(events)).toEqual(['retribution:1']);
     expect(state.stack.at(-1)).toMatchObject({ op: 'action-frame', seat: 1, kind: 'retribution' });
@@ -127,7 +137,7 @@ describe('a hidden card that moves', () => {
     // entered its old keep, nor in its new keep, where no Coin card entered.
     const start = buildPosition({
       hands: { 0: ['providence'] },
-      keeps: { 1: [hidden('interest')], 2: ['chalice'], 3: ['duplicity'] },
+      keeps: { 1: [hidden('interest', 3)], 2: ['chalice'], 3: ['duplicity'] },
       piles: { 1: ['dagger'], 2: ['medallion'] },
       turn: 0,
     });
@@ -285,7 +295,7 @@ describe('Duplicity with Retribution and Last Laugh, more combinations', () => {
 
   it("the Last Laugh action's own play can open a window, and a revealed Interest still draws post-round", () => {
     const start = buildPosition({
-      keeps: { 0: ['last-laugh'], 3: ['duplicity'], 2: [hidden('interest')] },
+      keeps: { 0: ['last-laugh'], 3: ['duplicity'], 2: [hidden('interest', 3)] },
       hands: { 0: ['chalice'] },
       piles: { 2: ['dagger'] },
       turn: 0,

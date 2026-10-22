@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildPosition, viewFor, type GameState } from '../../src/index.ts';
-import { act, draw, hotTarget, payloads, promptFor, respond } from '../helpers.ts';
+import { act, draw, frames, hotTarget, payloads, promptFor, respond } from '../helpers.ts';
 
 // Ruling Q-17 in deeper chains, and trigger ordering across seats.
 
-const frames = (state: GameState) =>
-  state.stack.flatMap((op) => (op.op === 'action-frame' ? [`S${op.seat}:${op.kind}:${op.remaining}${op.restricted ? '!' : ''}`] : []));
 
 describe('Q-17 in deeper chains', () => {
   it('an invoked Legerdemain stealing Hocus Pocus: the Retribution still comes first', () => {

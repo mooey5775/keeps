@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, describe as describeEvent, parseReplayLog, type KeepCard } from '../../src/index.ts';
-import { act, payloads, respond, revealNow, types } from '../helpers.ts';
+import { buildPosition, describe as describeEvent, parseReplayLog } from '../../src/index.ts';
+import { act, hidden, payloads, respond, revealNow, types } from '../helpers.ts';
 
 // Rule branches that coverage showed no test reaching.
 
-const hidden = (id: KeepCard['id'], placedBy: 0 | 1 | 2 | 3 = 3): KeepCard => ({ id, faceDown: { placedBy } });
 
 describe('rarely reached rules', () => {
   it('Prayer with every pile empty has no effect', () => {
@@ -35,7 +34,7 @@ describe('rarely reached rules', () => {
     // entering a keep, but only the Dagger entered the hidden Interest's keep.
     const start = buildPosition({
       hands: { 0: ['providence'] },
-      keeps: { 1: [hidden('interest'), 'scepter'], 2: ['dagger'], 3: ['duplicity'] },
+      keeps: { 1: [hidden('interest', 3), 'scepter'], 2: ['dagger'], 3: ['duplicity'] },
       piles: { 1: ['chalice', 'medallion'], 2: ['timepiece'] },
       turn: 0,
     });

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { buildPosition, CARD_IDS, CARDS, eventsFor, keepValue, legalCommands, type KeepCard } from '../../src/index.ts';
+import { buildPosition, CARD_IDS, CARDS, eventsFor, keepValue, legalCommands } from '../../src/index.ts';
 import {
   abilityNames,
   act,
@@ -8,6 +8,7 @@ import {
   actionsLeft,
   draw,
   hotTarget,
+  keepOf,
   payloads,
   pileIds,
   promptFor,
@@ -19,7 +20,6 @@ import {
 // edge cases; the deeper rules and clarification tests live in the other files
 // in this folder (abilities, effects, triggers, interaction, duplicity).
 
-const keepOf = (...ids: KeepCard['id'][]): KeepCard[] => ids.map((id) => ({ id }));
 
 describe('catalog', () => {
   it('has a section for every card', () => {

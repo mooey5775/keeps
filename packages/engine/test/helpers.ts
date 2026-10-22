@@ -1,6 +1,7 @@
 import { expect } from 'vitest';
 import {
   apply,
+  buildPosition,
   formatTrace,
   legalCommands,
   type ActionChoice,
@@ -9,6 +10,8 @@ import {
   type CardId,
   type Command,
   type GameState,
+  type KeepCard,
+  type PositionSpec,
   type Prompt,
   type Seat,
   type TraceEvent,
@@ -113,4 +116,37 @@ export function actionsLeft(state: GameState): number {
   const top = state.stack.at(-1);
   if (top?.op !== 'action-frame') expect.fail(`top of stack is not an action frame: ${JSON.stringify(top)}`);
   return top.remaining;
+}
+
+/** A face-down card for a keep, placed (and so known) by `placedBy`. */
+export const hidden = (id: CardId, placedBy: Seat): KeepCard => ({ id, faceDown: { placedBy } });
+
+/** Face-up keep cards. */
+export const keepOf = (...ids: CardId[]): KeepCard[] => ids.map((id) => ({ id }));
+
+/** The triggers in `events`, in order, as `kind(S<seat>)`. */
+export const triggerOrder = (events: readonly TraceEvent[]) =>
+  payloads(events, 'trigger').map((t) => `${t.kind}(S${t.seat})`);
+
+/** The stack's action frames, bottom first, as `S<seat>:<kind>:<remaining>`, with `!` if restricted. */
+export const frames = (state: GameState) =>
+  state.stack.flatMap((op) => (op.op === 'action-frame' ? [`S${op.seat}:${op.kind}:${op.remaining}${op.restricted ? '!' : ''}`] : []));
+
+/** Builds `spec` with successive seeds until Legerdemain (played by S0 on `victim`) steals `card`. */
+export function stealing(spec: PositionSpec, victim: Seat, card: CardId): { start: GameState; stolen: Step } {
+  for (let seed = 0; seed < 100; seed++) {
+    const start = buildPosition({ ...spec, seed });
+    const played = act(start, 0, { action: 'play', card: 'legerdemain' });
+    const stolen = respond(played.state, 0, { kind: 'choose-player', seat: victim });
+    if (payloads(stolen.events, 'steal')[0]?.cards?.[0] === card) return { start, stolen };
+  }
+  throw new Error(`no seed under 100 makes Legerdemain steal ${card}`);
+}
+
+/** S0 (Last Laugh, plus `keep`) ends the round on their first action; returns the post-round state. */
+export function lastLaughAfterEnding(keep: CardId[], hand: CardId[] = []): GameState {
+  const start = buildPosition({ keeps: { 0: ['last-laugh', ...keep] }, hands: { 0: hand }, turn: 0 });
+  const { state } = draw(start, 0);
+  expect(state.phase).toBe('post-round');
+  return state;
 }

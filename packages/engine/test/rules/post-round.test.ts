@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosition, type CardId, type GameState } from '../../src/index.ts';
-import { abilityNames, act, actionChoices, draw, hotTarget, payloads, promptFor, types } from '../helpers.ts';
+import { buildPosition } from '../../src/index.ts';
+import {
+  abilityNames,
+  act,
+  actionChoices,
+  draw,
+  hotTarget,
+  lastLaughAfterEnding,
+  payloads,
+  promptFor,
+  types,
+} from '../helpers.ts';
 
-/** S0 (Last Laugh, plus `keep`) ends the round on their first action; returns the post-round state. */
-function lastLaughAfterEnding(keep: CardId[], hand: CardId[] = []): GameState {
-  const start = buildPosition({ keeps: { 0: ['last-laugh', ...keep] }, hands: { 0: hand }, turn: 0 });
-  const { state } = draw(start, 0);
-  expect(state.phase).toBe('post-round');
-  return state;
-}
 
 describe('Last Laugh', () => {
   it('gives its owner one action after the round ends, right before scoring (Last Laugh 1)', () => {
