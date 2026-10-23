@@ -4,7 +4,7 @@
 //   node server.ts   → the game at http://localhost:8788, bot insight at http://localhost:8789,
 //                      the coach at http://localhost:8789/coach
 // The bot plays the best rollout move (SEARCH_MODE=sample: Ataraxos's sampling instead).
-import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
@@ -20,12 +20,15 @@ import { authorized } from '../../server/src/admin.ts';
 import { BETA, RolloutPool, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
+// Replays, sessions.jsonl, the admin-token file (KEEPS_DATA_DIR in a container; ./data locally).
+const DATA = process.env.KEEPS_DATA_DIR ?? join(import.meta.dirname, 'data');
+mkdirSync(DATA, { recursive: true });
 // The bot's network (BOT=vrpo1 → vrpo1.bin; e1 by default). VRPO's actor has no value head: its pages show none.
 const botName = process.env.BOT ?? 'e1';
 // The bot's name at the table.
 const DISPLAY_NAME = process.env.BOT_NAME ?? 'Midstrike';
 // The admin password for /bot/: ADMIN_TOKEN, or data/admin-token (git-ignored). Without one, /bot/ is off.
-const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(import.meta.dirname, 'data', 'admin-token')) ? readFileSync(join(import.meta.dirname, 'data', 'admin-token'), 'utf8').trim() : '');
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(DATA, 'admin-token')) ? readFileSync(join(DATA, 'admin-token'), 'utf8').trim() : '');
 const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
 const pool = new RolloutPool(Math.max(1, availableParallelism() - 2), weights);
 const MODE = process.env.SEARCH_MODE === 'sample' ? 'sample' : 'best-q';
@@ -71,7 +74,7 @@ function noteSession(room: LiveRoom): void {
   if (noted.has(replay)) return;
   noted.add(replay);
   const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, bot: !!p.bot }));
-  appendFileSync(join(import.meta.dirname, 'data', 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
+  appendFileSync(join(DATA, 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
 }
 const namesOf = (room: LiveRoom): (string | null)[] => {
   const names: (string | null)[] = [null, null, null, null];
@@ -299,10 +302,10 @@ type RoomInternals = {
 };
 
 await createKeepsServer({
-  port: 8788,
+  port: Number(process.env.PORT ?? 8788),
   webDir: join(root, 'packages/web/dist'),
   cardsDir: join(root, 'cards'),
-  dataDir: join(import.meta.dirname, 'data'),
+  dataDir: DATA,
   botWeights: weights,
   botName: DISPLAY_NAME,
   // The bot pages, for the admin only: /bot/ (insight), /bot/spectate, /bot/coach.
@@ -325,4 +328,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
+
+// Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
+for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

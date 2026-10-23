@@ -1,6 +1,8 @@
 **/node_modules
 **/dist
 data
+# Nested data folders too: the demo's holds replays and the admin password file.
+**/data
 cards
 rules
 docs

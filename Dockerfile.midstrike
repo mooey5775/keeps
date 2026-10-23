@@ -1,0 +1,44 @@
+# Midstrike: the game with the search bot (vrpo1 + test-time search, packages/learn/demo), deployed
+# on its own app (fly.midstrike.toml) so the production site is untouched. Like the main
+# Dockerfile, Node 24 runs the TypeScript sources directly; only the web client is built.
+# The bot's weights are baked in: export the policy to packages/learn/demo/weights/vrpo1.bin first.
+
+FROM node:24-slim AS build
+RUN npm install -g pnpm@11.5.2
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/engine/package.json packages/engine/
+COPY packages/learn/package.json packages/learn/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+RUN pnpm install --frozen-lockfile
+COPY packages ./packages
+RUN pnpm --filter @keeps/web build
+
+FROM node:24-slim
+RUN npm install -g pnpm@11.5.2
+WORKDIR /app
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/engine/package.json packages/engine/
+COPY packages/learn/package.json packages/learn/
+COPY packages/protocol/package.json packages/protocol/
+COPY packages/server/package.json packages/server/
+COPY packages/web/package.json packages/web/
+# The server and its dependencies, and the web package's: the demo server reuses the web client's
+# log and move-label code (packages/web/src/game) for its bot pages.
+RUN pnpm install --frozen-lockfile --prod --filter "@keeps/server..." --filter "@keeps/web..."
+COPY packages/engine/src packages/engine/src
+COPY packages/learn/src packages/learn/src
+COPY packages/learn/demo/*.ts packages/learn/demo/*.html packages/learn/demo/
+COPY packages/learn/demo/weights/vrpo1.bin packages/learn/demo/weights/vrpo1.bin
+COPY packages/protocol/src packages/protocol/src
+COPY packages/server/src packages/server/src
+COPY packages/web/src packages/web/src
+COPY --from=build /app/packages/web/dist packages/web/dist
+
+# The admin password (for /bot/) comes from the ADMIN_TOKEN secret, never the image.
+ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
+    BOT=vrpo1 BOT_NAME=Midstrike SEARCH_WORLDS=512 SEARCH_ROLLOUTS=sampled
+EXPOSE 8080
+CMD ["node", "packages/learn/demo/server.ts"]

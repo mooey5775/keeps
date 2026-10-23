@@ -1,0 +1,39 @@
+# Midstrike on Fly.io: the search bot's own app (midstrike.playkeeps.online), separate from the
+# production site (fly.toml). Rooms live in the server's memory, so this app must run on exactly
+# one machine: deploy with `fly deploy -c fly.midstrike.toml --ha=false`, and never scale it above one.
+
+app = "keeps-midstrike"
+primary_region = "sjc"
+
+[build]
+  dockerfile = "Dockerfile.midstrike"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Stop when nobody is connected (open game connections keep it running): the 16-core machine is
+  # paid for only while people play. It can't suspend (that needs 2 GB of memory or less); a stopped
+  # machine starts again on the next visit in about a second.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "connections"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/health"
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+
+# The search plays every legal move out in 512 sampled worlds at each decision: 16 dedicated cores
+# give about 14 s per decision.
+[[vm]]
+  size = "performance-16x"
