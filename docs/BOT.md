@@ -183,6 +183,10 @@ Heads-up Keeps is **chess-like in its tactics, card-game-like in its hidden info
 
 Implement Ataraxos's learner as an alternative to R-NaD (`--learner mmd`), after reading their Dou Dizhu code, and A/B it against `e1` with the same network and observation. Then the learned belief network, then search at play time.
 
+### Ideas for future model improvements
+
+- **True-state prediction heads take capacity, and Ataraxos may not need them.** Checked 2026-10-22: neither network has any. e1's entity network outputs only policy logits and a value. vrpo1's actor outputs only policy logits. The true state enters only vrpo1's central critic, as an input, in a separate network. If a learned belief model is added, keep it out of the actor's torso, as Ataraxos keeps its belief network separate.
+
 ## Layout
 
 - `packages/learn/`: action space, observation encoder, belief tracking, round environment, env server (TypeScript).
