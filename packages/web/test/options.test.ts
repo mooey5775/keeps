@@ -117,7 +117,19 @@ describe('log text', () => {
   it('turns seat labels into names', () => {
     const logNames = makeNames(['Ada', 'Bo', null, 'Di'], 'spectator');
     expect(humanize('S0 draws Chalice from pile@S1', logNames)).toBe("Ada draws Chalice from Bo's pile");
-    expect(humanize('S3 plays Dagger → keep(S2)', logNames)).toBe("Di plays Dagger → ghost 2's keep");
+    expect(humanize('S3 plays Dagger → keep(S2)', logNames)).toBe("Di plays Dagger → the ghost's keep");
+  });
+
+  it('names two ghosts by where they sit on the table, as the seats are labelled', () => {
+    // Seat 0 at the bottom: seat 1 is drawn on the left, seat 3 on the right.
+    const fromSeat0 = makeNames(['Ada', null, 'Cy', null], 'spectator', 0);
+    expect(humanize('S0 draws Chalice from pile@S1', fromSeat0)).toBe("Ada draws Chalice from left ghost's pile");
+    expect(humanize('the remaining pile from @S0 goes to S3', fromSeat0)).toBe("The remaining pile from Ada's spot goes to right ghost");
+    // Seat 2 at the bottom: the same ghosts swap sides.
+    const fromSeat2 = makeNames(['Ada', null, 'Cy', null], 2);
+    expect(fromSeat2.seat(1)).toBe('right ghost');
+    expect(fromSeat2.possessive(3)).toBe("left ghost's");
+    expect(fromSeat2.seat(2)).toBe('you');
   });
 });
 

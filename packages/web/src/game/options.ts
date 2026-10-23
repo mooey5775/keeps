@@ -45,13 +45,22 @@ export interface Option {
 }
 
 export interface Names {
-  /** Display name per seat: "you" for the viewer, the player's name, or "ghost". */
+  /**
+   * Display name per seat: "you" for the viewer, the player's name, or a ghost's
+   * by where it sits on the table ("left ghost"; "the ghost" if it is the only one).
+   */
   seat: (seat: Seat) => string;
   possessive: (seat: Seat) => string;
 }
 
-export function makeNames(names: (string | null)[], viewer: Seat | 'spectator'): Names {
-  const seat = (s: Seat) => (s === viewer ? 'you' : (names[s] ?? `ghost ${s}`));
+const TABLE_POSITIONS = ['bottom', 'left', 'top', 'right'] as const;
+
+/** `bottom`: the seat drawn at the bottom of the table (default: the viewer's, or seat 0). */
+export function makeNames(names: (string | null)[], viewer: Seat | 'spectator', bottom?: Seat): Names {
+  const anchor = bottom ?? (viewer === 'spectator' ? 0 : viewer);
+  const ghosts = names.filter((n) => n === null).length;
+  const ghost = (s: Seat) => (ghosts === 1 ? 'the ghost' : `${TABLE_POSITIONS[(s - anchor + 4) % 4]} ghost`);
+  const seat = (s: Seat) => (s === viewer ? 'you' : (names[s] ?? ghost(s)));
   return {
     seat,
     possessive: (s: Seat) => (s === viewer ? 'your' : `${seat(s)}'s`),

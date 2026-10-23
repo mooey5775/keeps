@@ -852,6 +852,20 @@ describe('face-down cards have no effect', () => {
     expect(promptFor(passed.state, 0, 'reveal-window').reason).toBe('before-scoring');
   });
 
+  it('a card never revealed is shown to everyone once the round is over, still face down and unscored', () => {
+    const start = buildPosition({ keeps: { 0: ['duplicity', { id: 'chalice', faceDown: { placedBy: 0 } }] }, hands: { 0: ['dagger'] }, turn: 0 });
+    const ended = draw(start, 0);
+    // Between the round's end and scoring, the card can still be revealed: still secret.
+    expect(viewFor(ended.state, 2).keeps[0]!.cards[1]).toEqual({ faceDown: true });
+    const passed = respond(ended.state, 0, { kind: 'reveal-window', reveal: false });
+    const { state } = respond(passed.state, 0, { kind: 'reveal-window', reveal: false });
+    expect(state.phase).toBe('round-over');
+    for (const viewer of [0, 2, 'spectator'] as const) {
+      expect(viewFor(state, viewer).keeps[0]!.cards[1]).toEqual({ faceDown: true, id: 'chalice' });
+    }
+    expect(viewFor(state, 2).scores[0]).toBe(0);
+  });
+
   it('a revealed Last Laugh after its window has passed gives no action', () => {
     const start = buildPosition({ keeps: { 0: ['duplicity', { id: 'last-laugh', faceDown: { placedBy: 0 } }] }, hands: { 0: ['chalice'] }, turn: 0 });
     const ended = draw(start, 0);

@@ -206,7 +206,7 @@ function nextPileClaim(ctx: Ctx, queue: PileClaim[], claims: { claimant: Seat; f
   const unfilled = SEATS.filter((s) => !claims.some((c) => c.claimant === s));
   const all = [...claims, ...unfilled.map((claimant, i) => ({ claimant, from: unclaimedPiles[i]! }))];
   for (const c of all.slice(claims.length)) {
-    tracer.emit({ type: 'note', text: `the remaining pile from @S${c.from} goes to ghost S${c.claimant}` });
+    tracer.emit({ type: 'note', text: `the remaining pile from @S${c.from} goes to S${c.claimant}` });
   }
   const before = [...state.pileAt] as PerSeat<PileId>;
   for (const c of all) state.pileAt[c.claimant] = before[c.from];

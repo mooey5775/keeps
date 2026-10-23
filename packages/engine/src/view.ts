@@ -31,7 +31,10 @@ export interface PileView {
 
 export type KeepCardView =
   | { faceDown: false; id: CardId }
-  /** `id` is present only for the player who placed it (ruling Q-04). */
+  /**
+   * `id` is present only for the player who placed it (ruling Q-04), and for
+   * everyone once the round is over (it stays face down: it never scored).
+   */
   | { faceDown: true; id?: CardId };
 
 type PromptBaseKeys = 'event' | 'depth' | 'play';
@@ -71,6 +74,7 @@ export interface PlayerView {
 
 export function viewFor(state: GameState, viewer: Viewer): PlayerView {
   const me = viewer === 'spectator' ? null : viewer;
+  const roundOver = state.phase === 'round-over' || state.phase === 'game-over';
   return {
     viewer,
     seats: [...state.config.seats],
@@ -97,7 +101,7 @@ export function viewFor(state: GameState, viewer: Viewer): PlayerView {
       seat,
       cards: state.keeps[seat].map((c): KeepCardView => {
         if (!c.faceDown) return { faceDown: false, id: c.id };
-        return c.faceDown.placedBy === me ? { faceDown: true, id: c.id } : { faceDown: true };
+        return c.faceDown.placedBy === me || roundOver ? { faceDown: true, id: c.id } : { faceDown: true };
       }),
     })),
     discard: [...state.discard],

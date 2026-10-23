@@ -36,8 +36,9 @@ const POSITIONS: Position[] = ['bottom', 'left', 'top', 'right'];
 export function GameTable({ view, log, names, onCommand, side, header, bottom, botSeats = [] }: GameTableProps) {
   const me: Seat = view.viewer === 'spectator' ? 0 : view.viewer;
   const anchor = bottom ?? me;
-  const uiNames = useMemo(() => makeNames(names, view.viewer), [names, view.viewer]);
-  const logNames = useMemo(() => makeNames(names, 'spectator'), [names]);
+  // Ghosts are named by where they sit on this table, in the log as on the seats.
+  const uiNames = useMemo(() => makeNames(names, view.viewer, anchor), [names, view.viewer, anchor]);
+  const logNames = useMemo(() => makeNames(names, 'spectator', anchor), [names, anchor]);
   const options = useMemo(() => describeOptions(view, uiNames), [view, uiNames]);
   const [picked, setPicked] = useState<Ref[]>([]);
   const [showDiscard, setShowDiscard] = useState(false);
@@ -198,7 +199,7 @@ function SeatArea({ seat, position, view, names, refProps }: { seat: Seat; posit
           disabled={!player.onClick}
           onClick={player.onClick}
         >
-          {ghost ? 'Ghost pile' : capital(names.seat(seat))}
+          {capital(names.seat(seat))}
           {turn && <span className="turn-dot" title="Their turn" />}
         </button>
         {!ghost && (
