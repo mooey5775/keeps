@@ -107,9 +107,12 @@ export class Policy {
     return legalPolicy(forward(this.head!, x, false), legal);
   }
 
-  /** The network's value estimate for the player observing (entity networks; null for the MLP, whose value head isn't exported). */
+  /**
+   * The network's value estimate for the player observing. Null when it has none: the MLP (its value
+   * head isn't exported) and networks trained without one (VRPO's actor).
+   */
   value(obs: Float32Array): number | null {
-    return this.entity ? this.entity.value(obs) : null;
+    return this.entity?.hasValue ? this.entity.value(obs) : null;
   }
 
   /** The policy as the bot plays it: post-processed like R-NaD at test time. */

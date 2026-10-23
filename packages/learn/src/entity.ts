@@ -52,11 +52,17 @@ function concat(...xs: ArrayLike<number>[]): Float32Array {
 export class EntityNetwork {
   private readonly t: Map<string, Tensor>;
   private readonly layout: Layout;
+  /**
+   * Whether the value head was trained. Policies trained without one (VRPO's actor: its values come
+   * from a separate critic) export it as zeros, which would read as a confident even chance.
+   */
+  readonly hasValue: boolean;
 
   constructor(tensors: Map<string, Tensor>, layout: Layout) {
     this.t = tensors;
     this.layout = layout;
     for (const name of ['~/card_embedding', 'card_in/w', 'trunk_in/w', 'special/w']) this.get(name);
+    this.hasValue = [...tensors].some(([name, t]) => name.startsWith('value/') && t.data.some((v) => v !== 0));
   }
 
   private get(name: string): Tensor {
@@ -152,7 +158,7 @@ export class EntityNetwork {
   /**
    * The value head (hk.nets.MLP([128, 1]) on the trunk): the network's estimate of the round's
    * result for the player observing, in [-1, 1] as trained (R-NaD's, from its regularized
-   * rewards; policies trained without one export it as zeros).
+   * rewards; policies trained without one export it as zeros: see hasValue).
    */
   value(obs: Float32Array): number {
     return this.mlp('value', this.features(obs).x, 2, false)[0]!;
