@@ -283,7 +283,7 @@ exports[`golden games > 2 players 1`] = `
 #280  R1 T29                  S2 claims the pile from @S0  ← #279
 #281  R1 T29                  waiting on S0: claim-pile  ← #279
 #282  R1 T29                    S0 places the pile from @S2 at S1  ← #281
-#283  R1 T29                    the remaining pile from @S1 goes to ghost S3  ← #281
+#283  R1 T29                    the remaining pile from @S1 goes to S3  ← #281
 #284  R1 T29  S0 turn end
 #285  R1 T30  S2 turn start (2 actions)
 #286  R1 T30    waiting on S2: action  ← #285
@@ -376,7 +376,7 @@ exports[`golden games > 2 players 1`] = `
 #373  R2 T4                   S2 claims the pile from @S0  ← #372
 #374  R2 T4                   waiting on S0: claim-pile  ← #372
 #375  R2 T4                     S0 places the pile from @S3 at S1  ← #374
-#376  R2 T4                     the remaining pile from @S1 goes to ghost S3  ← #374
+#376  R2 T4                     the remaining pile from @S1 goes to S3  ← #374
 #377  R2 T4   S0 turn end
 #378  R2 T5   S2 turn start (2 actions)
 #379  R2 T5     waiting on S2: action  ← #378
@@ -735,7 +735,7 @@ exports[`golden games > 3 players 1`] = `
 #148  R1 T15                  S0 claims the pile from @S3  ← #147
 #149  R1 T15                  waiting on S1: claim-pile  ← #147
 #150  R1 T15                    S1 claims the pile from @S0  ← #149
-#151  R1 T15                    the remaining pile from @S1 goes to ghost S3  ← #149
+#151  R1 T15                    the remaining pile from @S1 goes to S3  ← #149
 #152  R1 T15    waiting on S2: action  ← #138
 #153  R1 T15      S2 action [turn, 0 left]: draw  ← #152
 #154  R1 T15        S2 draws Count Token from pile@S2  ← #153  [private: S2]
@@ -882,7 +882,7 @@ exports[`golden games > 3 players 1`] = `
 #295  R2 T8                   S1 claims the pile from @S0  ← #294
 #296  R2 T8                   waiting on S2: claim-pile  ← #294
 #297  R2 T8                     S2 claims the pile from @S2  ← #296
-#298  R2 T8                     the remaining pile from @S1 goes to ghost S3  ← #296
+#298  R2 T8                     the remaining pile from @S1 goes to S3  ← #296
 #299  R2 T8   S0 turn end
 #300  R2 T9   S1 turn start (2 actions)
 #301  R2 T9     waiting on S1: action  ← #300

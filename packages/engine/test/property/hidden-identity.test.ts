@@ -65,8 +65,10 @@ function publicView(state: GameState) {
   return view;
 }
 
-/** Could either swapped card be visible to anyone now (revealed, drawn, played, discarded, looked at)? */
+/** Could either swapped card be visible to anyone now (revealed, drawn, played, discarded, looked at, round over)? */
 function exposed(state: GameState, a: CardId, b: CardId): boolean {
+  // Once the round is over, face-down cards are shown to everyone.
+  if (state.phase === 'round-over' || state.phase === 'game-over') return true;
   if (!state.keeps.flat().some((c) => c.faceDown)) return true;
   for (const id of [a, b]) {
     const inPile = Object.values(state.piles).some((p) => p.cards.some((c, i) => c.id === id && !(i === 0 && c.faceUp)));

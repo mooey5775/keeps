@@ -21,7 +21,9 @@ import {
 /** Card ids `seat` may see right now (see full-games.test.ts). */
 function entitled(state: GameState, seat: Seat): Set<CardId> {
   const ok = new Set<CardId>([...state.hands[seat], ...state.discard]);
-  for (const keep of state.keeps) for (const c of keep) if (!c.faceDown || c.faceDown.placedBy === seat) ok.add(c.id);
+  // Face-down cards: the placer's; everyone's once the round is over.
+  const over = state.phase === 'round-over' || state.phase === 'game-over';
+  for (const keep of state.keeps) for (const c of keep) if (!c.faceDown || c.faceDown.placedBy === seat || over) ok.add(c.id);
   for (const pile of Object.values(state.piles)) if (pile.cards[0]?.faceUp) ok.add(pile.cards[0].id);
   for (const p of state.prompts) {
     if (p.seat !== seat) continue;
