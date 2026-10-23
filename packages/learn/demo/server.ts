@@ -284,4 +284,4 @@ await createKeepsServer({
   dataDir: join(import.meta.dirname, 'data'),
   botWeights: weights,
 });
-console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
+console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);

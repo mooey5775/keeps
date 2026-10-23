@@ -1,7 +1,7 @@
 #!/bin/bash
 # Keeps the demo serving vrpo1's newest policy. Every hour: look for a newer policy on gpu03; if there
 # is one and nobody is playing (no bot move in the last 30 minutes), export it and restart the server
-# with it (BOT=vrpo1, 512 worlds). While a game is in play, it retries every 5 minutes instead.
+# with it (BOT=vrpo1, 512 worlds, sampled rollouts). While a game is in play, it retries every 5 minutes instead.
 #   setsid nohup packages/learn/demo/autoupdate.sh > /dev/null 2>&1 &      (--once: one check, then exit)
 # Log: packages/learn/demo/data/autoupdate.log
 set -u
@@ -27,7 +27,7 @@ restart() {
     [ "$(readlink /proc/$p/cwd)" = "$DEMO" ] && kill "$p"
   done
   sleep 2
-  (cd "$DEMO" && BOT=vrpo1 SEARCH_WORLDS=512 setsid nohup node server.ts > "$DEMO/data/server.log" 2>&1 < /dev/null &)
+  (cd "$DEMO" && BOT=vrpo1 SEARCH_WORLDS=512 SEARCH_ROLLOUTS=sampled setsid nohup node server.ts > "$DEMO/data/server.log" 2>&1 < /dev/null &)
   sleep 10
   head -1 "$DEMO/data/server.log" | grep -q "step $1" && log "serving vrpo1 $1" || log "ERROR: the server did not come back with step $1 (see data/server.log)"
 }

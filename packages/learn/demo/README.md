@@ -4,7 +4,7 @@ The site with a bot that plays by test-time search, plus local pages that show w
 
 ```
 cd packages/learn/demo
-BOT=vrpo1 SEARCH_WORLDS=512 node server.ts
+BOT=vrpo1 SEARCH_WORLDS=512 SEARCH_ROLLOUTS=sampled node server.ts
 ```
 
 - **The game:** http://localhost:8788
