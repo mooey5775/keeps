@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot insight</title>
+<style>
+  :root { --bg: #fbfaf7; --fg: #1d1b18; --muted: #6f6a62; --line: #e4e0d8; --card: #ffffff;
+          --before: #8a6fd1; --after: #1f8a70; --accent: #c2410c; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16161a; --fg: #ece9e3; --muted: #9a958c; --line: #2c2c33; --card: #1e1e24;
+            --before: #a991e8; --after: #3fbf98; --accent: #f08a4b; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin-bottom: 18px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .big { font-size: 34px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .before { color: var(--before); } .after { color: var(--after); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  svg { width: 100%; height: 220px; display: block; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 550; font-size: 12px; }
+  td.num, th.num { text-align: right; }
+  .section { margin-top: 18px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  select { font: inherit; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--fg); border-radius: 8px; padding: 6px 12px; cursor: pointer; }
+  .warn { color: var(--accent); }
+  .scroll { overflow-x: auto; }
+  .chosen { font-weight: 650; }
+  .legend span { margin-right: 14px; } .legend i { display: inline-block; width: 10px; height: 3px; vertical-align: middle; margin-right: 5px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row"><h1>Bot insight</h1>
+    <span class="note"><a href="/spectate" style="color:inherit">spectator view</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
+  <div class="sub" id="sub">Waiting for a game against the bot…</div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Bot's chance to win: before search</div><div class="big before" id="before">–</div><div class="note">its network's own estimate (value head)</div></div>
+    <div class="card"><div class="label">After search</div><div class="big after" id="after">–</div><div class="note">its rollouts' estimate for the move it played</div></div>
+    <div class="card"><div class="label">Last decision</div><div class="big" id="think" style="font-size:22px">–</div><div class="note" id="thinknote"></div></div>
+  </div>
+
+  <div class="card">
+    <div class="row"><div class="label">Bot's chance to win over the game</div>
+      <div class="legend note"><span><i style="background:var(--before)"></i>before search</span><span><i style="background:var(--after)"></i>after search</span></div></div>
+    <svg id="chart" viewBox="0 0 900 220" preserveAspectRatio="none"></svg>
+  </div>
+
+  <div class="card section">
+    <div class="row"><div class="label">Its candidate moves at the last decision</div>
+      <button id="toggle">Show (reveals the bot's hand)</button></div>
+    <div id="moves" class="scroll" hidden></div>
+  </div>
+
+  <div class="card section">
+    <div class="label">The bot's decisions</div>
+    <div class="scroll"><table id="log"></table></div>
+  </div>
+</main>
+<script>
+const pct = (x) => (x === null || x === undefined ? '–' : `${Math.round(100 * x)}%`);
+let showMoves = false;
+let pinned = '';
+document.getElementById('room').onchange = (e) => { pinned = e.target.value; refresh(); };
+document.getElementById('toggle').onclick = () => {
+  showMoves = !showMoves;
+  document.getElementById('moves').hidden = !showMoves;
+  document.getElementById('toggle').textContent = showMoves ? 'Hide' : "Show (reveals the bot's hand)";
+};
+
+function chart(reports) {
+  const svg = document.getElementById('chart');
+  const W = 900, H = 220, L = 34, R = 10, T = 10, B = 24;
+  const n = reports.length;
+  const x = (i) => L + (n <= 1 ? 0 : (i * (W - L - R)) / (n - 1));
+  const y = (v) => T + (1 - v) * (H - T - B);
+  let out = '';
+  for (const g of [0, 0.25, 0.5, 0.75, 1]) {
+    out += `<line x1="${L}" x2="${W - R}" y1="${y(g)}" y2="${y(g)}" stroke="var(--line)" stroke-width="${g === 0.5 ? 1.5 : 1}"/>`;
+    out += `<text x="${L - 6}" y="${y(g) + 4}" font-size="11" text-anchor="end" fill="var(--muted)">${g * 100}</text>`;
+  }
+  const line = (key, color) => {
+    const pts = reports.map((r, i) => (r[key] === null ? null : `${x(i)},${y(r[key])}`)).filter(Boolean);
+    if (pts.length > 1) out += `<polyline fill="none" stroke="${color}" stroke-width="2.2" points="${pts.join(' ')}"/>`;
+    reports.forEach((r, i) => { if (r[key] !== null) out += `<circle cx="${x(i)}" cy="${y(r[key])}" r="2.6" fill="${color}"/>`; });
+  };
+  line('before', 'var(--before)');
+  line('after', 'var(--after)');
+  let last = null;
+  reports.forEach((r, i) => {
+    if (r.turn !== last && i % Math.max(1, Math.ceil(n / 14)) === 0) out += `<text x="${x(i)}" y="${H - 6}" font-size="11" text-anchor="middle" fill="var(--muted)">t${r.turn}</text>`;
+    last = r.turn;
+  });
+  svg.innerHTML = out;
+}
+
+async function refresh() {
+  let data;
+  try { data = await (await fetch('/data')).json(); } catch { return; }
+  // Rooms, most recently active first; "follow the latest" unless one is pinned.
+  const codes = Object.keys(data.rooms).sort((a, b) => data.rooms[b].updated - data.rooms[a].updated);
+  const sel = document.getElementById('room');
+  sel.innerHTML = `<option value="">follow the latest${data.latest ? ` (${data.latest})` : ''}</option>` +
+    codes.map((c) => `<option value="${c}" ${c === pinned ? 'selected' : ''}>${c} · ${data.rooms[c].reports.length} bot decisions</option>`).join('');
+  const code = pinned && data.rooms[pinned] ? pinned : data.latest;
+  const room = code && data.rooms[code];
+  if (!room || !room.reports.length) return;
+  const reports = room.reports;
+  const last = reports[reports.length - 1];
+  const searched = [...reports].reverse().find((r) => r.after !== null);
+  document.getElementById('sub').textContent =
+    `Room ${code} · bot at seat ${last.seat} · ${last.mode === 'best-q' ? 'plays the best rollout move' : 'samples the search policy'} · ${reports.length} bot decisions`;
+  document.getElementById('before').textContent = pct(last.before);
+  document.getElementById('after').textContent = pct(searched ? searched.after : null);
+  document.getElementById('think').textContent = last.after === null ? 'forced move' : `${(last.ms / 1000).toFixed(1)} s`;
+  document.getElementById('thinknote').textContent = last.after === null
+    ? `turn ${last.turn}, ${last.kind}: one legal move`
+    : `turn ${last.turn}, ${last.kind}: ${last.moves.length} moves × ${last.worlds} worlds${last.overrode ? ' · overrode its policy' : ''}`;
+  chart(reports);
+  const m = searched ? searched.moves : [];
+  document.getElementById('moves').innerHTML = m.length
+    ? `<table><tr><th>Move</th><th class="num">Policy</th><th class="num">Win if played</th></tr>${m.map((r) =>
+        `<tr class="${r.chosen ? 'chosen' : ''}"><td>${r.chosen ? '→ ' : ''}${r.move}</td><td class="num">${pct(r.policy)}</td><td class="num">${pct(r.win)}</td></tr>`).join('')}</table>
+       <div class="note">Turn ${searched.turn}, ${searched.kind}. “Win if played”: the share of ${searched.worlds} sampled worlds the bot won after this move, with its policy playing both sides.</div>`
+    : '<div class="note">No searched decision yet.</div>';
+  document.getElementById('log').innerHTML =
+    `<tr><th>Turn</th><th>Decision</th><th class="num">Before</th><th class="num">After</th><th class="num">Moves</th><th class="num">Time</th><th>Overrode policy</th></tr>` +
+    [...reports].reverse().slice(0, 40).map((r) =>
+      `<tr><td>${r.turn}</td><td>${r.kind}</td><td class="num before">${pct(r.before)}</td><td class="num after">${pct(r.after)}</td>
+       <td class="num">${r.moves.length || 1}</td><td class="num">${r.after === null ? '–' : (r.ms / 1000).toFixed(1) + ' s'}</td>
+       <td class="${r.overrode ? 'warn' : ''}">${r.overrode ? 'yes' : ''}</td></tr>`).join('');
+}
+refresh();
+setInterval(refresh, 1500);
+</script>
+</body>
+</html>

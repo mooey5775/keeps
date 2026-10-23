@@ -9,3 +9,4 @@ bot/.venv/
 bot/.venv-torch/
 __pycache__/
 bot/runs/
+packages/learn/demo/weights/

@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bot coach</title>
+<style>
+  :root { --bg: #fbfaf7; --fg: #1d1b18; --muted: #6f6a62; --line: #e4e0d8; --card: #ffffff;
+          --before: #8a6fd1; --after: #1f8a70; --accent: #c2410c; --pick: #fff4e6; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #16161a; --fg: #ece9e3; --muted: #9a958c; --line: #2c2c33; --card: #1e1e24;
+            --before: #a991e8; --after: #3fbf98; --accent: #f08a4b; --pick: #2d241c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 system-ui, -apple-system, Segoe UI, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 18px; margin: 0 0 2px; }
+  .sub { color: var(--muted); margin-bottom: 16px; }
+  .row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 12px; }
+  .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+  .pick { font-size: 24px; font-weight: 650; margin-top: 4px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+  .big { font-size: 30px; font-weight: 650; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .before { color: var(--before); } .after { color: var(--after); }
+  .note { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .status { font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .status.thinking { color: var(--accent); border-color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 550; font-size: 12px; }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  tr.chosen td { background: var(--pick); font-weight: 650; }
+  .bar { display: inline-block; height: 6px; border-radius: 3px; background: var(--after); vertical-align: middle; margin-left: 6px; }
+  .bar.policy { background: var(--before); }
+  select { font: inherit; background: var(--card); color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  <div class="row"><h1>Bot coach</h1>
+    <span class="note"><a href="/">bot insight</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
+  <div class="sub" id="sub">Waiting for one of your decisions…</div>
+
+  <div class="card">
+    <div class="row"><div class="label">The bot would play</div><span class="status" id="status">–</span></div>
+    <div class="pick" id="pick">–</div>
+    <div class="note" id="pickNote"></div>
+  </div>
+
+  <div class="cards">
+    <div class="card"><div class="label">Your chance: network</div><div class="big before" id="before">–</div><div class="note">the network's value estimate, from your view</div></div>
+    <div class="card"><div class="label">Your chance: after search</div><div class="big after" id="after">–</div><div class="note">if you play the recommended move</div></div>
+  </div>
+
+  <div class="card">
+    <div class="label">Your options</div>
+    <table id="moves"></table>
+    <div class="note">Network: how likely the bot's network is to play each move in your seat. Win if played: the share of sampled worlds you win after it, with the bot playing both sides from then on. Worlds are sampled from what you can see; nothing hidden is used.</div>
+  </div>
+</main>
+<script>
+const pct = (x) => (x === null || x === undefined ? '–' : `${Math.round(100 * x)}%`);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+let pinned = '';
+document.getElementById('room').onchange = (e) => { pinned = e.target.value; refresh(); };
+
+async function refresh() {
+  let d;
+  try { d = await (await fetch('/coach.json' + (pinned ? `?room=${pinned}` : ''))).json(); } catch { return; }
+  const sel = document.getElementById('room');
+  sel.innerHTML = `<option value="">follow the latest${d.room && !pinned ? ` (${d.room})` : ''}</option>` +
+    d.rooms.map((r) => `<option value="${r}" ${r === pinned ? 'selected' : ''}>${r}</option>`).join('');
+  const c = d.coach;
+  if (!c || c.seat === null) return;
+  document.getElementById('sub').textContent = `Room ${d.room} · ${c.name ?? 'seat ' + c.seat} · turn ${c.turn}, ${c.kind}`;
+  const status = document.getElementById('status');
+  const labels = { thinking: 'searching…', searched: `searched ${c.worlds} worlds${c.ms ? ` in ${(c.ms / 1000).toFixed(0)} s` : ''}`, forced: 'only one legal move', error: 'search failed', waiting: 'waiting' };
+  status.textContent = labels[c.status] ?? c.status;
+  status.className = `status ${c.status}`;
+  document.getElementById('pick').textContent = c.recommended ?? '–';
+  document.getElementById('pickNote').textContent =
+    c.status === 'thinking' ? "The network's favourite; the search may change it." :
+    c.status === 'error' ? c.error : c.status === 'forced' ? '' : 'Best search result (the network breaks near-ties).';
+  document.getElementById('before').textContent = pct(c.before);
+  document.getElementById('after').textContent = c.status === 'searched' ? pct(c.after) : '–';
+  const rows = [...c.moves].sort((a, b) => (b.win ?? -1) - (a.win ?? -1) || b.policy - a.policy);
+  document.getElementById('moves').innerHTML = rows.length
+    ? `<tr><th>Move</th><th class="num">Network</th><th class="num">Win if played</th></tr>` + rows.map((m) =>
+        `<tr class="${m.chosen ? 'chosen' : ''}"><td>${m.chosen ? '→ ' : ''}${esc(m.label)}</td>
+         <td class="num">${pct(m.policy)}<span class="bar policy" style="width:${Math.round(40 * m.policy)}px"></span></td>
+         <td class="num">${m.win === null ? (c.status === 'thinking' ? '…' : '–') : pct(m.win)}${m.win === null ? '' : `<span class="bar" style="width:${Math.round(40 * m.win)}px"></span>`}</td></tr>`).join('')
+    : `<tr><td class="note">${c.status === 'forced' ? 'Only one legal move.' : 'No options yet.'}</td></tr>`;
+}
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>
