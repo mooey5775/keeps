@@ -58,6 +58,8 @@ export interface BotDeps {
   schedule: (fn: () => void, ms: number) => () => void;
   /** How long the bot waits before each move, so people can follow it. */
   delay: () => number;
+  /** Its name at the table (default "Bot"). */
+  name?: string;
 }
 
 /** Analytics id for the bot's own events (one person for every bot game). */
@@ -355,7 +357,7 @@ export class Room {
     if (this.players.length >= 2) return 'The bot only plays two-player games.';
     this.players.push({
       id: this.deps.id(),
-      name: this.uniqueName('Bot'),
+      name: this.uniqueName(this.deps.bot.name ?? 'Bot'),
       token: this.deps.token(),
       host: false,
       seat: null,

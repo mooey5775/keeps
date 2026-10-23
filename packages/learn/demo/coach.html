@@ -40,7 +40,7 @@
 <body>
 <main>
   <div class="row"><h1>Bot coach</h1>
-    <span class="note"><a href="/">bot insight</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
+    <span class="note"><a href="./">bot insight</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
   <div class="sub" id="sub">Waiting for one of your decisions…</div>
 
   <div class="card">
@@ -68,7 +68,7 @@ document.getElementById('room').onchange = (e) => { pinned = e.target.value; ref
 
 async function refresh() {
   let d;
-  try { d = await (await fetch('/coach.json' + (pinned ? `?room=${pinned}` : ''))).json(); } catch { return; }
+  try { d = await (await fetch('coach.json' + (pinned ? `?room=${pinned}` : ''))).json(); } catch { return; }
   const sel = document.getElementById('room');
   sel.innerHTML = `<option value="">follow the latest${d.room && !pinned ? ` (${d.room})` : ''}</option>` +
     d.rooms.map((r) => `<option value="${r}" ${r === pinned ? 'selected' : ''}>${r}</option>`).join('');

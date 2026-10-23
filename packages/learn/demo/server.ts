@@ -4,8 +4,8 @@
 //   node server.ts   → the game at http://localhost:8788, bot insight at http://localhost:8789,
 //                      the coach at http://localhost:8789/coach
 // The bot plays the best rollout move (SEARCH_MODE=sample: Ataraxos's sampling instead).
-import { appendFileSync, readFileSync } from 'node:fs';
-import { createServer } from 'node:http';
+import { appendFileSync, existsSync, readFileSync } from 'node:fs';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 import { CARDS, viewFor, type GameState, type TraceEvent } from '../../engine/src/index.ts';
@@ -16,11 +16,16 @@ import { Policy } from '../src/policy.ts';
 import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
+import { authorized } from '../../server/src/admin.ts';
 import { BETA, RolloutPool, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
 // The bot's network (BOT=vrpo1 → vrpo1.bin; e1 by default). VRPO's actor has no value head: its pages show none.
 const botName = process.env.BOT ?? 'e1';
+// The bot's name at the table.
+const DISPLAY_NAME = process.env.BOT_NAME ?? 'Midstrike';
+// The admin password for /bot/: ADMIN_TOKEN, or data/admin-token (git-ignored). Without one, /bot/ is off.
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(import.meta.dirname, 'data', 'admin-token')) ? readFileSync(join(import.meta.dirname, 'data', 'admin-token'), 'utf8').trim() : '');
 const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
 const pool = new RolloutPool(Math.max(1, availableParallelism() - 2), weights);
 const MODE = process.env.SEARCH_MODE === 'sample' ? 'sample' : 'best-q';
@@ -65,12 +70,12 @@ function noteSession(room: LiveRoom): void {
   const replay = replayFileName(room.code, startedAt);
   if (noted.has(replay)) return;
   noted.add(replay);
-  const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.bot ? 'Bot' : p.name, bot: !!p.bot }));
+  const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, bot: !!p.bot }));
   appendFileSync(join(import.meta.dirname, 'data', 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
 }
 const namesOf = (room: LiveRoom): (string | null)[] => {
   const names: (string | null)[] = [null, null, null, null];
-  for (const p of room.players) if (p.seat !== null) names[p.seat] = p.bot ? 'Bot' : p.name;
+  for (const p of room.players) if (p.seat !== null) names[p.seat] = p.name;
   return names;
 };
 
@@ -178,7 +183,7 @@ function spectate(code: string | null) {
   if (!room?.game) return { rooms: rooms.map((r) => r.code), room: null };
   const { state, events } = room.game;
   const names: (string | null)[] = [null, null, null, null];
-  for (const p of room.players) if (p.seat !== null) names[p.seat] = p.bot ? 'Bot' : p.name;
+  for (const p of room.players) if (p.seat !== null) names[p.seat] = p.name;
   const view = viewFor(state, 'spectator');
   const seats = state.config.seats.map((kind, seat) => ({ kind, seat })).filter((s) => s.kind === 'player').map((s) => s.seat);
   return {
@@ -206,7 +211,7 @@ function spectate(code: string | null) {
     bot: rooms.length && room ? (globalThis as unknown as { __reports?: Map<string, SearchReport[]> }).__reports?.get(room.code)?.slice(-1)[0] ?? null : null,
   };
 }
-createServer((req, res) => {
+function insightPages(req: IncomingMessage, res: ServerResponse): void {
   // Settings while it runs (no restart, so games in progress continue): /settings?worlds=512
   if (req.url?.startsWith('/settings')) {
     const worlds = Number(new URL(req.url, 'http://x').searchParams.get('worlds'));
@@ -245,7 +250,9 @@ createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     res.end(page());
   }
-}).listen(8789, '127.0.0.1'); // local only: it shows both hands
+}
+// Local only: it shows both hands. The same pages are on the game's address under /bot/, behind the admin password.
+createServer(insightPages).listen(8789, '127.0.0.1');
 
 // The room plays the bot synchronously (bot.choose); here it waits for the search instead. While
 // the search runs, botTimer holds its cancel, so the room neither schedules the bot twice nor
@@ -297,5 +304,25 @@ await createKeepsServer({
   cardsDir: join(root, 'cards'),
   dataDir: join(import.meta.dirname, 'data'),
   botWeights: weights,
+  botName: DISPLAY_NAME,
+  // The bot pages, for the admin only: /bot/ (insight), /bot/spectate, /bot/coach.
+  extraRoutes: (req, res, path) => {
+    if (path !== '/bot' && !path.startsWith('/bot/')) return false;
+    if (!ADMIN_TOKEN) {
+      res.writeHead(404).end('Not found');
+      return true;
+    }
+    if (!authorized(req, ADMIN_TOKEN)) {
+      res.writeHead(401, { 'www-authenticate': 'Basic realm="Keeps admin"', 'content-type': 'text/plain' }).end('Unauthorized');
+      return true;
+    }
+    if (path === '/bot') {
+      res.writeHead(302, { location: '/bot/' }).end();
+      return true;
+    }
+    req.url = (req.url ?? '/').slice('/bot'.length) || '/';
+    insightPages(req, res);
+    return true;
+  },
 });
 console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);

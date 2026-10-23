@@ -1,6 +1,6 @@
 // The search at a real decision of a replay (after its first K commands), with greedy and with sampled
 // rollouts. The bot's belief is built as in the game: it observes at each of its own decisions.
-//   node searchat.ts <replay> <weights> <K> <worlds>
+//   node searchat.ts <replay> <weights> <K> <worlds>      (ROLLOUTS=sampled or greedy: only that one)
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { BotPlayer } from '../src/bot.ts';
@@ -11,9 +11,14 @@ const [path, weights, kArg, worldsArg] = process.argv.slice(2);
 setSearchMode('best-q'); setWorlds(Number(worldsArg)); setSearchLog(() => {});
 const lines = readFileSync(path!, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const K = Number(kArg);
-const seat = lines[1 + K].seat as Seat;
+// The decider: the seat of the next recorded command, or (at the live end of a game) whoever is prompted now.
+const seat = (lines[1 + K]?.seat ?? (() => {
+  let st = newGame(lines[0].options).state as GameState;
+  for (const { seat: s, command } of lines.slice(1, 1 + K)) st = (apply(st, s, command) as { state: GameState }).state;
+  return st.prompts[0]!.seat;
+})()) as Seat;
 const policy = Policy.load(readFileSync(weights!));
-for (const sampled of [false, true]) {
+for (const sampled of process.env.ROLLOUTS === 'sampled' ? [true] : process.env.ROLLOUTS === 'greedy' ? [false] : [false, true]) {
   const pool = new RolloutPool(12, weights!, sampled);
   let { state, events } = newGame(lines[0].options) as { state: GameState; events: TraceEvent[] };
   const bot = new BotPlayer(policy, seat);

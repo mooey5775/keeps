@@ -38,7 +38,7 @@
 </head>
 <body>
 <main>
-  <div class="row"><h1>Spectator view</h1><span class="muted">local only · <a href="/" style="color:inherit">bot insight</a> · <select id="room"></select></span></div>
+  <div class="row"><h1>Spectator view</h1><span class="muted"><a href="./" style="color:inherit">bot insight</a> · <select id="room"></select></span></div>
   <div class="sub" id="sub">Waiting for a game…</div>
   <div class="grid">
     <div>
@@ -61,7 +61,7 @@ document.getElementById('room').onchange = (e) => { chosenRoom = e.target.value 
 
 async function refresh() {
   let d;
-  try { d = await (await fetch('/spectate.json' + (chosenRoom ? `?room=${chosenRoom}` : ''))).json(); } catch { return; }
+  try { d = await (await fetch('spectate.json' + (chosenRoom ? `?room=${chosenRoom}` : ''))).json(); } catch { return; }
   const sel = document.getElementById('room');
   sel.innerHTML = d.rooms.map((r) => `<option ${r === d.room ? 'selected' : ''}>${esc(r)}</option>`).join('') || '<option>no game</option>';
   if (!d.room) return;

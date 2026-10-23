@@ -84,6 +84,13 @@ describe('the bot in a room', () => {
     expect(host.last('room').room.players.map((p) => p.name)).toEqual(['Ana']);
   });
 
+  it('sits at the table under the name the server gives it', () => {
+    const { room } = botRoom({ bot: { policy, schedule: () => () => {}, delay: () => 1000, name: 'Midstrike' } });
+    const host = join(room, 'Ana');
+    room.handle(host.id, { t: 'add-bot' });
+    expect(host.last('room').room.players.map((p) => p.name)).toEqual(['Ana', 'Midstrike']);
+  });
+
   it('only plays two-player games', () => {
     const { room } = botRoom();
     const host = join(room, 'Ana');

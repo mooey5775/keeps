@@ -12,7 +12,9 @@ BOT=vrpo1 SEARCH_WORLDS=512 SEARCH_ROLLOUTS=sampled node server.ts
 - **Spectator view:** http://localhost:8789/spectate. Both hands and the unredacted log, so keep it off a human opponent's screen.
 - **Coach:** http://localhost:8789/coach, with `COACH=1` (off by default). What the bot would play in your seat, from your information only.
 
-Port 8789 listens on 127.0.0.1 only.
+Port 8789 listens on 127.0.0.1 only. The same pages are on the game's own address under `/bot/` (`/bot/`, `/bot/spectate`, `/bot/coach`), behind HTTP basic auth with the admin password: `ADMIN_TOKEN`, or the git-ignored file `data/admin-token`. Without a password, `/bot/` is off.
+
+The bot sits at the table as **Midstrike** (`BOT_NAME` to change it).
 
 **Options:**
 - `BOT=<name>`: plays `weights/<name>.bin` (e1 by default).

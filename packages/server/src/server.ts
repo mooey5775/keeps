@@ -35,6 +35,10 @@ export interface ServerOptions {
   botWeights?: string;
   /** Milliseconds the bot waits before each move (default: about a second). */
   botDelay?: () => number;
+  /** The bot's name at the table (default "Bot"). */
+  botName?: string;
+  /** Extra pages, tried before the static files: returns true if it served the request. */
+  extraRoutes?: (req: IncomingMessage, res: ServerResponse, path: string) => boolean;
 }
 
 export interface KeepsServer {
@@ -80,7 +84,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const buildFile = options.webDir ? join(options.webDir, 'build-id.txt') : null;
   const build = buildFile && existsSync(buildFile) ? readFileSync(buildFile, 'utf8').trim() : undefined;
 
-  const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay) : { deps: undefined, status: 'off (no weights configured)' };
+  const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay, options.botName) : { deps: undefined, status: 'off (no weights configured)' };
 
   const deps: RoomDeps = {
     ...(bot.deps ? { bot: bot.deps } : {}),
@@ -143,6 +147,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       });
       return;
     }
+    if (options.extraRoutes?.(req, res, path)) return;
     if (path === '/config.json') {
       res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-cache' }).end(JSON.stringify(options.publicConfig ?? {}));
       return;
@@ -353,7 +358,7 @@ function sendFile(res: ServerResponse, file: string | null, cache: string): void
  * moves, but silently bad). Then the server runs without the bot and says why,
  * at startup and on the admin page, rather than taking human games down too.
  */
-function loadBot(path: string, delay?: () => number): { deps: BotDeps | undefined; status: string } {
+function loadBot(path: string, delay?: () => number, name?: string): { deps: BotDeps | undefined; status: string } {
   try {
     const policy = Policy.load(readFileSync(path));
     const { run, step, fingerprint } = policy.info;
@@ -366,6 +371,7 @@ function loadBot(path: string, delay?: () => number): { deps: BotDeps | undefine
           return () => clearTimeout(timer);
         },
         delay: delay ?? (() => 800 + Math.random() * 400),
+        ...(name ? { name } : {}),
       },
       status: `on: ${run} step ${step}`,
     };

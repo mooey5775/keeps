@@ -40,7 +40,7 @@
 <body>
 <main>
   <div class="row"><h1>Bot insight</h1>
-    <span class="note"><a href="/spectate" style="color:inherit">spectator view</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
+    <span class="note"><a href="spectate" style="color:inherit">spectator view</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
   <div class="sub" id="sub">Waiting for a game against the bot…</div>
 
   <div class="cards">
@@ -105,7 +105,7 @@ function chart(reports) {
 
 async function refresh() {
   let data;
-  try { data = await (await fetch('/data')).json(); } catch { return; }
+  try { data = await (await fetch('data')).json(); } catch { return; }
   // Rooms, most recently active first; "follow the latest" unless one is pinned.
   const codes = Object.keys(data.rooms).sort((a, b) => data.rooms[b].updated - data.rooms[a].updated);
   const sel = document.getElementById('room');
