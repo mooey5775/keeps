@@ -6,7 +6,7 @@ import { encodeTruth, TRUTH_SIZE } from './truth.ts';
 // The training worker: many heads-up rounds at once, stepped in lockstep with
 // binary frames, for self-play at speed. (server.ts is the general, JSON
 // interface OpenSpiel's per-state API uses.)
-// Run: node src/worker.ts <rounds> <seed> [observation version] [both].
+// Run: node src/worker.ts <rounds> <seed> [observation version] [both] [half].
 //
 // Each slot holds one round; when it ends, the slot deals a new one at once.
 // Protocol, repeated: read M int32 actions (little-endian; -1 = none, as on the
@@ -17,6 +17,8 @@ import { encodeTruth, TRUTH_SIZE } from './truth.ts';
 //           without `both`; the other player's is a peek, RoundEnv.peekInto.)
 //   truth   float32 [M, TRUTH_SIZE]        only with `both`: the true state (truth.ts), for
 //           the critic
+//           (with `half`, obs and truth are float16 instead, rounded to nearest even, as
+//           NumPy rounds them: half the bytes, for a learner that stores float16 anyway)
 //   legal   uint8   [M, NUM_ACTIONS]       their legal actions (1 = legal)
 //   player  int8    [M]                    the player to move (0 or 1)
 //   done    uint8   [M]                    1 if this step ended the slot's round (obs etc. are the next round's)
@@ -25,19 +27,24 @@ import { encodeTruth, TRUTH_SIZE } from './truth.ts';
 const M = Number(process.argv[2]);
 const seedBase = process.argv[3] ?? 'w';
 const version = Number(process.argv[4] ?? 1) as ObservationVersion;
-const both = process.argv[5] === 'both';
+const both = process.argv.slice(5).includes('both');
+const half = process.argv.slice(5).includes('half');
 const OBSERVATION_SIZE = observationSize(version);
 const VIEWS = both ? 2 : 1;
-if (!Number.isInteger(M) || M <= 0) throw new Error('usage: worker.ts <rounds> <seed> [version] [both]');
+if (!Number.isInteger(M) || M <= 0) throw new Error('usage: worker.ts <rounds> <seed> [version] [both] [half]');
 
 let dealt = 0;
 const deal = () => RoundEnv.start(`${seedBase}-${dealt++}`, { checked: false, observation: version });
 const envs = Array.from({ length: M }, deal);
 
-const obsBytes = M * VIEWS * OBSERVATION_SIZE * 4 + (both ? M * TRUTH_SIZE * 4 : 0);
+const floats = M * VIEWS * OBSERVATION_SIZE + (both ? M * TRUTH_SIZE : 0);
+const obsBytes = floats * (half ? 2 : 4);
 const frame = Buffer.alloc(obsBytes + M * NUM_ACTIONS + M * 3);
-const obs = new Float32Array(frame.buffer, frame.byteOffset, M * VIEWS * OBSERVATION_SIZE);
-const truth = new Float32Array(frame.buffer, frame.byteOffset + M * VIEWS * OBSERVATION_SIZE * 4, both ? M * TRUTH_SIZE : 0);
+// obs and truth are encoded as float32 (into the frame, or a scratch copied over as float16).
+const encoded = half ? new Float32Array(floats) : new Float32Array(frame.buffer, frame.byteOffset, floats);
+const obs = encoded.subarray(0, M * VIEWS * OBSERVATION_SIZE);
+const truth = encoded.subarray(M * VIEWS * OBSERVATION_SIZE);
+const halves = half ? new Float16Array(frame.buffer, frame.byteOffset, floats) : null;
 const legal = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes, M * NUM_ACTIONS);
 const player = new Int8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS, M);
 const done = new Uint8Array(frame.buffer, frame.byteOffset + obsBytes + M * NUM_ACTIONS + M, M);
@@ -68,6 +75,7 @@ function step(actions: Int32Array): void {
     }
     for (const a of env.legalActions()) legal[i * NUM_ACTIONS + a] = 1;
   }
+  halves?.set(encoded);
 }
 
 // Exit quietly when the trainer goes away (it closes our pipes).

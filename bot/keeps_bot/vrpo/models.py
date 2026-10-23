@@ -22,9 +22,12 @@ and leave the rest zero, as MARVEL's mask them.
                  so the critic can separate the luck of a draw from the play.
 
 Both compute each step on its own, so a rollout's steps go through in chunks of
-CHUNK (MARVEL scores a whole iteration's rounds at once, ~135,000 steps): with
-gradients, each chunk is checkpointed (recomputed in the backward pass), so memory
-holds one chunk's activations, not the minibatch's.
+CHUNK (MARVEL scores a whole iteration's rounds at once, ~135,000 steps). With
+gradients, the critic's chunks are checkpointed (recomputed in the backward pass),
+so memory holds one chunk's activations, not the minibatch's (about 11 GB more
+for a 512-round minibatch otherwise). The agent's are not: its whole minibatch's
+activations take about 3 GB, and skipping the recomputation makes its pass about
+a quarter faster (the gradients are bit-identical either way).
 
 Parameters are named and initialized as in the Haiku network (truncated normal,
 1/sqrt(fan in)). Following MARVEL's optimizer grouping (marvel/model/trainable.py),
@@ -155,15 +158,15 @@ class EntityTorso(nn.Module):
     return x, h_card, positions, subject_card, subject_pile
 
 
-def _by_chunks(fn, *rows):
-  """fn(*rows) for row-independent fn, a chunk of rows at a time (checkpointed when computing gradients)."""
+def _by_chunks(fn, *rows, checkpointed=True):
+  """fn(*rows) for row-independent fn, a chunk of rows at a time (checkpointed, if asked, when computing gradients)."""
   n = rows[0].shape[0]
   if n <= CHUNK:
     return fn(*rows)
   out = []
   for start in range(0, n, CHUNK):
     part = [r[start:start + CHUNK] for r in rows]
-    out.append(checkpoint(fn, *part, use_reentrant=False) if torch.is_grad_enabled() else fn(*part))
+    out.append(checkpoint(fn, *part, use_reentrant=False) if checkpointed and torch.is_grad_enabled() else fn(*part))
   return torch.cat(out)
 
 
@@ -221,7 +224,7 @@ class Agent(CheckpointableModule, TrainableModule):
     mover = rollout['player_ids'][b, t]
     obs = rollout['obs_channels'][b, t, mover]  # float16 until its chunk
     legal = rollout['avail_weights'][b, t] > 0
-    probs = _by_chunks(lambda o, l: self.probabilities(o.float(), l), obs, legal)
+    probs = _by_chunks(lambda o, l: self.probabilities(o.float(), l), obs, legal, checkpointed=False)
     out = probs.new_zeros(rollout['player_ids'].shape + (self.num_actions,))
     out[b, t] = probs
     return AgentOutput(avail_probs=out)

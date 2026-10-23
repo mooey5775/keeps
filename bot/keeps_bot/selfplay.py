@@ -12,6 +12,7 @@ v-trace needs of the acting policy).
 """
 
 import collections
+import fcntl
 import os
 import subprocess
 import threading
@@ -32,23 +33,30 @@ Episode = collections.namedtuple('Episode', 'obs legal player action prob result
 class Worker:
   """One Node worker process and its frame layout."""
 
-  def __init__(self, rounds, seed, obs_size, num_actions, observation=None, both=False):
+  def __init__(self, rounds, seed, obs_size, num_actions, observation=None, both=False, half=False):
     """`both`: obs holds both players' observations, [rounds, 2, obs_size], and truth the true
-    state, [rounds, truth size] (for a central critic; see packages/learn/src/truth.ts)."""
+    state, [rounds, truth size] (for a central critic; see packages/learn/src/truth.ts).
+    `half`: obs and truth arrive as float16 (rounded by the worker as NumPy would)."""
     self.m = rounds
     version = observation if observation is not None else keeps.OBSERVATION
-    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed, str(version)] + (['both'] if both else []),
+    self._proc = subprocess.Popen(['node', WORKER, str(rounds), seed, str(version)] + (['both'] if both else []) +
+                                  (['half'] if half else []),
                                   cwd=os.path.dirname(WORKER), stdin=subprocess.PIPE, stdout=subprocess.PIPE, bufsize=0)
+    try:  # frames are large: a bigger pipe means fewer switches between the worker and us
+      fcntl.fcntl(self._proc.stdout.fileno(), fcntl.F_SETPIPE_SZ, 1 << 20)
+    except OSError:
+      pass
     m, o, a = rounds, obs_size, num_actions
     views = 2 if both else 1
     u = keeps.bridge().truth_layout['size'] if both else 0
-    self._buf = bytearray(m * views * o * 4 + m * u * 4 + m * a + m * 3)
+    f = 2 if half else 4
+    self._buf = bytearray(m * views * o * f + m * u * f + m * a + m * 3)
     self._view = memoryview(self._buf)
     raw = np.frombuffer(self._buf, dtype=np.uint8)
-    self.obs = raw[:m * views * o * 4].view('<f4').reshape((m, 2, o) if both else (m, o))
-    at = m * views * o * 4
-    self.truth = raw[at:at + m * u * 4].view('<f4').reshape(m, u)
-    at += m * u * 4
+    self.obs = raw[:m * views * o * f].view(f'<f{f}').reshape((m, 2, o) if both else (m, o))
+    at = m * views * o * f
+    self.truth = raw[at:at + m * u * f].view(f'<f{f}').reshape(m, u)
+    at += m * u * f
     self.legal = raw[at:at + m * a].reshape(m, a)
     at += m * a
     self.player = raw[at:at + m].view(np.int8)

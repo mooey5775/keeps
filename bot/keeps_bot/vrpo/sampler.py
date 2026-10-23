@@ -9,14 +9,19 @@ step of a trajectory comes from a policy at most one iteration old.
 
 Each worker plays its share of the rounds in `both` mode: every step, both
 players' observations (the mover's, which the policy reads, and the other
-player's, for the critic) and the true state (for the critic only). Workers are stepped a group at a time, one policy call
-per group, so the other groups' workers compute while the GPU works.
+player's, for the critic) and the true state (for the critic only), in float16,
+as the trajectories store them. Workers are stepped a group at a time, one
+policy call per group, so the other groups' workers compute while the GPU works.
+Each worker's frame is received, and later recorded, on a thread of its own, so
+the copies overlap the policy and the other groups (the trajectories are the
+same as stepping everything on one thread, bit for bit).
 
 Rounds longer than the horizon are dropped when they end (about 1 in 5,000 at
 128): a cut trajectory would have no result to learn from.
 """
 
 import collections
+import concurrent.futures
 import time
 
 import numpy as np
@@ -41,7 +46,7 @@ class Sampler:
     T, A, O = game.max_game_horizon, game.max_available_actions, game.num_channels
     self.T, self.A = T, A
     m = self.rollout_batch_size // workers
-    self.workers = [selfplay.Worker(m, f'vrpo-{seed}-{w}', O, A, observation=2, both=True) for w in range(workers)]
+    self.workers = [selfplay.Worker(m, f'vrpo-{seed}-{w}', O, A, observation=2, both=True, half=True) for w in range(workers)]
     # Each slot's round so far.
     self._obs = [np.zeros((m, T, 2, O), np.float16) for _ in self.workers]
     self._truth = [np.zeros((m, T, game.truth_layout['size']), np.float16) for _ in self.workers]
@@ -51,7 +56,19 @@ class Sampler:
     self._probs = [np.zeros((m, T, A), np.float32) for _ in self.workers]
     self._len = [np.zeros(m, np.int64) for _ in self.workers]
     self.finished = collections.deque()  # (worker, slot arrays..., result) in finishing order
+    self._mover = [None] * workers
     self._groups = [list(range(g, workers, groups)) for g in range(min(groups, workers))]
+    # Per group: the movers' views and legal moves, staged for the policy (pinned on a GPU).
+    pin = self.device.type == 'cuda'
+    self._stage = []
+    for group in self._groups:
+      n = m * len(group)
+      x, legal = torch.zeros((n, O), dtype=torch.float16), torch.zeros((n, A), dtype=torch.bool)
+      self._stage.append((x.pin_memory(), legal.pin_memory()) if pin else (x, legal))
+    self._pool = concurrent.futures.ThreadPoolExecutor(workers)
+    self._pending = [None] * workers  # each worker's recording in flight
+    self._graphs = {}  # group → its policy's CUDA graph (_policy)
+    self._worker_stats = [collections.Counter() for _ in self.workers]
     self._batch = None  # pinned host buffers for the rollout, reused
     # For logging: since the last stats() call.
     self._stats = collections.Counter()
@@ -64,69 +81,113 @@ class Sampler:
     started = time.perf_counter()
     with torch.inference_mode():
       while len(self.finished) < self.collect_batch_size:
-        for group in self._groups:
-          self._step_group(group, agent)
+        for g, group in enumerate(self._groups):
+          self._step_group(g, group, agent)
+      self._settle()
     self._stats['play_seconds'] += time.perf_counter() - started
     episodes = [self.finished.popleft() for _ in range(self.collect_batch_size)]
     return self._rollout(episodes)
 
   def stats(self):
     """Counts since the last call: rounds, decisions, cut rounds, seconds playing."""
-    out, self._stats = dict(self._stats), collections.Counter()
-    return out
+    out, self._stats = self._stats, collections.Counter()
+    for counts in self._worker_stats:
+      out.update(counts)
+      counts.clear()
+    return dict(out)
 
-  def _step_group(self, group, agent):
-    for w in group:
-      worker = self.workers[w]
-      worker.receive()
-      for i in np.flatnonzero(worker.done):
-        self._finish(w, i, int(worker.reward[i]))
-    obs = np.concatenate([self.workers[w].obs for w in group]).astype(np.float16)  # [n, 2, O]
-    truth = np.concatenate([self.workers[w].truth for w in group]).astype(np.float16)  # [n, U]
-    mover = np.concatenate([self.workers[w].player for w in group]).astype(np.int64)
-    legal = np.concatenate([self.workers[w].legal for w in group]).astype(np.bool_)
-    n = len(mover)
-    # The policy reads exactly what training will (the float16 observation).
-    x = torch.from_numpy(obs[np.arange(n), mover]).to(self.device).float()
-    probs = agent.probabilities(x, torch.from_numpy(legal).to(self.device))
+  def _step_group(self, g, group, agent):
+    # Each worker's step is received, and its mover's view gathered, on its own thread (the pipe
+    # reads and the copies release the GIL); the group then makes one policy call.
+    x, legal = self._stage[g]
+    offsets = np.cumsum([0] + [self.workers[w].m for w in group])
+    self._settle(group)
+    received = list(self._pool.map(self._receive, group, offsets[:-1], [x.numpy()] * len(group), [legal.numpy()] * len(group)))
+    for finished in received:
+      self.finished.extend(finished)
+    n = int(offsets[-1])
+    probs = self._policy(g, agent, x, legal)
     actions = torch.multinomial(probs, 1)[:, 0]
     probs, actions = probs.cpu().numpy(), actions.cpu().numpy()
-    at = 0
-    for w in group:
-      worker = self.workers[w]
-      m = worker.m
-      self._record(w, slice(at, at + m), obs, truth, mover, legal, actions, probs)
-      worker.send(actions[at:at + m])
-      at += m
+    # Send first, so the workers compute their next step while this one is recorded, in the
+    # background: each worker's record finishes before its next receive (_settle).
+    for j, w in enumerate(group):
+      part = slice(offsets[j], offsets[j + 1])
+      self.workers[w].send(actions[part])
+      self._pending[w] = self._pool.submit(self._record, w, legal.numpy()[part], actions[part], probs[part])
     self.total_env_steps += n
     self.total_game_steps += n
     self._stats['decisions'] += n
 
-  def _record(self, w, part, obs, truth, mover, legal, actions, probs):
-    length = self._len[w]
+  def _policy(self, g, agent, x, legal):
+    """The policy on group g's staged views: on a GPU, a CUDA graph per group, replayed (one launch
+    instead of one per layer, which the recording threads would otherwise slow down; the same
+    kernels, so the same numbers). It reads the parameters in place, so training's updates show;
+    it is captured again if the parameters move."""
+    # The policy reads each mover's own view in float16, exactly what training will read.
+    if self.device.type != 'cuda':
+      return agent.probabilities(x.float(), legal)
+    key = (id(agent), tuple(p.data_ptr() for p in agent.parameters()))
+    if g not in self._graphs or self._graphs[g][0] != key:
+      x_in, legal_in = x.to(self.device), legal.to(self.device)
+      side = torch.cuda.Stream()
+      side.wait_stream(torch.cuda.current_stream())
+      with torch.cuda.stream(side):
+        for _ in range(3):
+          agent.probabilities(x_in.float(), legal_in)
+      torch.cuda.current_stream().wait_stream(side)
+      graph = torch.cuda.CUDAGraph()
+      with torch.cuda.graph(graph):
+        out = agent.probabilities(x_in.float(), legal_in)
+      self._graphs[g] = (key, graph, x_in, legal_in, out)
+    _, graph, x_in, legal_in, out = self._graphs[g]
+    x_in.copy_(x, non_blocking=True)
+    legal_in.copy_(legal, non_blocking=True)
+    graph.replay()
+    return out
+
+  def _settle(self, group=None):
+    """Waits for the workers' (default: all) recordings in flight."""
+    for w in range(len(self.workers)) if group is None else group:
+      if self._pending[w] is not None:
+        self._pending[w].result()
+        self._pending[w] = None
+
+  def _receive(self, w, at, x, legal):
+    """Receives worker w's step, finishes its ended rounds and stages its movers' views at `at`."""
+    worker = self.workers[w]
+    worker.receive()
+    finished = [episode for i in np.flatnonzero(worker.done) if (episode := self._finish(w, i, int(worker.reward[i])))]
+    self._mover[w] = worker.player.astype(np.int64)
+    x[at:at + worker.m] = worker.obs[np.arange(worker.m), self._mover[w]]
+    legal[at:at + worker.m] = worker.legal
+    return finished
+
+  def _record(self, w, legal, actions, probs):
+    worker, mover, length = self.workers[w], self._mover[w], self._len[w]
     rows = np.flatnonzero(length < self.T)  # past the horizon: no longer recorded, the round will be dropped
     t = length[rows]
-    sel = np.arange(part.start, part.stop)[rows]
-    self._obs[w][rows, t] = obs[sel]
-    self._truth[w][rows, t] = truth[sel]
-    self._legal[w][rows, t] = legal[sel]
-    self._player[w][rows, t] = mover[sel]
-    self._action[w][rows, t] = actions[sel]
-    self._probs[w][rows, t] = probs[sel]
+    self._obs[w][rows, t] = worker.obs[rows]
+    self._truth[w][rows, t] = worker.truth[rows]
+    self._legal[w][rows, t] = legal[rows]
+    self._player[w][rows, t] = mover[rows]
+    self._action[w][rows, t] = actions[rows]
+    self._probs[w][rows, t] = probs[rows]
     length += 1
 
   def _finish(self, w, i, result):
+    """Ends slot i's round: its episode, or None for a round cut at the horizon."""
     n = int(self._len[w][i])
     self._len[w][i] = 0
-    self._stats['rounds'] += 1
-    self._stats['round_decisions'] += n
+    stats = self._worker_stats[w]
+    stats['rounds'] += 1
+    stats['round_decisions'] += n
     if n > self.T:
-      self._stats['rounds_cut'] += 1
-      return
-    self._stats['player0_wins'] += result > 0
-    self.finished.append((self._obs[w][i, :n].copy(), self._truth[w][i, :n].copy(), self._legal[w][i, :n].copy(),
-                          self._player[w][i, :n].copy(), self._action[w][i, :n].copy(), self._probs[w][i, :n].copy(),
-                          result))
+      stats['rounds_cut'] += 1
+      return None
+    stats['player0_wins'] += result > 0
+    return (self._obs[w][i, :n].copy(), self._truth[w][i, :n].copy(), self._legal[w][i, :n].copy(),
+            self._player[w][i, :n].copy(), self._action[w][i, :n].copy(), self._probs[w][i, :n].copy(), result)
 
   def _rollout(self, episodes):
     B, T, A, O = len(episodes), self.T, self.A, self.game.num_channels
@@ -164,5 +225,7 @@ class Sampler:
     return TensorDict({name: t.to(self.device) for name, t in batch.items()}, batch_size=[B], device=self.device)
 
   def close(self):
+    self._settle()
+    self._pool.shutdown()
     for w in self.workers:
       w.close()
