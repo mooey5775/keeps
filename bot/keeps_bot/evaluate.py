@@ -238,9 +238,10 @@ def backtest(run, yardstick, deals, every):
   """Plays each saved policy of a run (steps that are multiples of `every`) against a fixed yardstick,
   as watch() does (the same deals: seed eval-<step>), and adds the scores to the run's charts.
 
-  For a yardstick added after the run started. Coarse steps go first (every 16·`every`, then 8·, …),
-  so the curve's shape shows early; steps watch() already played against it are skipped. Results also
-  go to runs/<run>/backtest.jsonl (evals.jsonl stays watch()'s own).
+  For a yardstick added after the run started. Charted as its own run (runs/<run>/tb/backtest, beside
+  tb/eval), in increasing step order: TensorBoard takes a step lower than one it has seen for a restart
+  and drops the later points. Steps watch() already played against the yardstick are left to its run;
+  results go to runs/<run>/backtest.jsonl, and steps already there are charted from it, not replayed.
   """
   from tensorboardX import SummaryWriter
 
@@ -248,39 +249,42 @@ def backtest(run, yardstick, deals, every):
   name = os.path.splitext(os.path.basename(yardstick))[0]
   opponent, saved_yardstick = policies.load(yardstick)
   version = saved_yardstick.get('observation', 1)
-  done = set()
-  for log in ('evals.jsonl', 'backtest.jsonl'):
-    path = os.path.join(run_dir, log)
-    if os.path.exists(path):
-      with open(path) as f:
-        done |= {e['step'] for e in map(json.loads, f) if name in e}
-  steps = [s for s in sorted(_step_of(p) for p in glob.glob(os.path.join(run_dir, 'policy-*.pkl'))) if s > 0 and s % every == 0]
-  order = []
-  for stride in (16, 8, 4, 2, 1):
-    order += [s for s in steps if s % (stride * every) == 0 and s not in order]
-  order = [s for s in order if s not in done]
-  writer = SummaryWriter(os.path.join(run_dir, 'tb', 'eval'))
-  print(f'{len(order)} policies to play against {name}', flush=True)
+  live, stored = set(), {}
+  if os.path.exists(os.path.join(run_dir, 'evals.jsonl')):
+    with open(os.path.join(run_dir, 'evals.jsonl')) as f:
+      live = {e['step'] for e in map(json.loads, f) if name in e}
+  if os.path.exists(os.path.join(run_dir, 'backtest.jsonl')):
+    with open(os.path.join(run_dir, 'backtest.jsonl')) as f:
+      stored = {e['step']: e for e in map(json.loads, f) if name in e}
+  steps = sorted(_step_of(p) for p in glob.glob(os.path.join(run_dir, 'policy-*.pkl')))
+  order = [s for s in steps if s > 0 and s % every == 0 and s not in live]
+  writer = SummaryWriter(os.path.join(run_dir, 'tb', 'backtest'))
+  print(f'{len(order)} policies against {name}: {sum(s in stored for s in order)} from backtest.jsonl, the rest to play', flush=True)
   for step in order:
-    policy, saved = policies.load(os.path.join(run_dir, f'policy-{step}.pkl'))
-    if saved.get('observation', 1) != version:
-      continue
-    keeps.set_observation(version)
-    started = time.time()
-    result = match(policy, opponent, deals, seed=f'eval-{step}')
+    if step in stored:
+      entry = stored[step]
+    else:
+      policy, saved = policies.load(os.path.join(run_dir, f'policy-{step}.pkl'))
+      if saved.get('observation', 1) != version:
+        continue
+      keeps.set_observation(version)
+      started = time.time()
+      entry = {'step': step, name: match(policy, opponent, deals, seed=f'eval-{step}'), 'seconds': 0.0}
+      entry['seconds'] = round(time.time() - started, 1)
+      if saved.get('decisions') is not None:
+        entry['decisions'] = saved['decisions']
+      with open(os.path.join(run_dir, 'backtest.jsonl'), 'a') as f:
+        f.write(json.dumps(entry) + '\n')
+      print(json.dumps({'step': step, 'score': round(entry[name]['score'], 3), 'seconds': entry['seconds']}), flush=True)
+    result = entry[name]
     writer.add_scalar(f'eval/vs_{name}', result['score'], step)
     writer.add_scalar(f'eval_ci/vs_{name}_low', result['score'] - result['ci95'], step)
     writer.add_scalar(f'eval_ci/vs_{name}_high', result['score'] + result['ci95'], step)
     writer.add_scalar(f'eval_seats/vs_{name}_as_player0', result['as_player0'], step)
     writer.add_scalar(f'eval_seats/vs_{name}_as_player1', result['as_player1'], step)
-    entry = {'step': step, name: result, 'seconds': round(time.time() - started, 1)}
-    if saved.get('decisions') is not None:
-      entry['decisions'] = saved['decisions']
-      _by_decisions(writer, entry, saved['decisions'])
+    if entry.get('decisions') is not None:
+      _by_decisions(writer, entry, entry['decisions'])
     writer.flush()
-    with open(os.path.join(run_dir, 'backtest.jsonl'), 'a') as f:
-      f.write(json.dumps(entry) + '\n')
-    print(json.dumps({'step': step, 'score': round(result['score'], 3), 'seconds': entry['seconds']}), flush=True)
 
 
 def main():
