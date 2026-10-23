@@ -107,6 +107,11 @@ export class Policy {
     return legalPolicy(forward(this.head!, x, false), legal);
   }
 
+  /** The network's value estimate for the player observing (entity networks; null for the MLP, whose value head isn't exported). */
+  value(obs: Float32Array): number | null {
+    return this.entity ? this.entity.value(obs) : null;
+  }
+
   /** The policy as the bot plays it: post-processed like R-NaD at test time. */
   probabilities(obs: Float32Array, legal: ArrayLike<number>): Float32Array {
     const { threshold, discretization } = this.info.postprocess;

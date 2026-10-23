@@ -102,8 +102,8 @@ export class EntityNetwork {
     return row.subarray(start, start + width);
   }
 
-  /** The 48 logits, in action-id order (cards, positions, special ids). */
-  logits(obs: Float32Array): Float32Array {
+  /** The trunk's output and the entity features the heads read. */
+  private features(obs: Float32Array) {
     const cards = this.rows(obs, 'cards');
     const piles = this.rows(obs, 'piles');
     const players = this.rows(obs, 'players');
@@ -146,7 +146,21 @@ export class EntityNetwork {
       x = add(x, y);
     }
     x = relu(this.layerNorm('trunk_norm', x));
+    return { x, hCard, hPile, hPlayer, pools, subjectCard, subjectPile, cardDim };
+  }
 
+  /**
+   * The value head (hk.nets.MLP([128, 1]) on the trunk): the network's estimate of the round's
+   * result for the player observing, in [-1, 1] as trained (R-NaD's, from its regularized
+   * rewards; policies trained without one export it as zeros).
+   */
+  value(obs: Float32Array): number {
+    return this.mlp('value', this.features(obs).x, 2, false)[0]!;
+  }
+
+  /** The 48 logits, in action-id order (cards, positions, special ids). */
+  logits(obs: Float32Array): Float32Array {
+    const { x, hCard, hPile, hPlayer, pools, subjectCard, subjectPile, cardDim } = this.features(obs);
     const query = this.lin('query', x);
     const cardSubject = this.lin('card_head_subject', subjectCard, false);
     const cardLogits = hCard.map((h) => this.lin('card_head_out', relu(add(this.lin('card_head_candidate', h), query, cardSubject)))[0]!);
