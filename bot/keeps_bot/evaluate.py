@@ -234,11 +234,61 @@ def watch(run, deals, poll, every, heuristics=('greedy', 'timer'), heuristic_dea
     loaded = {s: p for s, p in loaded.items() if s == step}
 
 
+def backtest(run, yardstick, deals, every):
+  """Plays each saved policy of a run (steps that are multiples of `every`) against a fixed yardstick,
+  as watch() does (the same deals: seed eval-<step>), and adds the scores to the run's charts.
+
+  For a yardstick added after the run started. Coarse steps go first (every 16·`every`, then 8·, …),
+  so the curve's shape shows early; steps watch() already played against it are skipped. Results also
+  go to runs/<run>/backtest.jsonl (evals.jsonl stays watch()'s own).
+  """
+  from tensorboardX import SummaryWriter
+
+  run_dir = os.path.abspath(os.path.join(RUNS, run))
+  name = os.path.splitext(os.path.basename(yardstick))[0]
+  opponent, saved_yardstick = policies.load(yardstick)
+  version = saved_yardstick.get('observation', 1)
+  done = set()
+  for log in ('evals.jsonl', 'backtest.jsonl'):
+    path = os.path.join(run_dir, log)
+    if os.path.exists(path):
+      with open(path) as f:
+        done |= {e['step'] for e in map(json.loads, f) if name in e}
+  steps = [s for s in sorted(_step_of(p) for p in glob.glob(os.path.join(run_dir, 'policy-*.pkl'))) if s > 0 and s % every == 0]
+  order = []
+  for stride in (16, 8, 4, 2, 1):
+    order += [s for s in steps if s % (stride * every) == 0 and s not in order]
+  order = [s for s in order if s not in done]
+  writer = SummaryWriter(os.path.join(run_dir, 'tb', 'eval'))
+  print(f'{len(order)} policies to play against {name}', flush=True)
+  for step in order:
+    policy, saved = policies.load(os.path.join(run_dir, f'policy-{step}.pkl'))
+    if saved.get('observation', 1) != version:
+      continue
+    keeps.set_observation(version)
+    started = time.time()
+    result = match(policy, opponent, deals, seed=f'eval-{step}')
+    writer.add_scalar(f'eval/vs_{name}', result['score'], step)
+    writer.add_scalar(f'eval_ci/vs_{name}_low', result['score'] - result['ci95'], step)
+    writer.add_scalar(f'eval_ci/vs_{name}_high', result['score'] + result['ci95'], step)
+    writer.add_scalar(f'eval_seats/vs_{name}_as_player0', result['as_player0'], step)
+    writer.add_scalar(f'eval_seats/vs_{name}_as_player1', result['as_player1'], step)
+    entry = {'step': step, name: result, 'seconds': round(time.time() - started, 1)}
+    if saved.get('decisions') is not None:
+      entry['decisions'] = saved['decisions']
+      _by_decisions(writer, entry, saved['decisions'])
+    writer.flush()
+    with open(os.path.join(run_dir, 'backtest.jsonl'), 'a') as f:
+      f.write(json.dumps(entry) + '\n')
+    print(json.dumps({'step': step, 'score': round(result['score'], 3), 'seconds': entry['seconds']}), flush=True)
+
+
 def main():
   parser = argparse.ArgumentParser()
   parser.add_argument('policy', nargs='?', help='policy file (or "random")')
   parser.add_argument('opponent', nargs='?', default='random', help='policy file (or "random")')
   parser.add_argument('--watch', metavar='RUN', help='evaluate each new policy of a training run')
+  parser.add_argument('--backtest', metavar='RUN', help="play a run's saved policies against --yardstick (one), for its charts")
   parser.add_argument('--deals', type=int, default=1000)
   parser.add_argument('--poll', type=float, default=10, help='seconds between checks for new policies')
   parser.add_argument('--every', type=int, default=1000, help='evaluate only policies whose step is a multiple of this')
@@ -248,7 +298,11 @@ def main():
   parser.add_argument('--yardstick', action='append', default=[], metavar='POLICY',
                       help='a fixed policy file every evaluation also plays (repeatable)')
   args = parser.parse_args()
-  if args.watch:
+  if args.backtest:
+    if len(args.yardstick) != 1:
+      parser.error('--backtest takes one --yardstick')
+    backtest(args.backtest, args.yardstick[0], args.deals, args.every)
+  elif args.watch:
     heuristics = tuple(h for h in args.heuristics.split(',') if h)
     watch(args.watch, args.deals, args.poll, args.every, heuristics, args.heuristic_deals, args.shards, args.yardstick)
   else:
