@@ -10,7 +10,7 @@ BOT=vrpo1 SEARCH_WORLDS=512 node server.ts
 - **The game:** http://localhost:8788
 - **Bot insight:** http://localhost:8789. The bot's chance to win before and after search, and its candidate moves.
 - **Spectator view:** http://localhost:8789/spectate. Both hands and the unredacted log, so keep it off a human opponent's screen.
-- **Coach:** http://localhost:8789/coach. What the bot would play in your seat, from your information only.
+- **Coach:** http://localhost:8789/coach, with `COACH=1` (off by default). What the bot would play in your seat, from your information only.
 
 Port 8789 listens on 127.0.0.1 only.
 

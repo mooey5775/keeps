@@ -48,7 +48,7 @@ const sendGame = (Room.prototype as unknown as { sendGame: (...a: unknown[]) => 
 (Room.prototype as unknown as { sendGame: (...a: unknown[]) => unknown }).sendGame = function (this: LiveRoom, ...args: unknown[]) {
   liveRooms.set(this.code, this);
   try {
-    coachUpdate(this);
+    if (COACH) coachUpdate(this);
   } catch (error) {
     console.error(`room ${this.code}: the coach failed: ${String(error instanceof Error ? error.stack : error)}`);
   }
@@ -64,6 +64,8 @@ const namesOf = (room: LiveRoom): (string | null)[] => {
 // bot of its own in that seat, seeing only that player's view and log (its belief built at each of
 // their decisions, as the bot's is at its own), searching worlds sampled from THEIR information.
 // First the network's probabilities, then the search's win chances when the rollouts finish.
+// Off unless COACH=1: it searches at every one of the human's decisions, competing with the bot's search.
+const COACH = process.env.COACH === '1';
 const coachPolicy = Policy.load(readFileSync(weights));
 type CoachMove = { label: string; policy: number; win: number | null; chosen: boolean };
 type Coach = {
@@ -209,7 +211,7 @@ createServer((req, res) => {
   }
   if (req.url?.startsWith('/coach')) {
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(coachPage());
+    res.end(COACH ? coachPage() : 'The coach is off. Start the server with COACH=1 to use it.');
     return;
   }
   if (req.url?.startsWith('/spectate.json')) {
@@ -282,4 +284,4 @@ await createKeepsServer({
   dataDir: join(import.meta.dirname, 'data'),
   botWeights: weights,
 });
-console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789, coach on http://localhost:8789/coach (${botName}, ${WORLDS} worlds per decision, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
+console.log(`search demo on http://localhost:8788, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
