@@ -4,7 +4,7 @@
 //   node server.ts   → the game at http://localhost:8788, bot insight at http://localhost:8789,
 //                      the coach at http://localhost:8789/coach
 // The bot plays the best rollout move (SEARCH_MODE=sample: Ataraxos's sampling instead).
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
@@ -15,6 +15,7 @@ import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
 import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
+import { replayFileName } from '../../server/src/replays.ts';
 import { BETA, RolloutPool, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
@@ -47,6 +48,7 @@ const liveRooms = new Map<string, LiveRoom>();
 const sendGame = (Room.prototype as unknown as { sendGame: (...a: unknown[]) => unknown }).sendGame;
 (Room.prototype as unknown as { sendGame: (...a: unknown[]) => unknown }).sendGame = function (this: LiveRoom, ...args: unknown[]) {
   liveRooms.set(this.code, this);
+  noteSession(this);
   try {
     if (COACH) coachUpdate(this);
   } catch (error) {
@@ -54,6 +56,18 @@ const sendGame = (Room.prototype as unknown as { sendGame: (...a: unknown[]) => 
   }
   return sendGame.apply(this, args);
 };
+// Who played each game, by its replay file (replays record only the moves): data/sessions.jsonl,
+// one line per game when it starts. sessions.ts joins the two into a summary of who played and how it went.
+const noted = new Set<string>();
+function noteSession(room: LiveRoom): void {
+  const startedAt = (room.game as { startedAt?: number } | null)?.startedAt;
+  if (!startedAt) return;
+  const replay = replayFileName(room.code, startedAt);
+  if (noted.has(replay)) return;
+  noted.add(replay);
+  const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.bot ? 'Bot' : p.name, bot: !!p.bot }));
+  appendFileSync(join(import.meta.dirname, 'data', 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
+}
 const namesOf = (room: LiveRoom): (string | null)[] => {
   const names: (string | null)[] = [null, null, null, null];
   for (const p of room.players) if (p.seat !== null) names[p.seat] = p.bot ? 'Bot' : p.name;

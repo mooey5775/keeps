@@ -23,6 +23,9 @@ print(int(any(time.time() * 1000 - r["updated"] < 30 * 60 * 1000 for r in rooms)
 }
 
 restart() {
+  # Who played since the last restart, and how it went (the restart ends any game still open).
+  (cd "$DEMO" && node sessions.ts 2>&1) | sed 's/^/  played: /' >> "$LOG"
+  date +%s%3N > "$DEMO/data/last-restart"
   for p in $(pgrep -f '^node server.ts$'); do
     [ "$(readlink /proc/$p/cwd)" = "$DEMO" ] && kill "$p"
   done
