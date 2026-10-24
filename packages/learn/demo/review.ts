@@ -553,25 +553,27 @@ export function verdictOf(d: Pick<DecisionData, 'rows' | 'truth' | 'played' | 'c
     });
   const p = d.played;
   if (known[p] === null || known[best] === null) return { verdict: null, best, unclear: false };
-  if (best === p) {
-    // Right from what they knew; unlucky if, with every card known, another option was clearly better.
+  // Unlucky: with every card known, another option was clearly better (at least 15 points, three standard errors).
+  const unlucky = () => {
     const truth = d.truth.map((t) => (t.n ? t.wins / t.n : null));
     const top = truth.reduce<number>((a, t, k) => ((t ?? -1) > (truth[a] ?? -1) ? k : a), 0);
     const tp = truth[p] ?? null;
     const tb = truth[top] ?? null;
-    if (tp !== null && tb !== null && top !== p) {
-      const se = Math.sqrt((tb * (1 - tb)) / d.truth[top]!.n + (tp * (1 - tp)) / d.truth[p]!.n);
-      if (tb - tp >= 0.15 && tb - tp >= 3 * se) return { verdict: 'unlucky', best, unclear: false };
-    }
-    return { verdict: 'best', best, unclear: false };
-  }
+    if (tp === null || tb === null || top === p) return false;
+    const se = Math.sqrt((tb * (1 - tb)) / d.truth[top]!.n + (tp * (1 - tp)) / d.truth[p]!.n);
+    return tb - tp >= 0.15 && tb - tp >= 3 * se;
+  };
+  // The bot's own pick: right from what they knew.
+  if (best === p) return { verdict: unlucky() ? 'unlucky' : 'best', best, unclear: false };
   const gap = known[best]! - known[p]!;
   const diffs = d.rows.filter((r) => r[best] !== null && r[best] !== undefined && r[p] !== null && r[p] !== undefined).map((r) => r[best]! - r[p]!);
   const mean = diffs.reduce((a, x) => a + x, 0) / diffs.length;
   const variance = diffs.reduce((a, x) => a + (x - mean) ** 2, 0) / Math.max(1, diffs.length - 1);
   const se = Math.sqrt(variance / diffs.length) || 1e-9;
   const clear = gap >= 0.1 && gap >= 3 * se;
-  if (!clear) return { verdict: null, best, unclear: gap >= 0.1 && !d.rechecked };
+  // As good as the pick from what they knew (within 10 points): only the hidden cards can make it look bad.
+  if (gap < 0.1) return { verdict: unlucky() ? 'unlucky' : null, best, unclear: false };
+  if (!clear) return { verdict: null, best, unclear: !d.rechecked };
   const tb = d.truth[best]!.n ? d.truth[best]!.wins / d.truth[best]!.n : null;
   const tp = d.truth[p]!.n ? d.truth[p]!.wins / d.truth[p]!.n : null;
   if (gap >= 0.2) return { verdict: 'blunder', best, unclear: false };

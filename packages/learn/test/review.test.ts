@@ -53,5 +53,8 @@ describe('round review verdicts', () => {
   it('calls the right move unlucky when, with every card known, another was clearly better', () => {
     expect(verdictOf(decision([0.7, 0.6], 0, { truth: [0.2, 0.8] })).verdict).toBe('unlucky');
     expect(verdictOf(decision([0.7, 0.6], 0, { truth: [0.45, 0.55] })).verdict).toBe('best');
+    // Not the bot's pick, but as good from what you knew (89% against 88%): the hidden cards made it costly.
+    expect(verdictOf(decision([0.88, 0.89], 1, { chosen: 0, truth: [0.88, 0.47] })).verdict).toBe('unlucky');
+    expect(verdictOf(decision([0.88, 0.89], 1, { chosen: 0, truth: [0.88, 0.85] })).verdict).toBeNull();
   });
 });
