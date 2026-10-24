@@ -1,4 +1,5 @@
 import { CARDS, coinsLabel, type CardId, type Command, type PlayerView, type PromptView, type Seat, type TraceEvent } from '@keeps/engine';
+import type { Hint } from '@keeps/protocol';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from './Card.tsx';
 import { logLines } from './log.ts';
@@ -18,6 +19,8 @@ export interface GameTableProps {
   onCommand: (command: Command) => void;
   /** Extra controls for the side panel (undo, leave, …). */
   side?: ReactNode;
+  /** Training mode: the bot's suggestion for your current decision, most likely first. */
+  hints?: Hint[] | null;
   /** Shown above the board (room code, puzzle title, …). */
   header?: ReactNode;
   /** The seat drawn at the bottom of the table. Default: the viewer's. */
@@ -33,7 +36,7 @@ const DISCARD_PEEK = 3;
 const DISCARD_STEP = 11;
 const POSITIONS: Position[] = ['bottom', 'left', 'top', 'right'];
 
-export function GameTable({ view, log, names, onCommand, side, header, bottom, botSeats = [] }: GameTableProps) {
+export function GameTable({ view, log, names, onCommand, side, header, bottom, botSeats = [], hints = null }: GameTableProps) {
   const me: Seat = view.viewer === 'spectator' ? 0 : view.viewer;
   const anchor = bottom ?? me;
   // Ghosts are named by where they sit on this table, in the log as on the seats.
@@ -152,6 +155,9 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom, b
             ),
           )}
         </div>
+        {hints && hints.length > 0 && (
+          <TrainingHints hints={hints} options={options} bot={botSeats.length ? capital(uiNames.seat(botSeats[0]!)) : 'The bot'} />
+        )}
         <OptionsPanel view={view} options={remaining} picked={picked} onSend={send} onPick={onRef} onClear={() => setPicked([])} />
         {side}
         <Log events={log} names={logNames} />
@@ -383,6 +389,36 @@ function Log({ events, names }: { events: readonly TraceEvent[]; names: ReturnTy
           {l.text}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Training mode: the move the bot would most likely play in your seat, and the next two, labelled as the options are. */
+function TrainingHints({ hints, options, bot }: { hints: Hint[]; options: Option[]; bot: string }) {
+  const labels = new Map(options.map((o) => [JSON.stringify(o.command), o.label]));
+  const label = (hint: Hint): string => {
+    const known = labels.get(JSON.stringify(hint.command));
+    if (known) return known;
+    // A pile reorder lists no options: name the order.
+    const order = hint.command.type === 'answer' && hint.command.answer.kind === 'order-pile' ? hint.command.answer.order : null;
+    return order ? `Put the pile in this order: ${order.map((c) => CARDS[c].name).join(', ')}` : 'A move';
+  };
+  const pct = (p: number) => `${Math.round(100 * p)}%`;
+  const [best, ...rest] = hints;
+  return (
+    <div className="training">
+      <p>
+        {bot} would play: <strong>{label(best!)}</strong> <span className="pct">{pct(best!.probability)}</span>
+      </p>
+      {rest.length > 0 && (
+        <ul>
+          {rest.slice(0, 2).map((h) => (
+            <li key={JSON.stringify(h.command)}>
+              {label(h)} <span className="pct">{pct(h.probability)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

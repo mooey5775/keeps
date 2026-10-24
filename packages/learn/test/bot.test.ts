@@ -48,6 +48,45 @@ describe('bot', () => {
     expect(compared).toBeGreaterThan(500);
   });
 
+  it('suggests moves for a seat it advises: every legal command, ranked, probabilities summing to 1', () => {
+    for (let g = 0; g < 4; g++) {
+      const random = rng(300 + g);
+      let { state, events } = newGame({ players: 2, seed: `advice-${g}`, marksToWin: 2 }) as { state: GameState; events: TraceEvent[] };
+      const bot = new BotPlayer(policy, 2, random);
+      const advisor = new BotPlayer(policy, 0);
+      let advised = 0;
+      for (let step = 0; state.phase !== 'game-over'; step++) {
+        expect(step).toBeLessThan(5000);
+        let seat: Seat;
+        let command;
+        if (bot.wantsToMove(state)) {
+          seat = 2;
+          command = bot.choose(state, events);
+        } else if (advisor.wantsToMove(state)) {
+          seat = 0;
+          const advice = advisor.suggest(state, events);
+          expect(advice.length).toBeGreaterThan(0);
+          expect(advice.reduce((sum, a) => sum + a.probability, 0)).toBeCloseTo(1, 5);
+          for (let i = 1; i < advice.length; i++) expect(advice[i]!.probability).toBeLessThanOrEqual(advice[i - 1]!.probability);
+          const legal = legalCommands(state, 0).map((c) => JSON.stringify(c));
+          // Every legal command is advised on (a pile reorder, which lists none, gets the network's own order).
+          if (legal.length > 0) expect(advice.map((a) => JSON.stringify(a.command)).sort()).toEqual([...legal].sort());
+          // The human follows the advice half the time, otherwise plays at random.
+          command = random() < 0.5 ? advice[0]!.command : advice[Math.floor(random() * advice.length)]!.command;
+          advised++;
+        } else {
+          seat = 0; // starting the next round
+          command = legalCommands(state, 0)[0]!;
+        }
+        const result = apply(state, seat, command);
+        if (!result.ok) throw new Error(result.error.message);
+        state = result.state;
+        events = [...events, ...result.events];
+      }
+      expect(advised).toBeGreaterThan(20);
+    }
+  });
+
   it('plays whole games of several rounds without trouble', () => {
     for (let g = 0; g < 6; g++) {
       const random = rng(100 + g);

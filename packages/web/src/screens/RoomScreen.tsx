@@ -274,6 +274,9 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
   const { undo } = game;
   const proposer = room.players.find((p) => p.id === undo.proposedBy);
   const mustVote = undo.waitingOn.includes(room.you);
+  // Training mode: only for a seated player in a game against the bot.
+  const bot = room.players.find((p) => p.bot);
+  const canTrain = bot !== undefined && me?.seat !== null && me?.seat !== undefined;
 
   const side = (
     <div className="room-controls">
@@ -315,6 +318,14 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
           </button>
         )}
       </div>
+      {canTrain && (
+        <div className="training-switch">
+          <button type="button" className={room.training ? 'primary' : ''} aria-pressed={room.training === true} onClick={() => roomStore.setTraining(!room.training)}>
+            Training mode: {room.training ? 'on' : 'off'}
+          </button>
+          <span className="hint">{room.training ? `Showing what ${bot.name} would play in your seat.` : `See what ${bot.name} would play in your seat.`}</span>
+        </div>
+      )}
       <DisputeButton
         context={() => {
           const token = tabToken(room.code) ?? browserToken(room.code);
@@ -331,6 +342,7 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
       names={game.names}
       botSeats={room.players.flatMap((p) => (p.bot && p.seat !== null ? [p.seat] : []))}
       onCommand={(command) => roomStore.command(command)}
+      hints={room.training ? game.hints : null}
       side={side}
       header={
         <div className="table-header">

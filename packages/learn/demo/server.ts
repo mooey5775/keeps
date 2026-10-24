@@ -32,7 +32,8 @@ const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(DATA, 'admin-tok
 const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
 // The search (on unless SEARCH=off), and the coach (COACH=1), play out moves in these worker threads.
 const SEARCH = process.env.SEARCH !== 'off';
-const pool = new RolloutPool(SEARCH || process.env.COACH === '1' ? Math.max(1, availableParallelism() - 2) : 1, weights);
+// Not started at all when neither needs it (SEARCH=off, no coach): no second copy of the network in memory.
+const pool = (SEARCH || process.env.COACH === '1' ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null) as RolloutPool;
 const MODE = process.env.SEARCH_MODE === 'sample' ? 'sample' : 'best-q';
 setSearchMode(MODE);
 

@@ -34,6 +34,14 @@ export interface RoomSummary {
   you: string;
   /** Whether this server can add a bot player. */
   botAvailable: boolean;
+  /** Whether your training mode is on: in games against the bot, its suggestion for your moves. */
+  training?: boolean;
+}
+
+/** Training mode: a move and how likely the bot's network is to play it in your seat. */
+export interface Hint {
+  command: Command;
+  probability: number;
 }
 
 export interface UndoState {
@@ -62,6 +70,8 @@ export type ClientMessage =
   /** Host, in the lobby: add a bot player (the room must be for two). */
   | { t: 'add-bot' }
   | { t: 'remove-bot' }
+  /** Training mode on or off: in games against the bot, its suggestion for each of your moves. */
+  | { t: 'training'; on: boolean }
   | { t: 'leave' };
 
 export type ServerMessage =
@@ -78,6 +88,11 @@ export type ServerMessage =
       /** Player names by seat (null for ghost seats). */
       names: (string | null)[];
       undo: UndoState;
+      /**
+       * Training mode: the bot's suggestion for your current decision (every legal move, most likely
+       * first), worked out from your own view only. Null when you have no decision; absent when off.
+       */
+      hints?: Hint[] | null;
     }
   | { t: 'error'; message: string }
   /** The room no longer exists (e.g. a stale resume). */

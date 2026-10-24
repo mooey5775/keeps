@@ -1,5 +1,5 @@
 import type { Command, PlayerView, TraceEvent } from '@keeps/engine';
-import type { ClientMessage, RoomSummary, ServerMessage, Settings, UndoState } from '@keeps/protocol';
+import type { ClientMessage, Hint, RoomSummary, ServerMessage, Settings, UndoState } from '@keeps/protocol';
 import { useSyncExternalStore } from 'react';
 import { markReloadedFor, onServerBuild, PAGE_BUILD, reloadedFor } from './build.ts';
 
@@ -11,6 +11,8 @@ export interface NetGame {
   log: TraceEvent[];
   names: (string | null)[];
   undo: UndoState;
+  /** Training mode: the bot's suggestion for your current decision (null: off, or not your decision). */
+  hints: Hint[] | null;
 }
 
 export interface RoomState {
@@ -146,6 +148,11 @@ class RoomStore {
     return true;
   }
 
+  /** Training mode on or off (games against the bot): the bot's suggestion for each of your moves. */
+  setTraining(on: boolean): void {
+    this.send({ t: 'training', on });
+  }
+
   send(message: ClientMessage): void {
     this.socket?.send(JSON.stringify(message));
   }
@@ -235,7 +242,7 @@ class RoomStore {
       case 'game': {
         const previous = this.state.game;
         const log = message.reset || !previous ? message.log : [...previous.log, ...message.log];
-        this.set({ game: { view: message.view, log, names: message.names, undo: message.undo } });
+        this.set({ game: { view: message.view, log, names: message.names, undo: message.undo, hints: message.hints ?? null } });
         return;
       }
       case 'error':

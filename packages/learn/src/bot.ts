@@ -44,13 +44,7 @@ export class BotPlayer {
 
   /** The command the bot plays now, given every event of the game so far. */
   choose(state: GameState, events: readonly TraceEvent[]): Command {
-    if (state.config.seats.filter((s) => s === 'player').length !== 2) throw new Error('the bot only plays two-player games');
-    if (!this.wantsToMove(state)) throw new Error(`seat ${this.seat} has nothing to decide`);
-    if (events.length < this.read) throw new Error('the game went back (undo?): the bot only follows a game forward');
-    this.log.push(...eventsFor(events.slice(this.read), this.seat));
-    this.read = events.length;
-    const view = viewFor(state, this.seat);
-    this.belief.update(this.log).observe(view);
+    const view = this.observe(state, events);
     const decision = new Decision(view, legalCommands(state, this.seat));
     const prefix: number[] = [];
     const legal = new Uint8Array(NUM_ACTIONS);
@@ -65,5 +59,58 @@ export class BotPlayer {
       const command = decision.complete(prefix);
       if (command) return command;
     }
+  }
+
+  /**
+   * What the bot would play in this seat now, as advice: every complete legal command with the
+   * network's probability of it (the product along its ids, of the raw policy), most likely first.
+   * It sees exactly what choose() would (this seat's view and belief), and observes this decision
+   * the same way, so a seat it advises keeps the belief it would have if it were playing there.
+   * A pile reorder (Tithes) lists no commands: the advice is then the network's own order.
+   */
+  suggest(state: GameState, events: readonly TraceEvent[]): { command: Command; probability: number }[] {
+    if (!this.wantsToMove(state)) return [];
+    const view = this.observe(state, events);
+    const decision = new Decision(view, legalCommands(state, this.seat));
+    const legal = new Uint8Array(NUM_ACTIONS);
+    const probabilities = (prefix: number[]): Float32Array => {
+      legal.fill(0);
+      const ids = decision.next(prefix);
+      for (const id of ids) legal[id] = 1;
+      const obs = this.policy.observation === 2 ? encodeObservation2(view, this.belief, prefix, ids) : encodeObservation(view, this.belief, prefix);
+      return this.policy.raw(obs, legal);
+    };
+    let encodings = decision.encodings();
+    if (encodings.length === 0) {
+      const prefix: number[] = [];
+      while (!decision.complete(prefix)) {
+        const p = probabilities(prefix);
+        prefix.push(decision.next(prefix).reduce((best, id) => (p[id]! > p[best]! ? id : best)));
+      }
+      encodings = [prefix];
+    }
+    const rows = encodings.map((ids) => {
+      let probability = 1;
+      for (let i = 0; i < ids.length; i++) probability *= probabilities(ids.slice(0, i))[ids[i]!]!;
+      return { command: decision.complete(ids)!, probability };
+    });
+    const total = rows.reduce((sum, r) => sum + r.probability, 0) || 1;
+    return rows.map((r) => ({ command: r.command, probability: r.probability / total })).sort((a, b) => b.probability - a.probability);
+  }
+
+  /**
+   * Brings the bot's log and belief up to date with a decision of its seat (and checks it may decide),
+   * as choose() does. A seat it only advises calls this at each decision, so its belief stays what it
+   * would be if it were playing there.
+   */
+  observe(state: GameState, events: readonly TraceEvent[]): ReturnType<typeof viewFor> {
+    if (state.config.seats.filter((s) => s === 'player').length !== 2) throw new Error('the bot only plays two-player games');
+    if (!this.wantsToMove(state)) throw new Error(`seat ${this.seat} has nothing to decide`);
+    if (events.length < this.read) throw new Error('the game went back (undo?): the bot only follows a game forward');
+    this.log.push(...eventsFor(events.slice(this.read), this.seat));
+    this.read = events.length;
+    const view = viewFor(state, this.seat);
+    this.belief.update(this.log).observe(view);
+    return view;
   }
 }

@@ -14,10 +14,10 @@ primary_region = "sjc"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Stop when nobody is connected (open game connections keep it running): the 16-core machine is
-  # paid for only while people play. It can't suspend (that needs 2 GB of memory or less); a stopped
-  # machine starts again on the next visit in about a second.
-  auto_stop_machines = "stop"
+  # Sleep when nobody is connected (open game connections keep it awake). "suspend" freezes the
+  # running server, memory and all, and resumes it on the next visit in well under a second (only
+  # machines with 2 GB of memory or less can suspend).
+  auto_stop_machines = "suspend"
   auto_start_machines = true
   min_machines_running = 0
 
@@ -33,7 +33,9 @@ primary_region = "sjc"
     timeout = "5s"
     grace_period = "15s"
 
-# Sized for the search (every legal move played out in 512 sampled worlds: about 14 s per decision on
-# 16 dedicated cores). With SEARCH=off the network alone needs a tiny fraction of this.
+# The bot plays its network directly (SEARCH=off), and training mode's suggestions are a few hundred
+# network passes per decision: a small shared machine is plenty. (The search needed performance-16x:
+# about 14 s per decision at 512 worlds.)
 [[vm]]
-  size = "performance-16x"
+  size = "shared-cpu-2x"
+  memory = "1gb"

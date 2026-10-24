@@ -884,6 +884,42 @@ a.buy:hover {
   margin: 0 0 0.5em;
 }
 
+/* Training mode: the bot's suggestion for your move. */
+.training {
+  background: var(--bg-raised);
+  border: 1px solid var(--blue);
+  border-radius: var(--radius);
+  padding: 0.5em 0.75em;
+  margin-bottom: 0.75em;
+}
+
+.training p {
+  margin: 0;
+}
+
+.training strong {
+  color: var(--gold-bright);
+}
+
+.training ul {
+  margin: 0.35em 0 0;
+  padding-left: 1.2em;
+  color: var(--muted);
+  font-size: 0.9em;
+}
+
+.training .pct {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.training-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5em;
+}
+
 .log {
   flex: 1;
   min-height: 120px;

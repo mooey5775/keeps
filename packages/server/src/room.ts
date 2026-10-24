@@ -17,6 +17,7 @@ import {
   DEFAULT_SETTINGS,
   NAME_MAX,
   type ClientMessage,
+  type Hint,
   type RoomPlayer,
   type ServerMessage,
   type Settings,
@@ -85,6 +86,8 @@ interface Player {
   joinedAt: number;
   /** A computer player: never connected, never host. */
   bot: boolean;
+  /** Training mode: in games against the bot, the bot's suggestion for each of this player's moves. */
+  training: boolean;
 }
 
 /** A room as the admin page shows it. */
@@ -117,6 +120,12 @@ interface Game {
   roundStartedAt: number;
   /** The bot players at the table (none in an all-human game). */
   bots: BotPlayer[];
+  /**
+   * In games against the bot, one shadow bot per human seat, for training mode: it follows that seat
+   * exactly as if it were playing there (its view, its log, its belief), at every decision whether or
+   * not anyone asks for advice. Its latest advice is kept, for the state it was worked out for.
+   */
+  advisors: Map<Seat, { bot: BotPlayer; advice: { state: GameState; hints: Hint[] } | null }>;
 }
 
 export class Room {
@@ -164,6 +173,7 @@ export class Room {
       client: validClient(from.client),
       joinedAt: this.deps.now(),
       bot: false,
+      training: false,
     };
     this.players.push(player);
     this.touch();
@@ -248,6 +258,12 @@ export class Room {
         return this.proposeUndo(player);
       case 'vote-undo':
         return this.voteUndo(player, message.accept);
+      case 'training':
+        if (!this.deps.bot) return "Training mode needs the bot, and this server doesn't have it.";
+        player.training = message.on === true;
+        player.send?.({ t: 'room', room: this.summary(player) });
+        if (this.game) this.sendGame(player, false);
+        return null;
       case 'back-to-lobby':
         if (!player.host) return 'Only the host can do that.';
         if (!this.game) return null;
@@ -307,7 +323,11 @@ export class Room {
     const { state, events } = chosen ? newGame(options) : preview;
     const startedAt = this.deps.now();
     const bots = this.players.filter((p) => p.bot).map((p) => new BotPlayer(this.deps.bot!.policy, p.seat!, this.deps.random));
-    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots };
+    const advisors: Game['advisors'] = new Map(
+      bots.length ? this.players.filter((p) => !p.bot && p.seat !== null).map((p) => [p.seat!, { bot: new BotPlayer(this.deps.bot!.policy, p.seat!), advice: null }]) : [],
+    );
+    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors };
+    this.followHumans();
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
     const seated = this.seatedPlayers();
     this.track('game_started', player, {
@@ -342,6 +362,7 @@ export class Room {
     if (newRound) game.roundStartedAt = this.deps.now();
     this.deps.saveReplay?.(this.code, game.startedAt, game.log);
     this.trackCommand(game, before, result.events);
+    this.followHumans();
     for (const p of this.players) this.sendGame(p, false, result.events);
     this.scheduleBot();
     return null;
@@ -366,6 +387,7 @@ export class Room {
       client: null,
       joinedAt: this.deps.now(),
       bot: true,
+      training: false,
     });
     this.track('bot_added', player);
     this.broadcastRoom();
@@ -644,6 +666,7 @@ export class Room {
       settings: this.settings,
       you: player.id,
       botAvailable: this.deps.bot !== undefined,
+      training: player.training,
     };
   }
 
@@ -664,7 +687,37 @@ export class Room {
       reset,
       names,
       undo: this.undoState(player),
+      ...(player.training && player.seat !== null && game.advisors.has(player.seat) ? { hints: this.hints(game, player.seat) } : {}),
     });
+  }
+
+  /** Each human seat's shadow bot observes that seat's decision, as it would if it were playing it. */
+  private followHumans(): void {
+    const game = this.game;
+    if (!game) return;
+    for (const { bot } of game.advisors.values()) {
+      if (!bot.wantsToMove(game.state)) continue;
+      try {
+        bot.observe(game.state, game.events);
+      } catch (error) {
+        console.error(`room ${this.code}: training mode could not follow seat ${bot.seat}:`, error);
+      }
+    }
+  }
+
+  /** Training mode's advice for `seat` now: the bot's suggestion, or null when the seat has no decision. */
+  private hints(game: Game, seat: Seat): Hint[] | null {
+    const advisor = game.advisors.get(seat)!;
+    if (!advisor.bot.wantsToMove(game.state)) return null;
+    if (advisor.advice?.state !== game.state) {
+      try {
+        advisor.advice = { state: game.state, hints: advisor.bot.suggest(game.state, game.events) };
+      } catch (error) {
+        console.error(`room ${this.code}: training mode could not advise seat ${seat}:`, error);
+        return null;
+      }
+    }
+    return advisor.advice.hints;
   }
 }
 

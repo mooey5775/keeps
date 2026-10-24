@@ -153,6 +153,61 @@ describe('the bot in a room', () => {
     expect(human.last('game').view.marks.some((m) => m >= 2)).toBe(true);
   });
 
+  it('training mode: the bot suggests each of the person\'s moves, to them alone, only while it is on', () => {
+    const { room, runBot } = botRoom();
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: 'random' } });
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    const watcher = join(room, 'Wes'); // a spectator
+    // Off by default: no hints at all.
+    expect(human.last('room').room.training).toBe(false);
+    expect('hints' in human.last('game')).toBe(false);
+    room.handle(human.id, { t: 'training', on: true });
+    expect(human.errors()).toEqual([]);
+    expect(human.last('room').room.training).toBe(true);
+    let advised = 0;
+    for (let step = 0; human.last('game').view.phase === 'playing' || human.last('game').view.phase === 'post-round'; step++) {
+      expect(step).toBeLessThan(5000);
+      const game = human.last('game');
+      const mine = game.view.prompts.some((p) => p.mine);
+      if (mine) {
+        // Every legal move, the most likely first, probabilities adding up to 1.
+        const hints = game.hints!;
+        expect(hints.length).toBeGreaterThan(0);
+        expect(hints.reduce((sum, h) => sum + h.probability, 0)).toBeCloseTo(1, 5);
+        if (game.view.legal.length > 0) expect(hints.map((h) => JSON.stringify(h.command)).sort()).toEqual(game.view.legal.map((c) => JSON.stringify(c)).sort());
+        advised++;
+        room.handle(human.id, { t: 'command', command: hints[0]!.command });
+        expect(human.errors()).toEqual([]);
+      } else {
+        expect(game.hints).toBeNull(); // not the person's decision
+        expect(runBot()).toBe(true);
+      }
+    }
+    expect(advised).toBeGreaterThan(5);
+    // The spectator never gets hints.
+    expect(watcher.messages.some((m) => m.t === 'game' && 'hints' in m)).toBe(false);
+    // Switched off, they stop.
+    room.handle(human.id, { t: 'training', on: false });
+    expect('hints' in human.last('game')).toBe(false);
+  });
+
+  it('training mode gives nothing in a game without the bot, and needs a server with the bot', () => {
+    const { room } = botRoom();
+    const a = join(room, 'Ana');
+    const b = join(room, 'Ben');
+    room.handle(a.id, { t: 'training', on: true });
+    room.handle(a.id, { t: 'start' });
+    expect(a.errors()).toEqual([]);
+    expect(a.messages.some((m) => m.t === 'game' && 'hints' in m)).toBe(false);
+    expect(b.messages.some((m) => m.t === 'game' && 'hints' in m)).toBe(false);
+    const { room: plain } = botRoom({ bot: undefined });
+    const c = join(plain, 'Cy');
+    plain.handle(c.id, { t: 'training', on: true });
+    expect(c.errors()).toEqual(["Training mode needs the bot, and this server doesn't have it."]);
+  });
+
   it("isn't offered without weights", () => {
     const { room } = botRoom({ bot: undefined });
     const host = join(room, 'Ana');
