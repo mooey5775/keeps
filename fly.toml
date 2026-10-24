@@ -34,6 +34,12 @@ primary_region = "sjc"
     timeout = "5s"
     grace_period = "10s"
 
+# Saved games (KEEPS_DATA_DIR) live on a volume, so they survive redeploys and restarts. Create it
+# once: fly volumes create keeps_data --size 1 -r sjc -a keeps-online
+[mounts]
+  source = "keeps_data"
+  destination = "/app/data"
+
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
