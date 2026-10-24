@@ -2,10 +2,11 @@
 # (fly.midstrike.toml) so the production site is untouched. Like the main Dockerfile, Node 24 runs
 # the TypeScript sources directly; only the web client is built.
 # The bot searches each decision (every legal move played out in 128 sampled deals), and training
-# mode's advice comes from the same search. Its network (moves under 20% dropped) plays the rollouts.
-# Its weights are baked in: export the policy first, from bot/:
-#   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> --threshold 0.2 \
-#     --out ../packages/learn/demo/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
+# mode's advice comes from the same search. Its network plays the rollouts as trained, unsharpened
+# (sharpening narrows the rollouts and biases their values). Its weights are baked in: export the
+# policy first, from bot/:
+#   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> \
+#     --out ../packages/learn/demo/weights/vrpo1.bin --fixture /tmp/vrpo1-parity.bin
 
 FROM node:24-slim AS build
 RUN npm install -g pnpm@11.5.2
@@ -35,7 +36,7 @@ RUN pnpm install --frozen-lockfile --prod --filter "@keeps/server..." --filter "
 COPY packages/engine/src packages/engine/src
 COPY packages/learn/src packages/learn/src
 COPY packages/learn/demo/*.ts packages/learn/demo/*.html packages/learn/demo/
-COPY packages/learn/demo/weights/midstrike.bin packages/learn/demo/weights/midstrike.bin
+COPY packages/learn/demo/weights/vrpo1.bin packages/learn/demo/weights/vrpo1.bin
 COPY packages/protocol/src packages/protocol/src
 COPY packages/server/src packages/server/src
 COPY packages/web/src packages/web/src
@@ -43,6 +44,6 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 
 # The admin password (for /bot/) comes from the ADMIN_TOKEN secret, never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike SEARCH_WORLDS=128 SEARCH_ROLLOUTS=sampled
+    BOT=vrpo1 BOT_NAME=Midstrike SEARCH_WORLDS=128 SEARCH_ROLLOUTS=sampled
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]
