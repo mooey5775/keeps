@@ -131,7 +131,7 @@ class Game {
 
   logText(from = 0): string {
     const mine = eventsFor(this.events, this.saved.human);
-    return logLines(mine.slice(from), makeNames(this.names, 'spectator'))
+    return logLines(mine.slice(from), makeNames(this.names, 'spectator', this.saved.human)) // named from the player's side of the table, as the options are
       .map((l) => `${'  '.repeat(l.depth)}${l.text.replace(/\byou\b/g, 'You')}`)
       .join('\n');
   }
@@ -140,7 +140,7 @@ class Game {
     const me = this.saved.human;
     const view = viewFor(this.state, me);
     const names = makeNames(this.names, me);
-    const who = (s: Seat) => (s === me ? 'You' : s === this.bot ? 'Bot' : `ghost seat ${s}`);
+    const who = (s: Seat) => (s === me ? 'You' : s === this.bot ? 'Bot' : `${names.seat(s)} (seat ${s})`);
     const out: string[] = [];
     const recent = eventsFor(this.events, me).length;
     out.push(`=== Game ${this.saved.options.seed}: you are seat ${me}, the bot is seat ${this.bot}. Turn ${view.turnNumber}, phase ${view.phase}.`);
