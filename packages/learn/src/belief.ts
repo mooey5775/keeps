@@ -136,6 +136,16 @@ export class Belief implements PileMap {
     return copy;
   }
 
+  /**
+   * The card the opponent just took unseen, if it's still waiting to be played (a HOT card waiting for
+   * its keep, or Invocation's draw): 'hot' after an ordinary draw or take (only a HOT card waits), 'any'
+   * under Invocation (any card drawn waits, played as if HOT). Null if no card they took unseen is waiting.
+   */
+  waitingUnseen(): 'hot' | 'any' | null {
+    if (this.justHidden === null) return null;
+    return this.lastPlayed.get(this.opponent) === 'invocation' ? 'any' : 'hot';
+  }
+
   /** Reads the player's log from where it left off (a new round starts over). */
   update(log: readonly TraceEvent[]): this {
     for (; this.processed < log.length; this.processed++) this.apply(log[this.processed]!.payload);

@@ -31,6 +31,8 @@ interface Decision {
   seat: Seat;
   belief: Belief;
   view: PlayerView;
+  /** Every event so far. */
+  events: TraceEvent[];
 }
 
 /** Every decision of random-move rounds, with the decider's belief observed as the bot's is. */
@@ -48,7 +50,7 @@ function* decisions(rounds: number, seed: string, random: () => number): Generat
       p.read = events.length;
       const view = viewFor(state, seat);
       p.belief.update(p.log).observe(view);
-      yield { state, initial, seat, belief: p.belief, view };
+      yield { state, initial, seat, belief: p.belief, view, events };
       const legal = legalCommands(state, seat).filter((c) => c.type !== 'next-round');
       const r = apply(state, seat, legal[Math.floor(random() * legal.length)]!);
       if (!r.ok) throw new Error(r.error.message);
@@ -97,6 +99,43 @@ describe('worlds', () => {
     expect(checked).toBeGreaterThan(400);
   });
 
+  it("samples playable worlds in the middle of the opponent's decisions (their prompts consistent with the world's cards)", () => {
+    // The player watches while the opponent decides: a HOT card waiting for its target, a pile being
+    // looked through, a card to hide face down. Each world must let the opponent answer as the
+    // real game would: every legal command of theirs applies.
+    const random = rng(23);
+    const watchers = new Map<Seat, { belief: Belief; read: number; log: TraceEvent[] }>();
+    const kinds = new Set<string>();
+    let checked = 0;
+    let game: GameState | null = null;
+    for (const d of decisions(40, 'worlds-watch', random)) {
+      if (d.initial !== game) watchers.clear(); // a new round
+      game = d.initial;
+      const me = ((d.seat + 2) % 4) as Seat;
+      const w = watchers.get(me) ?? { belief: new Belief(me, { sound: true }), read: 0, log: [] };
+      watchers.set(me, w);
+      const events = d.events;
+      w.log.push(...eventsFor(events.slice(w.read), me));
+      w.read = events.length;
+      const view = viewFor(d.state, me);
+      w.belief.update(w.log).observe(view);
+      const model = worldModel(d.state, me, w.belief, view);
+      for (let k = 0; k < 3; k++) {
+        const world = sampleWorld(model, d.state, w.belief, random);
+        expect(checkInvariants(world)).toEqual([]);
+        expect(JSON.stringify(viewFor(world, me))).toBe(JSON.stringify(view));
+        for (const command of legalCommands(world, d.seat)) {
+          const r = apply(world, d.seat, command);
+          expect(r.ok ? null : r.error.message, `${d.state.prompts[0]!.kind}: ${JSON.stringify(command)}`).toBeNull();
+        }
+      }
+      kinds.add(d.state.prompts[0]!.kind);
+      checked++;
+    }
+    expect(checked).toBeGreaterThan(1000);
+    expect([...kinds]).toEqual(expect.arrayContaining(['hot-target', 'choose-pile-card', 'take-or-discard']));
+  });
+
   it('draws worlds in the proportions of the exact posterior', () => {
     const random = rng(23);
     let pooled = 0, df = 0, tested = 0;
@@ -139,7 +178,8 @@ describe('worlds', () => {
 const CH = ['count', 'fool', 'friar'] as const;
 const IDS = ['count', 'fool', 'friar', 'mask'] as const;
 const perms = <T,>(a: T[]): T[][] => (a.length <= 1 ? [a] : a.flatMap((v, i) => perms([...a.slice(0, i), ...a.slice(i + 1)]).map((r) => [v, ...r])));
-type Slot = { pile: number; nc: boolean; fd: boolean };
+/** A hidden card's slot: its pile, hidden when they held no Coin cards, face down, waiting for its keep. */
+type Slot = { pile: number; nc: boolean; fd: boolean; w?: boolean };
 
 function enumerate(log: HiddenEvent[], facts: Facts): Map<string, number> | null {
   const roles = revealRoles(log, facts);
@@ -156,9 +196,9 @@ function enumerate(log: HiddenEvent[], facts: Facts): Map<string, number> | null
       if (hand.length + facts.opponentKnown.length - down.length !== facts.handSize) return;
       if (fd.length + down.length !== facts.faceDownSlots.length) return;
       const targets = [
-        ...hand.map((s) => ({ pile: s.pile, where: 'hand', nc: s.nc })),
-        ...fd.map((s) => ({ pile: s.pile, where: 'fd', nc: s.nc })),
-        ...[0, 1, 2, 3].flatMap((p) => Array.from({ length: facts.stillIn[p]! }, () => ({ pile: p, where: 'pile', nc: false }))),
+        ...hand.map((s) => ({ pile: s.pile, where: 'hand', nc: s.nc, w: s.w ?? false })),
+        ...fd.map((s) => ({ pile: s.pile, where: 'fd', nc: s.nc, w: false })),
+        ...[0, 1, 2, 3].flatMap((p) => Array.from({ length: facts.stillIn[p]! }, () => ({ pile: p, where: 'pile', nc: false, w: false }))),
       ];
       if (targets.length !== unplaced.length) return;
       for (const order of perms(targets.map((_, i) => i))) {
@@ -169,6 +209,11 @@ function enumerate(log: HiddenEvent[], facts: Facts): Map<string, number> | null
           const known = facts.origin.get(card);
           if (known !== undefined ? t.pile !== known : t.pile !== own(card) && t.pile !== mask) return false;
           if ((t.nc && isCoinCard(card)) || (t.where === 'fd' && !CARDS[card].keep)) return false;
+          // HOT cards are played as soon as they're drawn: never held or hidden face down, except the
+          // card waiting for its keep (HOT after a draw, any Keep card under Invocation; never Blunder).
+          if (t.w) {
+            if (card === 'blunder' || !CARDS[card].keep || (facts.waiting === 5 && !CARDS[card].hot)) return false;
+          } else if (t.where !== 'pile' && CARDS[card].hot) return false;
           if (known === undefined) (t.pile === mask ? toMask : toOwn)[CH.indexOf(CARDS[card].character as (typeof CH)[number])]! += 1;
           return true;
         });
@@ -188,7 +233,7 @@ function enumerate(log: HiddenEvent[], facts: Facts): Map<string, number> | null
       if (++work > 5e6) return;
       if (i === log.length) return finish(slots, down, tally);
       const e = log[i]!;
-      if (e.kind === 'hide') return go(i + 1, [...slots, { pile: e.pile, nc: false, fd: false }], down, tally);
+      if (e.kind === 'hide') return go(i + 1, [...slots, { pile: e.pile, nc: false, fd: false, w: facts.waiting !== null && i === log.length - 1 }], down, tally);
       if (e.kind === 'no-coins') return go(i + 1, slots.map((s) => (s.fd ? s : { ...s, nc: true })), down, tally);
       if (e.kind === 'face-down') {
         for (const k of e.known) if (!down.includes(k)) go(i + 1, slots, [...down, k], tally);

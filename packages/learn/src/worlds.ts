@@ -17,11 +17,12 @@ import type { Belief, HiddenEvent } from './belief.ts';
 // the player has: what they see, the cards they know are in each pile (and where), the origins
 // they know, the opponent's cards they know, and the log of the opponent's hidden cards, with
 // its constraints (a card hidden face down is a Keep card; none of the cards hidden when our
-// Pickpocket came up empty-handed or took every Coin card is a Coin card).
+// Pickpocket came up empty-handed or took every Coin card is a Coin card; no card they hold or hid
+// face down is HOT, since HOT cards are played as soon as they're drawn, except a Keep card they
+// just drew unseen that waits for them to choose its keep: HOT, or any Keep card under Invocation).
 //
-// Exact sampling, no rejection. Cards matter to the constraints only through their character
-// (where they could have been dealt), whether they're Coin cards and whether they're Keep cards,
-// so worlds are counted by kind:
+// Exact sampling. Cards matter to the constraints only through their character (where they could
+// have been dealt), whether they're Coin cards, Keep cards and HOT cards, so worlds are counted by kind:
 //   1. for each σ, a pass over the hidden log counts the ways each end state (the opponent's
 //      hidden cards by pile of origin and constraint, and how many of the cards that came out
 //      of them were dealt into the Mask) can arise: each card that came out was one of the
@@ -31,6 +32,10 @@ import type { Belief, HiddenEvent } from './belief.ts';
 //      which of the cards dealt there are still there and which are hidden where;
 //   3. a world is drawn in proportion to its count; the cards themselves, the orders of the
 //      unknown positions and of the opponent's hand, then uniformly.
+// The opponent's open prompts are rebuilt from the world's own cards (the pile they're looking
+// through, the card in their hand they'll hide face down). A prompt that exists only because their
+// hand holds a card of some kind (Duplicity's, Joker's) rejects the worlds whose hand holds none:
+// the only rejection, and rare.
 // Positions the player knew but forgot (when a card left a pile from a position they couldn't
 // see) are treated as unknown: that only widens the set of worlds, and never excludes the real one.
 // One approximation: with two or more cards the opponent hid face down without our seeing them
@@ -43,21 +48,31 @@ type Identity = Character | 'mask';
 const IDENTITIES: Identity[] = ['count', 'fool', 'friar', 'mask'];
 const ASSIGNMENTS: Identity[][] = permutations(IDENTITIES); // assignment[p] = identity of physical pile p
 
-/** A card's kind, as the constraints see it: bit 0 Coin card, bit 1 Keep card. */
-const kindOf = (card: CardId) => (isCoinCard(card) ? 1 : 0) | (CARDS[card].keep ? 2 : 0);
-const KINDS = [0, 1, 2, 3];
+/**
+ * A card's kind, as the constraints see it: bit 0 Coin card, bit 1 Keep card, bit 2 HOT. Blunder, a
+ * HOT Keep card that goes straight into its owner's keep, counts as HOT without Keep: it is never
+ * held, hidden face down or left waiting for a keep.
+ */
+const kindOf = (card: CardId) => (isCoinCard(card) ? 1 : 0) | (CARDS[card].keep && card !== 'blunder' ? 2 : 0) | (CARDS[card].hot ? 4 : 0);
+const KINDS = [0, 1, 2, 3, 4, 5, 6, 7];
 /**
  * Where a card dealt into a pile is now: 0 still in the pile; 1 the opponent's hand; 2 their hand,
  * hidden when they held no Coin cards; 3 face down where they hid it; 4 face down, hidden when they
- * held no Coin cards. Hidden cells as indices into a pile's counts: 1..4.
+ * held no Coin cards; 5 in their hand, the HOT Keep card they just drew, waiting for its keep; 6 the
+ * same, drawn by Invocation (any Keep card). Hidden cells as indices into a pile's counts: 1..6.
  */
-const CELLS = [0, 1, 2, 3, 4];
-const accepts = (cell: number, kind: number) =>
-  (cell !== 2 && cell !== 4 ? true : (kind & 1) === 0) && (cell < 3 ? true : (kind & 2) !== 0);
+const CELLS = [0, 1, 2, 3, 4, 5, 6];
+const accepts = (cell: number, kind: number) => {
+  if (cell === 0) return true;
+  if (cell === 5) return (kind & 6) === 6;
+  if (cell === 6) return (kind & 2) !== 0;
+  if (kind & 4) return false;
+  return (cell !== 2 && cell !== 4 ? true : (kind & 1) === 0) && (cell < 3 ? true : (kind & 2) !== 0);
+};
 
 /** The opponent's hidden cards at a point of the hidden log, for one σ. */
 interface HiddenState {
-  /** [physical pile][cell 1..4]: hidden cards dealt into that pile, by where they are (index 0 unused). */
+  /** [physical pile][cell 1..6]: hidden cards dealt into that pile, by where they are (index 0 unused). */
   held: number[][];
   /** Keep cards we knew they held that are now the face-down card(s) they hid. */
   knownDown: CardId[];
@@ -95,6 +110,10 @@ export interface Facts {
   handSize: number;
   /** Keep slots holding a face-down card the player can't see: [seat, index]. */
   faceDownSlots: [Seat, number][];
+  /** The opponent's last hidden card, drawn unseen, waits for its keep: the cell it's in (5 HOT Keep card, 6 any Keep card), or null. */
+  waiting: 5 | 6 | null;
+  /** The kind bits that can matter (see gatherFacts). */
+  kindMask: number;
 }
 
 /** Everything needed to draw worlds for `me` now. Throws if the facts contradict each other (a bug). */
@@ -125,6 +144,15 @@ export function worldModel(state: GameState, me: Seat, belief: Belief, view: Pla
 
 /** One world, drawn exactly from the model. */
 export function sampleWorld(model: WorldModel, state: GameState, belief: Belief, random: () => number): GameState {
+  for (let attempt = 0; attempt < 10000; attempt++) {
+    const world = drawWorld(model, state, belief, random);
+    if (world) return world;
+  }
+  throw new Error("no world fits the opponent's open prompt");
+}
+
+/** A world drawn from the model, or null if it can't hold the opponent's open prompt (rejected). */
+function drawWorld(model: WorldModel, state: GameState, belief: Belief, random: () => number): GameState | null {
   const { facts, me, opponent } = model;
   // 1. A class, in proportion to its worlds.
   let u = random() * model.total;
@@ -185,7 +213,7 @@ export function sampleWorld(model: WorldModel, state: GameState, belief: Belief,
   const hand = [...facts.opponentKnown.filter((c) => !knownDown.has(c))];
   const down: CardId[] = [...hidden.knownDown];
   for (let p = 0; p < 4; p++) {
-    hand.push(...cells[p]![1]!, ...cells[p]![2]!);
+    hand.push(...cells[p]![1]!, ...cells[p]![2]!, ...cells[p]![5]!, ...cells[p]![6]!);
     down.push(...cells[p]![3]!, ...cells[p]![4]!);
   }
   world.hands[opponent] = shuffled(hand, random);
@@ -193,10 +221,49 @@ export function sampleWorld(model: WorldModel, state: GameState, belief: Belief,
   slots.forEach(([seat, index], i) => {
     world.keeps[seat]![index] = { ...world.keeps[seat]![index]!, id: down[i]! };
   });
+  if (!fitPrompts(world, opponent, [0, 1, 2, 3].flatMap((p) => [...cells[p]![5]!, ...cells[p]![6]!])[0] ?? null)) return null;
   // Chance from here on is the world's own: a fresh generator.
   world.rng = { a: (random() * 2 ** 32) >>> 0, b: (random() * 2 ** 32) >>> 0, c: (random() * 2 ** 32) >>> 0, d: (random() * 2 ** 32) >>> 0 || 1 };
   void me;
   return world;
+}
+
+/**
+ * The opponent's open prompts, rebuilt from the world's cards: the piles they're looking at, the HOT
+ * card waiting for its keep (`waiting`, when we didn't see it), the cards in their hand they're choosing
+ * from. False if the world's hand can't hold a prompt that needs a card of some kind.
+ */
+function fitPrompts(world: GameState, opponent: Seat, waiting: CardId | null): boolean {
+  const pile = (position: Seat) => world.piles[world.pileAt[position]].cards.map((c) => c.id);
+  const hand = world.hands[opponent];
+  let fits = true;
+  world.prompts = world.prompts.map((p) => {
+    if (p.seat !== opponent) return p;
+    switch (p.kind) {
+      case 'hot-target':
+        return waiting ? { ...p, card: waiting } : p;
+      case 'choose-pile-card':
+      case 'order-pile':
+        return { ...p, cards: pile(p.pile) };
+      case 'take-or-discard':
+        return { ...p, card: pile(p.pile)[0]! };
+      case 'choose-top-card':
+        return { ...p, options: p.options.map((o) => ({ pile: o.pile, card: pile(o.pile)[0]! })) };
+      case 'duplicity-hide': {
+        const options = [...new Set(hand.filter((c) => CARDS[c].keep))];
+        fits &&= options.length > 0;
+        return { ...p, options };
+      }
+      case 'joker-copy': {
+        const options = [...new Set(hand.filter((c) => c !== 'joker' && !CARDS[c].keep))];
+        fits &&= options.length > 0;
+        return { ...p, options };
+      }
+      default:
+        return p;
+    }
+  });
+  return fits;
 }
 
 /** Where counting fails, for an error message: per σ that fits the known origins, the stage that leaves nothing. */
@@ -273,13 +340,23 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
       revealedUnknown[CHARACTERS.indexOf(CARDS[e.card].character as Character)]! += 1;
     }
   });
+  // A card waiting for its keep in the opponent's hand: the one they just took unseen, or one we know.
+  const unseen = view.prompts.some((p) => p.seat === opponent && p.kind === 'hot-target') ? belief.waitingUnseen() : null;
+  const waiting = unseen === 'hot' ? 5 : unseen === 'any' ? 6 : null;
+  if (waiting && belief.hiddenLog.at(-1)?.kind !== 'hide') throw new Error('a card waits for its keep, but the last hidden event is not a draw');
+  // The kind bits that can matter now (the rest are merged, which counts the same worlds with fewer
+  // classes): Coin only if they held no Coin cards at some point, Keep only with cards hidden face down
+  // or waiting for a keep, HOT only if they hold or held hidden cards at all.
+  const log = belief.hiddenLog;
+  const kindMask =
+    (log.some((e) => e.kind === 'no-coins') ? 1 : 0) | (log.some((e) => e.kind === 'face-down') || waiting !== null ? 2 : 0) | (log.some((e) => e.kind === 'hide') ? 4 : 0);
   const unknownOrigin = CHARACTERS.map(() => KINDS.map(() => [] as CardId[]));
   const knownOrigin = [0, 1, 2, 3].map(() => KINDS.map(() => [] as CardId[]));
   for (const card of CARD_IDS) {
     if (located.has(card)) continue;
     const o = origin.get(card);
-    if (o !== undefined) knownOrigin[o]![kindOf(card)]!.push(card);
-    else unknownOrigin[CHARACTERS.indexOf(CARDS[card].character as Character)]![kindOf(card)]!.push(card);
+    if (o !== undefined) knownOrigin[o]![kindOf(card) & kindMask]!.push(card);
+    else unknownOrigin[CHARACTERS.indexOf(CARDS[card].character as Character)]![kindOf(card) & kindMask]!.push(card);
   }
   const faceDownSlots: [Seat, number][] = [];
   for (const keep of view.keeps) keep.cards.forEach((c, index) => c.faceDown && !c.id && faceDownSlots.push([keep.seat, index]));
@@ -294,6 +371,8 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
     opponentKnown: [...belief.opponentKnown],
     handSize: view.hands.find((h) => h.seat === opponent)!.count,
     faceDownSlots,
+    waiting,
+    kindMask,
   };
 }
 
@@ -354,7 +433,7 @@ function hiddenEndStates(log: HiddenEvent[], sigma: Identity[], facts: Facts): M
     if (at) at.w += w;
     else into.set(key, { s, w });
   };
-  put(states, { held: [0, 1, 2, 3].map(() => [0, 0, 0, 0, 0]), knownDown: [], toMask: [0, 0, 0] }, 1);
+  put(states, { held: [0, 1, 2, 3].map(() => [0, 0, 0, 0, 0, 0, 0]), knownDown: [], toMask: [0, 0, 0] }, 1);
   const copy = (s: HiddenState): HiddenState => ({ held: s.held.map((r) => [...r]), knownDown: [...s.knownDown], toMask: [...s.toMask] });
   const reveals = revealRoles(log, facts);
   for (const [i, e] of log.entries()) {
@@ -363,7 +442,7 @@ function hiddenEndStates(log: HiddenEvent[], sigma: Identity[], facts: Facts): M
       switch (e.kind) {
         case 'hide': {
           const t = copy(s);
-          t.held[e.pile]![1]! += 1;
+          t.held[e.pile]![facts.waiting !== null && i === log.length - 1 ? facts.waiting : 1]! += 1;
           put(next, t, w);
           break;
         }
@@ -406,7 +485,7 @@ function hiddenEndStates(log: HiddenEvent[], sigma: Identity[], facts: Facts): M
           }
           // A card we knew they held can't have been one of their unknown hidden cards.
           if (e.kind === 'turn-up' && knownDownCandidate(log, e)) break;
-          const kind = kindOf(e.card);
+          const kind = kindOf(e.card) & facts.kindMask;
           const from = e.kind === 'reveal' ? [1, 2] : [3, 4];
           const role = reveals.get(i)!;
           const unknownOrigin = role.dealt && !facts.origin.has(e.card);
@@ -414,7 +493,9 @@ function hiddenEndStates(log: HiddenEvent[], sigma: Identity[], facts: Facts): M
           for (const p of piles) {
             for (const cell of from) {
               const n = s.held[p]![cell]!;
-              if (n === 0 || !accepts(cell, kind)) continue;
+              // A HOT card was held for a moment before it came out (played as soon as it was drawn):
+              // "never HOT" is about the cards still hidden, not the ones that came out.
+              if (n === 0 || !accepts(cell, kind & 3)) continue;
               const t = copy(s);
               t.held[p]![cell]! -= 1;
               if (unknownOrigin && p === mask) t.toMask[CHARACTERS.indexOf(CARDS[e.card].character as Character)]! += 1;
@@ -434,7 +515,7 @@ function hiddenEndStates(log: HiddenEvent[], sigma: Identity[], facts: Facts): M
 function fitsView(s: HiddenState, facts: Facts): boolean {
   const down = new Set(s.knownDown);
   for (const card of down) if (!facts.opponentKnown.includes(card)) return false;
-  const inHand = s.held.reduce((a, r) => a + r[1]! + r[2]!, 0);
+  const inHand = s.held.reduce((a, r) => a + r[1]! + r[2]! + r[5]! + r[6]!, 0);
   const faceDown = s.held.reduce((a, r) => a + r[3]! + r[4]!, 0);
   return inHand + facts.opponentKnown.length - down.size === facts.handSize && faceDown + down.size === facts.faceDownSlots.length;
 }
