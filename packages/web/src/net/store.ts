@@ -1,5 +1,5 @@
 import type { Command, PlayerView, TraceEvent } from '@keeps/engine';
-import type { ClientMessage, Hint, RoomSummary, ServerMessage, Settings, UndoState } from '@keeps/protocol';
+import type { ClientMessage, Hint, RoomSummary, RoundReview, ServerMessage, Settings, UndoState } from '@keeps/protocol';
 import { useSyncExternalStore } from 'react';
 import { markReloadedFor, onServerBuild, PAGE_BUILD, reloadedFor } from './build.ts';
 
@@ -22,10 +22,12 @@ export interface RoomState {
   playerId: string | null;
   room: RoomSummary | null;
   game: NetGame | null;
+  /** Games against the bot: the reviews of this game's finished rounds, by round. */
+  reviews: RoundReview[];
   error: { id: number; message: string } | null;
 }
 
-const initial: RoomState = { status: 'idle', code: null, playerId: null, room: null, game: null, error: null };
+const initial: RoomState = { status: 'idle', code: null, playerId: null, room: null, game: null, reviews: [], error: null };
 
 // Seat tokens. Each tab keeps its own (sessionStorage survives a reload), so
 // a second tab in the same browser can join as a different player. The
@@ -237,8 +239,14 @@ class RoomStore {
         return;
       }
       case 'room':
-        this.set({ room: message.room, ...(message.room.phase === 'lobby' ? { game: null } : {}) });
+        this.set({ room: message.room, ...(message.room.phase === 'lobby' ? { game: null, reviews: [] } : {}) });
         return;
+      case 'review': {
+        // A review of another game starts the set over.
+        const others = this.state.reviews.filter((r) => r.game === message.review.game && r.round !== message.review.round);
+        this.set({ reviews: [...others, message.review].sort((a, b) => a.round - b.round) });
+        return;
+      }
       case 'game': {
         const previous = this.state.game;
         const log = message.reset || !previous ? message.log : [...previous.log, ...message.log];

@@ -1,7 +1,8 @@
-import { NAME_MAX, type RoomSummary } from '@keeps/protocol';
+import { NAME_MAX, type RoomSummary, type RoundReview } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
 import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
+import { RoundReviewView } from '../game/RoundReview.tsx';
 import { natoSpelling } from '../game/nato.ts';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
@@ -93,7 +94,7 @@ export function RoomScreen({ code }: { code: string }) {
       {state.room.phase === 'lobby' || !state.game ? (
         <Lobby room={state.room} error={state.error} />
       ) : (
-        <OnlineGame room={state.room} game={state.game} error={state.error} />
+        <OnlineGame room={state.room} game={state.game} reviews={state.reviews} error={state.error} />
       )}
     </>
   );
@@ -269,8 +270,22 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
   );
 }
 
-function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; error: { id: number; message: string } | null }) {
+function OnlineGame({
+  room,
+  game,
+  reviews,
+  error,
+}: {
+  room: RoomSummary;
+  game: NetGame;
+  reviews: RoundReview[];
+  error: { id: number; message: string } | null;
+}) {
   const me = room.players.find((p) => p.id === room.you);
+  // Games against the bot: each finished round's review, opened from the side panel.
+  const [reviewing, setReviewing] = useState<number | null>(null);
+  const open = reviews.find((r) => r.round === reviewing) ?? null;
+  const roundOver = game.view.phase === 'round-over' || game.view.phase === 'game-over';
   const { undo } = game;
   const proposer = room.players.find((p) => p.id === undo.proposedBy);
   const mustVote = undo.waitingOn.includes(room.you);
@@ -326,6 +341,20 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
           <span className="hint">{room.training ? `Showing what ${bot.name} would play in your seat.` : `See what ${bot.name} would play in your seat.`}</span>
         </div>
       )}
+      {reviews.length > 0 && (
+        <div className="review-links">
+          {[...reviews].reverse().map((r) => (
+            <button
+              key={r.round}
+              type="button"
+              className={roundOver && r.round === game.view.round ? 'primary' : ''}
+              onClick={() => setReviewing(r.round)}
+            >
+              Round {r.round} review{r.pending > 0 ? ' (filling in…)' : ''}
+            </button>
+          ))}
+        </div>
+      )}
       <DisputeButton
         context={() => {
           const token = tabToken(room.code) ?? browserToken(room.code);
@@ -336,30 +365,33 @@ function OnlineGame({ room, game, error }: { room: RoomSummary; game: NetGame; e
   );
 
   return (
-    <GameTable
-      view={game.view}
-      log={game.log}
-      names={game.names}
-      botSeats={room.players.flatMap((p) => (p.bot && p.seat !== null ? [p.seat] : []))}
-      onCommand={(command) => roomStore.command(command)}
-      hints={room.training ? game.hints : null}
-      side={side}
-      header={
-        <div className="table-header">
-          <span>
-            Room <span className="room-code">{room.code}</span> <span className="nato inline">({natoSpelling(room.code)})</span>
-            {game.view.viewer === 'spectator' && ' · watching'}
-          </span>
-          <span className="players-inline">
-            {room.players.map((p) => (
-              <span key={p.id} className={p.connected ? '' : 'offline'} title={p.bot ? 'bot' : p.connected ? 'connected' : 'disconnected'}>
-                {p.name}
-                {p.bot && <span className="badge">bot</span>}
-              </span>
-            ))}
-          </span>
-        </div>
-      }
-    />
+    <>
+      <GameTable
+        view={game.view}
+        log={game.log}
+        names={game.names}
+        botSeats={room.players.flatMap((p) => (p.bot && p.seat !== null ? [p.seat] : []))}
+        onCommand={(command) => roomStore.command(command)}
+        hints={room.training ? game.hints : null}
+        side={side}
+        header={
+          <div className="table-header">
+            <span>
+              Room <span className="room-code">{room.code}</span> <span className="nato inline">({natoSpelling(room.code)})</span>
+              {game.view.viewer === 'spectator' && ' · watching'}
+            </span>
+            <span className="players-inline">
+              {room.players.map((p) => (
+                <span key={p.id} className={p.connected ? '' : 'offline'} title={p.bot ? 'bot' : p.connected ? 'connected' : 'disconnected'}>
+                  {p.name}
+                  {p.bot && <span className="badge">bot</span>}
+                </span>
+              ))}
+            </span>
+          </div>
+        }
+      />
+      {open && <RoundReviewView review={open} names={game.names} onClose={() => setReviewing(null)} />}
+    </>
   );
 }

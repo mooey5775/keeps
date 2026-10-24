@@ -55,6 +55,8 @@ export interface SearchReport {
   overrode: boolean;
   /** Every candidate (reveals the bot's hand): its move, policy probability, rollout win chance, chosen. */
   moves: { move: string; policy: number; win: number; chosen: boolean; command: Command }[];
+  /** Every playout's result for the searching seat (+1 won, -1 not), by world, in the order of `commands` (the round review reuses them). */
+  outcomes?: { commands: Command[]; rows: number[][] };
 }
 const toWin = (v: number) => Math.min(1, Math.max(0, (v + 1) / 2));
 let x = 7654321;
@@ -215,6 +217,7 @@ export async function searchChoose(
     moves: encodings
       .map((ids, i) => ({ move: ids.map(actionName).join(' '), policy: prior[i]! / total, win: toWin(q[i]!), chosen: i === k, command: commands[i]! }))
       .sort((a, c) => c.win - a.win),
+    outcomes: { commands, rows: results },
   });
   log(`[search${mode === 'best-q' ? ' best-q' : ''}] seat ${seat} turn ${state.turnNumber}: ${worlds.length} worlds × ${commands.length} moves in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   for (const r of rows)
@@ -232,9 +235,14 @@ export async function searchAdvise(
   state: GameState,
   events: readonly TraceEvent[],
   pool: RolloutPool,
+  /** The search's full report (training mode's advice is also the round review's). */
+  onReport?: (r: SearchReport) => void,
 ): Promise<{ command: Command; probability: number; win?: number }[]> {
   let moves: SearchReport['moves'] = [];
-  const command = await searchChoose(advisor, state, events, pool, (r) => (moves = r.moves));
+  const command = await searchChoose(advisor, state, events, pool, (r) => {
+    moves = r.moves;
+    onReport?.(r);
+  });
   if (moves.length === 0) return [{ command, probability: 1 }];
   const ranked = [...moves].sort((a, b) => Number(b.chosen) - Number(a.chosen) || b.win - a.win);
   return ranked.map((m) => ({ command: m.command, probability: m.policy, win: m.win }));

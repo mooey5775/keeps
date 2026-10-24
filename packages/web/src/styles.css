@@ -1169,3 +1169,301 @@ a.buy:hover {
   margin: 0;
   color: var(--gold-bright);
 }
+
+/* ---------- Round review (games against the bot) ---------- */
+
+.review-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5em;
+}
+
+.modal.review {
+  max-width: 880px;
+  display: grid;
+  gap: 0.9rem;
+  align-content: start;
+}
+
+.modal.review p {
+  margin: 0;
+}
+
+.review-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.9rem;
+}
+
+.review-head h3 {
+  margin: 0;
+  font-size: 1.4rem;
+}
+
+.review-head .won {
+  color: var(--ok);
+}
+
+.review-head .lost {
+  color: var(--muted);
+}
+
+.review-head .close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  cursor: pointer;
+}
+
+.review-pending,
+.modal.review .note {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.review-chart {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.75rem 0.4rem;
+  min-width: 0;
+}
+
+.review-chart .legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+
+.review-chart .legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+}
+
+.review-chart .key {
+  width: 20px;
+  border-top: 3px solid;
+  display: inline-block;
+}
+
+.review-chart .key.truth,
+.review-chart path.truth {
+  border-color: var(--gold-bright);
+  stroke: var(--gold-bright);
+}
+
+.review-chart .key.you,
+.review-chart path.you {
+  border-color: var(--blue);
+  stroke: var(--blue);
+}
+
+.review-chart .key.bot,
+.review-chart path.bot {
+  border-color: var(--danger);
+  stroke: var(--danger);
+}
+
+.review-chart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  touch-action: none;
+}
+
+.review-chart path {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.review-chart path.truth {
+  stroke-width: 3;
+}
+
+.review-chart line.grid {
+  stroke: var(--line);
+  stroke-width: 0.6;
+  stroke-dasharray: 3 4;
+}
+
+.review-chart line.mid {
+  stroke: var(--line);
+  stroke-width: 1.2;
+}
+
+.review-chart line.cursor {
+  stroke: var(--muted);
+  stroke-width: 1;
+}
+
+.review-chart text {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.review-at {
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-turn {
+  display: grid;
+  gap: 0.4rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+  min-width: 0;
+}
+
+.review-turn header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.2rem 0.75rem;
+}
+
+.review-turn h4 {
+  margin: 0;
+}
+
+.review-turn.theirs h4 {
+  color: var(--muted);
+}
+
+.review-nums {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-nums .truth {
+  color: var(--gold-bright);
+}
+
+.review-nums .you {
+  color: var(--blue);
+}
+
+.review-nums .bot {
+  color: var(--danger);
+}
+
+.review-move {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.review-line {
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.review-rank {
+  margin-bottom: 0;
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.review-rank.theirs {
+  border-color: var(--line);
+}
+
+.review-rank-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.86rem;
+  color: var(--muted);
+}
+
+.review-rank ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.review-rank li {
+  display: grid;
+  grid-template-columns: 1.3em minmax(0, 1fr) 5.2em 5.2em;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.92rem;
+}
+
+.review-rank li.cols {
+  font-size: 0.74rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.review-rank li.cols span,
+.review-rank .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.review-rank .num.muted {
+  color: var(--muted);
+}
+
+.review-rank .rank {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.review-rank li.played .opt {
+  color: var(--gold-bright);
+}
+
+.review-rank .tag {
+  font-size: 0.72rem;
+  color: var(--gold);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 0 0.45em;
+  margin-left: 0.4em;
+  white-space: nowrap;
+}
+
+.review-rank .chip {
+  font-size: 0.76rem;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0 0.55em;
+  white-space: nowrap;
+}
+
+.review-rank .chip.good {
+  color: var(--ok);
+}
+
+.review-rank .chip.warn {
+  color: var(--gold);
+}
+
+.review-rank .chip.bad {
+  color: var(--danger);
+}
+
+.review-rank .chip.info {
+  color: var(--blue);
+}
+
+.review-rank button.link {
+  justify-self: start;
+  font-size: 0.8rem;
+}

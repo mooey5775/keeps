@@ -8,7 +8,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
-import { CARDS, viewFor, type GameState, type TraceEvent } from '../../engine/src/index.ts';
+import { apply, CARDS, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { logLines } from '../../web/src/game/log.ts';
 import { describeOptions, makeNames } from '../../web/src/game/options.ts';
 import { BotPlayer } from '../src/bot.ts';
@@ -17,6 +17,7 @@ import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
+import { ReviewPool, Reviewer, type ReviewedGame } from './review.ts';
 import { BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
@@ -299,6 +300,14 @@ type RoomInternals = {
   command(player: unknown, command: unknown): string | null;
   scheduleBot(): void;
 };
+// The live game's searches, by the position they searched (the bot's own moves, training mode's advice):
+// the round review reuses them rather than search again.
+const liveSearches = new WeakMap<GameState, Promise<SearchReport | null>>();
+function liveSearch(state: GameState): (report: SearchReport | null) => void {
+  let resolve!: (report: SearchReport | null) => void;
+  liveSearches.set(state, new Promise((r) => (resolve = r)));
+  return resolve;
+}
 // SEARCH=off: the room's own bot plays instead, straight from its network (no search, instant moves).
 if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot = function (
   this: RoomInternals,
@@ -318,14 +327,20 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
     const error = this.command(player, bot.choose(game.state, game.events as never));
     if (error !== null) console.error(`room ${this.code}: the network's own move failed too: ${error}`);
   };
-  searchChoose(bot, state, game.events as never, pool, (r) => record(this.code, r)).then(
+  const found = liveSearch(state);
+  searchChoose(bot, state, game.events as never, pool, (r) => {
+    record(this.code, r);
+    found(r);
+  }).then(
     (command) => {
+      found(null); // (no report: nothing to compare)
       this.botTimer = null;
       if (cancelled || this.game !== game || game.state !== state) return this.scheduleBot();
       const error = this.command(player, command);
       if (error !== null) fallback(error);
     },
     (error: unknown) => {
+      found(null);
       this.botTimer = null;
       if (cancelled || this.game !== game || game.state !== state) return this.scheduleBot();
       fallback(String(error instanceof Error ? error.stack : error));
@@ -335,8 +350,105 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
 // Training mode's advice comes from the same search, from the seat's own information (the room shows
 // "thinking" until it's ready, and falls back to the network's suggestion if it fails).
 if (SEARCH)
-  (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) =>
-    searchAdvise(bot, state, events, pool);
+  (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) => {
+    const found = liveSearch(state);
+    return searchAdvise(bot, state, events, pool, found).finally(() => found(null));
+  };
+
+// Round reviews (REVIEW=off: none): every move of a game against the bot judged as the round goes, in
+// worker processes at the lowest CPU priority, and each round's review sent to the person once it's over.
+type ReviewRoom = {
+  code: string;
+  game: (ReviewedGame & { state: GameState }) | null;
+  players: { id: string; name: string; seat: number | null; bot?: boolean; send: ((m: unknown) => void) | null }[];
+};
+const REVIEW = process.env.REVIEW !== 'off';
+const reviewPool = REVIEW ? new ReviewPool(Math.max(1, availableParallelism() - 2), weights) : null;
+const roomOfGame = new WeakMap<ReviewedGame, ReviewRoom>();
+const reviewedGameOf = new WeakMap<ReviewRoom, ReviewedGame>();
+const reviewer = reviewPool
+  ? new Reviewer(reviewPool, (game, review) => {
+      const room = roomOfGame.get(game);
+      if (room?.game !== game) return;
+      for (const p of room.players) if (!p.bot && p.seat === review.seat) p.send?.({ t: 'review', review });
+    })
+  : null;
+/** Keeps the reviewer on the room's current game: stops the old one, starts a new game against the bot. */
+function followGame(room: ReviewRoom): void {
+  if (!reviewer) return;
+  const old = reviewedGameOf.get(room);
+  if (old && old !== room.game) {
+    reviewer.stop(old);
+    reviewedGameOf.delete(room);
+  }
+  const game = room.game;
+  if (!game || reviewedGameOf.get(room) === game) return;
+  const seated = room.players.filter((p) => p.seat !== null);
+  const bots = seated.filter((p) => p.bot);
+  const people = seated.filter((p) => !p.bot);
+  if (bots.length !== 1 || people.length !== 1) return;
+  const names: (string | null)[] = [null, null, null, null];
+  for (const p of seated) names[p.seat!] = p.name;
+  roomOfGame.set(game, room);
+  reviewedGameOf.set(room, game);
+  reviewer.start(room.code, game, people[0]!.seat as Seat, bots[0]!.seat as Seat, names);
+}
+if (reviewer) {
+  const proto = Room.prototype as unknown as {
+    command: (player: { seat: number | null }, command: Command) => string | null;
+    close: () => void;
+    sendGame: (player: { seat: number | null; bot?: boolean; send: ((m: unknown) => void) | null }, reset: boolean, ...rest: unknown[]) => unknown;
+  };
+  const command = proto.command;
+  proto.command = function (this: ReviewRoom, player, cmd) {
+    const game = this.game;
+    const before = game?.state;
+    const eventsBefore = game?.events;
+    const error = command.call(this, player, cmd);
+    if (error !== null || !game || !before || !eventsBefore || player.seat === null) return error;
+    followGame(this);
+    if (!reviewer.has(game)) return error;
+    // The move's own result, recomputed (the engine is deterministic): the bot may already have moved since.
+    const r = apply(before, player.seat as Seat, cmd);
+    if (r.ok) reviewer.moved(game, before, player.seat as Seat, cmd, r.state, [...eventsBefore, ...r.events], r.events, liveSearches.get(before));
+    return error;
+  };
+  // The person going away sets the round in play aside; coming back (the game sent afresh) resumes it.
+  const away = (room: ReviewRoom) => {
+    const game = reviewedGameOf.get(room);
+    if (game && !room.players.some((p) => !p.bot && p.seat !== null && p.send)) reviewer.pause(game);
+  };
+  const protoAway = Room.prototype as unknown as { disconnect: (...a: unknown[]) => unknown; handle: (id: string, message: { t: string }) => unknown };
+  const disconnect = protoAway.disconnect;
+  protoAway.disconnect = function (this: ReviewRoom, ...args: unknown[]) {
+    const out = disconnect.apply(this, args);
+    away(this);
+    return out;
+  };
+  const handleMessage = protoAway.handle;
+  protoAway.handle = function (this: ReviewRoom, id, message) {
+    const out = handleMessage.call(this, id, message);
+    if (message.t === 'leave') away(this);
+    return out;
+  };
+  const close = proto.close;
+  proto.close = function (this: ReviewRoom) {
+    const game = reviewedGameOf.get(this);
+    if (game) reviewer.stop(game);
+    return close.call(this);
+  };
+  // A player who (re)connects gets the finished rounds' reviews again; a game that ended back in the lobby stops being reviewed.
+  const sendGameWithReviews = proto.sendGame;
+  proto.sendGame = function (this: ReviewRoom, player, reset, ...rest) {
+    const out = sendGameWithReviews.call(this, player, reset, ...rest);
+    followGame(this);
+    if (reset && this.game && !player.bot && player.send) {
+      reviewer.resume(this.game);
+      for (const review of reviewer.finished(this.game)) if (review.seat === player.seat) player.send({ t: 'review', review });
+    }
+    return out;
+  };
+}
 
 await createKeepsServer({
   port: Number(process.env.PORT ?? 8788),

@@ -46,6 +46,51 @@ export interface Hint {
   win?: number;
 }
 
+/**
+ * After a round of a game against the bot: how it went, move by move, for one player (sent only once
+ * the round is over: it shows what was hidden). Filled in as the server works it out (`pending`).
+ * Chances are of winning the round, 0..1, for the player the review is for; null until worked out.
+ */
+export interface RoundReview {
+  /** The game it belongs to (a new game starts a new set of reviews). */
+  game: string;
+  round: number;
+  /** The player it's for. */
+  seat: Seat;
+  /** Pieces of work still to do (0: complete). */
+  pending: number;
+  /** Who won the round (null: nobody), and the coins each seat ended with (null: not a player). */
+  winner: Seat | null;
+  scores: (number | null)[];
+  /** After each move of the round: who moved, what happened (as this player's log showed it) and their chance of winning. */
+  moves: {
+    turn: number;
+    seat: Seat;
+    events: TraceEvent[];
+    /** Played out with every card known. */
+    truth: number | null;
+    /** As this player could tell. */
+    mine: number | null;
+    /** As the other player could tell. */
+    theirs: number | null;
+  }[];
+  /** Each decision with a choice (both players'): the options, best first by what the decider knew. */
+  decisions: {
+    /** The move it made (index into `moves`). */
+    move: number;
+    seat: Seat;
+    options: {
+      label: string;
+      /** The decider's chance of winning with it: from what they knew, and with every card known. */
+      known: number | null;
+      truth: number | null;
+      played: boolean;
+    }[];
+    /** This player's decisions only, once clear: how the move played compares with the best. */
+    verdict: 'best' | 'mistake' | 'mistake-worked-out' | 'blunder' | 'unlucky' | null;
+  }[];
+}
+
 export interface UndoState {
   /** Whether a proposal could be made now (there is something to undo this round). */
   available: boolean;
@@ -96,6 +141,8 @@ export type ServerMessage =
        */
       hints?: Hint[] | null;
     }
+  /** Games against the bot: the review of a finished round (sent again as it fills in). */
+  | { t: 'review'; review: RoundReview }
   | { t: 'error'; message: string }
   /** The room no longer exists (e.g. a stale resume). */
   | { t: 'gone' }
