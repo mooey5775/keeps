@@ -1,5 +1,5 @@
 import { CARDS, type CardId } from '@keeps/engine';
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 
 // Card images, plus a shared hover preview so small cards stay readable.
 
@@ -45,12 +45,25 @@ export function Card({ id, faceDown = false, size = 'sm', clickable = false, pic
   // Hovering or focusing any card previews it. A card that can't be clicked
   // right now must not be a disabled button: browsers send no mouse events to
   // those, so the preview would never appear.
-  const preview = {
-    onMouseEnter: () => known && setPreview(known),
-    onMouseLeave: () => setPreview(null),
-    onFocus: () => known && setPreview(known),
-    onBlur: () => setPreview(null),
+  // A card that leaves the table while previewed (clicking it played it) gets
+  // no mouseleave or blur: it takes its preview with it when it goes.
+  const showing = useRef(false);
+  const show = () => {
+    if (!known) return;
+    showing.current = true;
+    setPreview(known);
   };
+  const hide = () => {
+    showing.current = false;
+    setPreview(null);
+  };
+  useEffect(() => {
+    if (showing.current) setPreview(known); // the card under the pointer became another
+  }, [known, setPreview]);
+  useEffect(() => () => {
+    if (showing.current) setPreview(null);
+  }, [setPreview]);
+  const preview = { onMouseEnter: show, onMouseLeave: hide, onFocus: show, onBlur: hide };
   const content = (
     <>
       <img src={showFace ? cardImage(known) : CARD_BACK} alt="" draggable={false} />
