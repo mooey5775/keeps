@@ -59,6 +59,8 @@ export interface Page {
   setUserAgent(userAgent: string): Promise<void>;
   /** Moves the real mouse pointer over the first element matching `selector`. */
   hover(selector: string): Promise<void>;
+  /** Moves the real mouse pointer to a point in the viewport. */
+  mouseTo(x: number, y: number): Promise<void>;
   errors(): Promise<string[]>;
   close(): void;
 }
@@ -163,6 +165,10 @@ export async function open(browser: Browser, url: string): Promise<Page> {
       })()`);
       if (!point) throw new Error(`nothing matches ${selector}`);
       await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: point.x, y: point.y });
+      await sleep(150);
+    },
+    async mouseTo(x, y) {
+      await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
       await sleep(150);
     },
     async emulatePhone() {
