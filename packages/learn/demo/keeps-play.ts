@@ -1,6 +1,6 @@
 // A command-line Keeps game against the bot playing the best-Q move of its search (search-bot.ts): heads-up, one round per game.
 // The bot: BOT=<name> plays weights/<name>.bin (vrpo1 by default), SEARCH_WORLDS worlds (512), sampled rollouts
-// (SEARCH_ROLLOUTS=greedy for the policy's top move).
+// (SEARCH_ROLLOUTS=greedy for the policy's top move; SEARCH=off for no search: the network plays directly).
 //
 //   node keeps-play.ts new <id> <0|2>   start game <id>; you sit at seat 0 or 2 (the bot takes the other)
 //   node keeps-play.ts show <id>        your view, the prompt, your numbered options, the recent log
@@ -75,7 +75,7 @@ class Game {
     this.events = [...start.events];
     // Replay, observing at each of the bot's decisions as the bot did.
     for (const { seat, command } of saved.commands) {
-      if (seat === this.bot && this.player.wantsToMove(this.state)) this.player.choose(this.state, this.events);  // observe, as it did
+      if (seat === this.bot && this.player.wantsToMove(this.state)) this.player.observe(this.state, this.events); // as it did
       this.applyRaw(seat, command);
     }
   }
@@ -105,8 +105,11 @@ class Game {
   /** The bot moves until it's the human's decision or the round is over. */
   async botPlays(): Promise<void> {
     while (this.waitsOn(this.bot) && !this.waitsOn(this.saved.human)) {
-      pool ??= new RolloutPool(Math.max(1, availableParallelism() - 4), WEIGHTS, process.env.SEARCH_ROLLOUTS !== 'greedy');
-      const command = await searchChoose(this.player, this.state, this.events, pool);
+      // SEARCH=off: the network plays directly (as its weights' threshold says), like the live site.
+      const command =
+        process.env.SEARCH === 'off'
+          ? this.player.choose(this.state, this.events)
+          : await searchChoose(this.player, this.state, this.events, (pool ??= new RolloutPool(Math.max(1, availableParallelism() - 4), WEIGHTS, process.env.SEARCH_ROLLOUTS !== 'greedy')));
       this.saved.commands.push({ seat: this.bot, command });
       this.applyRaw(this.bot, command);
     }
