@@ -54,7 +54,7 @@ const page = () => readFileSync(join(import.meta.dirname, 'insight.html'));
 const spectatePage = () => readFileSync(join(import.meta.dirname, 'spectate.html'));
 
 // Live rooms, for the spectator page (local only: the insight server isn't exposed).
-type LiveRoom = { code: string; lastActivity: number; game: { state: GameState; events: TraceEvent[] } | null; players: { name: string; seat: number | null; bot?: boolean }[] };
+type LiveRoom = { code: string; lastActivity: number; game: { state: GameState; events: TraceEvent[] } | null; players: { id: string; name: string; seat: number | null; bot?: boolean; training?: boolean }[] };
 const liveRooms = new Map<string, LiveRoom>();
 const sendGame = (Room.prototype as unknown as { sendGame: (...a: unknown[]) => unknown }).sendGame;
 (Room.prototype as unknown as { sendGame: (...a: unknown[]) => unknown }).sendGame = function (this: LiveRoom, ...args: unknown[]) {
@@ -68,7 +68,9 @@ const sendGame = (Room.prototype as unknown as { sendGame: (...a: unknown[]) => 
   return sendGame.apply(this, args);
 };
 // Who played each game, by its replay file (replays record only the moves): data/sessions.jsonl,
-// one line per game when it starts. sessions.ts joins the two into a summary of who played and how it went.
+// one line per game when it starts (with whether each player's training mode is on), and one each
+// time a player switches training mode during a game. sessions.ts joins them into a summary of who
+// played and how it went.
 const noted = new Set<string>();
 function noteSession(room: LiveRoom): void {
   const startedAt = (room.game as { startedAt?: number } | null)?.startedAt;
@@ -76,9 +78,34 @@ function noteSession(room: LiveRoom): void {
   const replay = replayFileName(room.code, startedAt);
   if (noted.has(replay)) return;
   noted.add(replay);
-  const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, bot: !!p.bot }));
+  const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, bot: !!p.bot, training: !!p.training }));
   appendFileSync(join(DATA, 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
 }
+const handle = (Room.prototype as unknown as { handle: (id: string, message: { t: string }) => void }).handle;
+(Room.prototype as unknown as { handle: (id: string, message: { t: string }) => void }).handle = function (this: LiveRoom, id, message) {
+  const player = message.t === 'training' ? this.players.find((p) => p.id === id) : undefined;
+  const was = !!player?.training;
+  handle.call(this, id, message);
+  if (!player || !!player.training === was) return;
+  const game = this.game as { startedAt?: number; state: GameState } | null;
+  try {
+    appendFileSync(
+      join(DATA, 'sessions.jsonl'),
+      JSON.stringify({
+        event: 'training',
+        on: !!player.training,
+        room: this.code,
+        replay: game?.startedAt ? replayFileName(this.code, game.startedAt) : null,
+        at: Date.now(),
+        name: player.name,
+        seat: player.seat,
+        ...(game ? { round: game.state.round, turn: game.state.turnNumber } : {}),
+      }) + '\n',
+    );
+  } catch (error) {
+    console.error(`room ${this.code}: could not record training mode:`, error);
+  }
+};
 const namesOf = (room: LiveRoom): (string | null)[] => {
   const names: (string | null)[] = [null, null, null, null];
   for (const p of room.players) if (p.seat !== null) names[p.seat] = p.name;
