@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import {
   apply,
   CARDS,
@@ -134,6 +135,30 @@ describe('worlds', () => {
     }
     expect(checked).toBeGreaterThan(1000);
     expect([...kinds]).toEqual(expect.arrayContaining(['hot-target', 'choose-pile-card', 'take-or-discard']));
+  });
+
+  it("keeps the Joker in the opponent's hand while they choose what it copies (drawn unseen by Invocation)", () => {
+    // A real game (fixtures/joker-copy.jsonl): the bot's Invocation drew the Joker unseen; it waits for its copy.
+    const lines = readFileSync(new URL('./fixtures/joker-copy.jsonl', import.meta.url), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+    let { state, events } = newGame(lines[0].options) as { state: GameState; events: TraceEvent[] };
+    for (const { seat, command } of lines.slice(1)) {
+      const r = apply(state, seat, command);
+      if (!r.ok) throw new Error(r.error.message);
+      state = r.state;
+      events = [...events, ...r.events];
+    }
+    const decider = state.prompts.find((p) => p.kind === 'joker-copy')!.seat;
+    const me = ((decider + 2) % 4) as Seat;
+    const belief = new Belief(me, { sound: true });
+    const view = viewFor(state, me);
+    belief.update(eventsFor(events, me)).observe(view);
+    const model = worldModel(state, me, belief, view);
+    const random = rng(5);
+    for (let k = 0; k < 40; k++) {
+      const world = sampleWorld(model, state, belief, random);
+      expect(world.hands[decider]).toContain('joker');
+      for (const command of legalCommands(world, decider)) expect(apply(world, decider, command).ok).toBe(true);
+    }
   });
 
   it('draws worlds in the proportions of the exact posterior', () => {

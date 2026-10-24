@@ -114,6 +114,8 @@ export interface Facts {
   waiting: 5 | 6 | null;
   /** The kind bits that can matter (see gatherFacts). */
   kindMask: number;
+  /** The opponent's hidden-card history the worlds follow (the belief's, and what an open prompt shows). */
+  hiddenLog: HiddenEvent[];
 }
 
 /** Everything needed to draw worlds for `me` now. Throws if the facts contradict each other (a bug). */
@@ -127,7 +129,7 @@ export function worldModel(state: GameState, me: Seat, belief: Belief, view: Pla
     // Known origins must fit σ: a character's cards come from its pile or the Mask.
     const dealt = facts.dealtKnown;
     if (CHARACTERS.some((_, x) => dealt.some((row, p) => row[x]! > 0 && p !== own[x] && p !== mask))) continue;
-    for (const [hidden, ways] of hiddenEndStates(belief.hiddenLog, sigma, facts)) {
+    for (const [hidden, ways] of hiddenEndStates(facts.hiddenLog, sigma, facts)) {
       if (!fitsView(hidden, facts)) continue;
       for (const { split, ways: splitWays, pileCounts } of maskSplits(sigma, hidden, facts)) {
         const caps = [0, 1, 2, 3].map((p) => [facts.stillIn[p]!, ...hidden.held[p]!.slice(1)]);
@@ -138,7 +140,7 @@ export function worldModel(state: GameState, me: Seat, belief: Belief, view: Pla
     }
   }
   const total = classes.reduce((a, c) => a + c.weight, 0);
-  if (!(total > 0)) throw new Error(`no world is consistent with what the player knows: ${diagnose(belief, facts)}`);
+  if (!(total > 0)) throw new Error(`no world is consistent with what the player knows: ${diagnose(facts)}`);
   return { me, opponent, classes, total, facts };
 }
 
@@ -267,7 +269,7 @@ function fitPrompts(world: GameState, opponent: Seat, waiting: CardId | null): b
 }
 
 /** Where counting fails, for an error message: per σ that fits the known origins, the stage that leaves nothing. */
-function diagnose(belief: Belief, facts: Facts): string {
+function diagnose(facts: Facts): string {
   const stages = { origins: 0, noEndState: 0, view: 0, composition: 0, piles: 0 };
   let example = '';
   for (const sigma of ASSIGNMENTS) {
@@ -277,7 +279,7 @@ function diagnose(belief: Belief, facts: Facts): string {
       stages.origins++;
       continue;
     }
-    const ends = [...hiddenEndStates(belief.hiddenLog, sigma, facts).keys()];
+    const ends = [...hiddenEndStates(facts.hiddenLog, sigma, facts).keys()];
     if (!ends.length) {
       stages.noEndState++;
       continue;
@@ -298,18 +300,30 @@ function diagnose(belief: Belief, facts: Facts): string {
     const { h, m } = splits[0]!;
     example ||= `piles: counts ${JSON.stringify(m.pileCounts)} caps ${JSON.stringify([0, 1, 2, 3].map((p) => [facts.stillIn[p]!, ...h.held[p]!.slice(1)]))}`;
   }
-  return `${JSON.stringify(stages)} log ${JSON.stringify(belief.hiddenLog.map((e) => (e.kind === 'hide' ? `h${e.pile}` : e.kind === 'reveal' ? `r:${e.card}${e.just !== null ? '@' + e.just : ''}` : e.kind === 'turn-up' ? `t:${e.card}` : e.kind === 'face-down' ? `fd[${e.known}]` : 'nc')))} ${example}`;
+  return `${JSON.stringify(stages)} log ${JSON.stringify(facts.hiddenLog.map((e) => (e.kind === 'hide' ? `h${e.pile}` : e.kind === 'reveal' ? `r:${e.card}${e.just !== null ? '@' + e.just : ''}` : e.kind === 'turn-up' ? `t:${e.card}` : e.kind === 'face-down' ? `fd[${e.known}]` : 'nc')))} ${example}`;
 }
 
 // -- Facts ------------------------------------------------------------------
 
 /** The facts worlds are built from (exported for the tests' independent enumeration). */
 export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: Belief, view: PlayerView): Facts {
+  // A Joker the opponent drew unseen and plays as if HOT (Invocation) waits in their hand for the card it
+  // copies: that prompt shows it's the Joker, as plain as playing it would. It counts as come out of
+  // their hidden cards, from the pile just taken from, and held again, known.
+  let hiddenLog = belief.hiddenLog;
+  const opponentKnown = new Set(belief.opponentKnown);
+  const lastHidden = belief.hiddenLog.at(-1);
+  const jokerShown =
+    view.prompts.some((p) => p.seat === opponent && p.kind === 'joker-copy') && !opponentKnown.has('joker') && belief.waitingUnseen() !== null && lastHidden?.kind === 'hide';
+  if (jokerShown) {
+    hiddenLog = [...hiddenLog, { kind: 'reveal', card: 'joker', just: lastHidden.pile }];
+    opponentKnown.add('joker');
+  }
   const located = new Set<CardId>();
   for (const card of view.hands.find((h) => h.seat === me)!.cards ?? []) located.add(card);
   for (const keep of view.keeps) for (const c of keep.cards) if (c.id) located.add(c.id);
   for (const card of view.discard) located.add(card);
-  for (const card of belief.opponentKnown) located.add(card);
+  for (const card of opponentKnown) located.add(card);
   const stillIn = [0, 0, 0, 0];
   for (let p = 0; p < 4; p++) {
     const pile = belief.piles[p]!;
@@ -330,13 +344,14 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
   for (const c of state.limbo) located.add(c.id);
 
   const origin = new Map(belief.origin);
+  if (jokerShown && !origin.has('joker') && lastHidden?.kind === 'hide') origin.set('joker', lastHidden.pile);
   const dealtKnown = [0, 1, 2, 3].map(() => [0, 0, 0]);
   for (const [card, p] of origin) dealtKnown[p]![CHARACTERS.indexOf(CARDS[card].character as Character)]! += 1;
   // Cards that came out of the opponent's hidden cards without a known origin.
   const revealedUnknown = [0, 0, 0];
-  const roles = revealRoles(belief.hiddenLog, null as never);
-  belief.hiddenLog.forEach((e, i) => {
-    if ((e.kind === 'reveal' || e.kind === 'turn-up') && roles.get(i)!.dealt && !origin.has(e.card) && !knownDownCandidate(belief.hiddenLog, e)) {
+  const roles = revealRoles(hiddenLog, null as never);
+  hiddenLog.forEach((e, i) => {
+    if ((e.kind === 'reveal' || e.kind === 'turn-up') && roles.get(i)!.dealt && !origin.has(e.card) && !knownDownCandidate(hiddenLog, e)) {
       revealedUnknown[CHARACTERS.indexOf(CARDS[e.card].character as Character)]! += 1;
     }
   });
@@ -347,7 +362,7 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
   // The kind bits that can matter now (the rest are merged, which counts the same worlds with fewer
   // classes): Coin only if they held no Coin cards at some point, Keep only with cards hidden face down
   // or waiting for a keep, HOT only if they hold or held hidden cards at all.
-  const log = belief.hiddenLog;
+  const log = hiddenLog;
   const kindMask =
     (log.some((e) => e.kind === 'no-coins') ? 1 : 0) | (log.some((e) => e.kind === 'face-down') || waiting !== null ? 2 : 0) | (log.some((e) => e.kind === 'hide') ? 4 : 0);
   const unknownOrigin = CHARACTERS.map(() => KINDS.map(() => [] as CardId[]));
@@ -368,11 +383,12 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
     stillIn,
     dealtKnown,
     revealedUnknown,
-    opponentKnown: [...belief.opponentKnown],
+    opponentKnown: [...opponentKnown],
     handSize: view.hands.find((h) => h.seat === opponent)!.count,
     faceDownSlots,
     waiting,
     kindMask,
+    hiddenLog,
   };
 }
 
