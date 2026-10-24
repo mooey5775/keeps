@@ -18,6 +18,7 @@ The bot sits at the table as **Midstrike** (`BOT_NAME` to change it).
 
 **Options:**
 - `BOT=<name>`: plays `weights/<name>.bin` (e1 by default).
+- `SEARCH=off`: no search: the bot plays its network directly (instant moves; export with `--threshold` to drop its unlikely moves).
 - `SEARCH_WORLDS`: worlds per decision (256 by default).
 - `SEARCH_MODE=sample`: Ataraxos's sampling, π·exp(βQ), instead of the best rollout move.
 - `SEARCH_ROLLOUTS=sampled`: rollouts sample the policy instead of taking its top move.

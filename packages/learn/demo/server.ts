@@ -30,7 +30,9 @@ const DISPLAY_NAME = process.env.BOT_NAME ?? 'Midstrike';
 // The admin password for /bot/: ADMIN_TOKEN, or data/admin-token (git-ignored). Without one, /bot/ is off.
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(DATA, 'admin-token')) ? readFileSync(join(DATA, 'admin-token'), 'utf8').trim() : '');
 const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
-const pool = new RolloutPool(Math.max(1, availableParallelism() - 2), weights);
+// The search (on unless SEARCH=off), and the coach (COACH=1), play out moves in these worker threads.
+const SEARCH = process.env.SEARCH !== 'off';
+const pool = new RolloutPool(SEARCH || process.env.COACH === '1' ? Math.max(1, availableParallelism() - 2) : 1, weights);
 const MODE = process.env.SEARCH_MODE === 'sample' ? 'sample' : 'best-q';
 setSearchMode(MODE);
 
@@ -268,7 +270,8 @@ type RoomInternals = {
   command(player: unknown, command: unknown): string | null;
   scheduleBot(): void;
 };
-(Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot = function (
+// SEARCH=off: the room's own bot plays instead, straight from its network (no search, instant moves).
+if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot = function (
   this: RoomInternals,
   game,
   bot,
@@ -328,7 +331,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`}` : 'no search: its network plays directly'})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

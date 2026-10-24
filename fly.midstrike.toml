@@ -33,7 +33,7 @@ primary_region = "sjc"
     timeout = "5s"
     grace_period = "15s"
 
-# The search plays every legal move out in 512 sampled worlds at each decision: 16 dedicated cores
-# give about 14 s per decision.
+# Sized for the search (every legal move played out in 512 sampled worlds: about 14 s per decision on
+# 16 dedicated cores). With SEARCH=off the network alone needs a tiny fraction of this.
 [[vm]]
   size = "performance-16x"

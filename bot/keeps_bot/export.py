@@ -163,6 +163,9 @@ def main():
                       help="record the current encoder's fingerprint in the shipped weights (see above)")
   parser.add_argument('--out', default=WEIGHTS)
   parser.add_argument('--fixture', default=FIXTURE)
+  parser.add_argument('--threshold', type=float, default=None,
+                      help="play with moves under this probability dropped (and no rounding), instead of the policy's "
+                           'own post-processing (the parity fixture still reflects its own)')
   args = parser.parse_args()
   if args.restamp:
     return restamp([args.out, args.fixture], keeps.bridge().fingerprint)
@@ -176,9 +179,13 @@ def main():
   fingerprint = saved.get('fingerprint', current)
   if fingerprint != current:
     raise SystemExit(f'this policy was trained with encoder {fingerprint}; the encoder is now {current}')
-  step = saved.get('learner_steps', int(re.search(r'(\d+)\.pkl$', args.policy).group(1)))
+  step = saved.get('learner_steps')
+  if step is None:
+    step = int(re.search(r'(\d+)\.pkl$', args.policy).group(1))
   run = os.path.basename(os.path.dirname(os.path.abspath(args.policy)))
   header, tensors = policy_file(saved, run, step, fingerprint, evals_for(args.policy, step))
+  if args.threshold is not None:
+    header['postprocess'] = {'threshold': args.threshold, 'discretization': 0}
   write(args.out, header, tensors)
 
   net = policies.build(saved)
