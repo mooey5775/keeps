@@ -221,3 +221,21 @@ export async function searchChoose(
     log(`  ${r.chosen ? '→' : ' '} ${r.move.padEnd(36)} policy ${(100 * r.prior).toFixed(0).padStart(3)}%  Q ${r.q >= 0 ? '+' : ''}${r.q.toFixed(2)}  search ${(100 * r.search).toFixed(0).padStart(3)}%`);
   return commands[k]!;
 }
+
+/**
+ * Training mode's advice for the seat `advisor` follows, from the same search: the move the bot would
+ * play there first, then the rest by their chance of winning the round. A move with nothing to compare
+ * (one legal move, or a pile reorder, searched card by card) comes alone.
+ */
+export async function searchAdvise(
+  advisor: BotPlayer,
+  state: GameState,
+  events: readonly TraceEvent[],
+  pool: RolloutPool,
+): Promise<{ command: Command; probability: number; win?: number }[]> {
+  let moves: SearchReport['moves'] = [];
+  const command = await searchChoose(advisor, state, events, pool, (r) => (moves = r.moves));
+  if (moves.length === 0) return [{ command, probability: 1 }];
+  const ranked = [...moves].sort((a, b) => Number(b.chosen) - Number(a.chosen) || b.win - a.win);
+  return ranked.map((m) => ({ command: m.command, probability: m.policy, win: m.win }));
+}

@@ -17,7 +17,7 @@ import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
-import { BETA, RolloutPool, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
+import { BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
 // Replays, sessions.jsonl, the admin-token file (KEEPS_DATA_DIR in a container; ./data locally).
@@ -258,7 +258,8 @@ function insightPages(req: IncomingMessage, res: ServerResponse): void {
   }
 }
 // Local only: it shows both hands. The same pages are on the game's address under /bot/, behind the admin password.
-createServer(insightPages).listen(8789, '127.0.0.1');
+const INSIGHT_PORT = Number(process.env.INSIGHT_PORT ?? 8789);
+createServer(insightPages).listen(INSIGHT_PORT, '127.0.0.1');
 
 // The room plays the bot synchronously (bot.choose); here it waits for the search instead. While
 // the search runs, botTimer holds its cancel, so the room neither schedules the bot twice nor
@@ -304,6 +305,11 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
     },
   );
 };
+// Training mode's advice comes from the same search, from the seat's own information (the room shows
+// "thinking" until it's ready, and falls back to the network's suggestion if it fails).
+if (SEARCH)
+  (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) =>
+    searchAdvise(bot, state, events, pool);
 
 await createKeepsServer({
   port: Number(process.env.PORT ?? 8788),
@@ -332,7 +338,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:8789${COACH ? ', coach on http://localhost:8789/coach' : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`}` : 'no search: its network plays directly'})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`}` : 'no search: its network plays directly'})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

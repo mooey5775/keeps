@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
-import { Policy } from '@keeps/learn';
-import type { ReplayLog } from '@keeps/engine';
-import type { ServerMessage } from '@keeps/protocol';
+import { Policy, type BotPlayer } from '@keeps/learn';
+import type { GameState, ReplayLog, TraceEvent } from '@keeps/engine';
+import type { Hint, ServerMessage } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type RoomDeps, type Send } from '../src/room.ts';
 
@@ -191,6 +191,50 @@ describe('the bot in a room', () => {
     // Switched off, they stop.
     room.handle(human.id, { t: 'training', on: false });
     expect('hints' in human.last('game')).toBe(false);
+  });
+
+  it("training mode with advice that takes time (a search): 'thinking' until it's ready, then sent; stale advice dropped", async () => {
+    const { room, runBot } = botRoom();
+    type Advise = (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<Hint[]>;
+    const asked: { state: GameState; resolve: (hints: Hint[]) => void; reject: (e: Error) => void; bot: BotPlayer; events: readonly TraceEvent[] }[] = [];
+    (room as unknown as { advise: Advise }).advise = (bot, state, events) =>
+      new Promise((resolve, reject) => asked.push({ state, resolve, reject, bot, events }));
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: 'random' } });
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    room.handle(human.id, { t: 'training', on: true });
+    while (!human.last('game').view.prompts.some((p) => p.mine)) expect(runBot()).toBe(true);
+    // Asked once for this decision, however often the game is sent meanwhile.
+    expect(human.last('game').hints).toEqual([]);
+    room.handle(human.id, { t: 'training', on: true });
+    expect(asked).toHaveLength(1);
+    const ask = asked[0]!;
+    const sent = human.messages.length;
+    ask.resolve([{ command: human.last('game').view.legal[0]!, probability: 0.5, win: 0.7 }]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(human.messages.length).toBe(sent + 1);
+    expect(human.last('game').hints).toEqual([{ command: human.last('game').view.legal[0], probability: 0.5, win: 0.7 }]);
+    // A move made before the advice arrives: the late advice is dropped.
+    const legal = human.last('game').view.legal;
+    room.handle(human.id, { t: 'command', command: legal[0]! });
+    while (!human.last('game').view.prompts.some((p) => p.mine)) expect(runBot()).toBe(true);
+    const next = asked.at(-1)!;
+    expect(next).not.toBe(ask);
+    room.handle(human.id, { t: 'command', command: human.last('game').view.legal[0]! });
+    const before = human.messages.length;
+    next.resolve([{ command: legal[0]!, probability: 1 }]);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(human.messages.slice(before).some((m) => m.t === 'game' && m.hints?.length)).toBe(false);
+    // A failed search: the network's own suggestion instead.
+    while (!human.last('game').view.prompts.some((p) => p.mine) && human.last('game').view.phase === 'playing') expect(runBot()).toBe(true);
+    if (human.last('game').view.phase === 'playing') {
+      asked.at(-1)!.reject(new Error('the search broke'));
+      await new Promise((r) => setTimeout(r, 0));
+      const hints = human.last('game').hints!;
+      expect(hints.length).toBeGreaterThan(0);
+      expect(hints[0]!.win).toBeUndefined();
+    }
   });
 
   it('training mode gives nothing in a game without the bot, and needs a server with the bot', () => {

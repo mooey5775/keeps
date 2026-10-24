@@ -42,6 +42,8 @@ export interface RoomSummary {
 export interface Hint {
   command: Command;
   probability: number;
+  /** When the bot searched your move (played it out in sampled deals): its chance of winning the round with it, 0..1. */
+  win?: number;
 }
 
 export interface UndoState {

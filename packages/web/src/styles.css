@@ -908,6 +908,10 @@ a.buy:hover {
   font-size: 0.9em;
 }
 
+.training .thinking {
+  color: var(--muted);
+}
+
 .training .pct {
   color: var(--muted);
   font-variant-numeric: tabular-nums;

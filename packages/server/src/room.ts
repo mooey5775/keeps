@@ -123,7 +123,8 @@ interface Game {
   /**
    * In games against the bot, one shadow bot per human seat, for training mode: it follows that seat
    * exactly as if it were playing there (its view, its log, its belief), at every decision whether or
-   * not anyone asks for advice. Its latest advice is kept, for the state it was worked out for.
+   * not anyone asks for advice. Its latest advice is kept, for the state it was worked out for
+   * (empty while it is still being worked out).
    */
   advisors: Map<Seat, { bot: BotPlayer; advice: { state: GameState; hints: Hint[] } | null }>;
 }
@@ -705,19 +706,43 @@ export class Room {
     }
   }
 
-  /** Training mode's advice for `seat` now: the bot's suggestion, or null when the seat has no decision. */
+  /**
+   * Training mode's advice for `seat` now: the bot's suggestion, null when the seat has no decision, or
+   * empty while advice that takes time (a search) is worked out: it is sent when it is ready.
+   */
   private hints(game: Game, seat: Seat): Hint[] | null {
     const advisor = game.advisors.get(seat)!;
     if (!advisor.bot.wantsToMove(game.state)) return null;
     if (advisor.advice?.state !== game.state) {
+      const state = game.state;
+      let advice: Hint[] | Promise<Hint[]>;
       try {
-        advisor.advice = { state: game.state, hints: advisor.bot.suggest(game.state, game.events) };
+        advice = this.advise(advisor.bot, state, game.events);
       } catch (error) {
         console.error(`room ${this.code}: training mode could not advise seat ${seat}:`, error);
         return null;
       }
+      advisor.advice = { state, hints: Array.isArray(advice) ? advice : [] };
+      if (!Array.isArray(advice)) {
+        advice
+          .catch((error: unknown) => {
+            console.error(`room ${this.code}: training mode's search failed for seat ${seat} (the network advises instead):`, error);
+            return advisor.bot.suggest(state, game.events);
+          })
+          .then((hints) => {
+            if (this.game !== game || game.state !== state || advisor.advice?.state !== state) return; // the moment has passed
+            advisor.advice = { state, hints };
+            for (const p of this.players) if (p.training && p.seat === seat) this.sendGame(p, false);
+          })
+          .catch((error: unknown) => console.error(`room ${this.code}: training mode could not advise seat ${seat}:`, error));
+      }
     }
     return advisor.advice.hints;
+  }
+
+  /** The advice itself: the network's suggestion, at once. (A server that searches replaces this with its search.) */
+  private advise(bot: BotPlayer, state: GameState, events: readonly TraceEvent[]): Hint[] | Promise<Hint[]> {
+    return bot.suggest(state, events);
   }
 }
 

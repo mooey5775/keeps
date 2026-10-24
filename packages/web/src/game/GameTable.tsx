@@ -155,7 +155,7 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom, b
             ),
           )}
         </div>
-        {hints && hints.length > 0 && (
+        {hints && (
           <TrainingHints hints={hints} options={options} bot={botSeats.length ? capital(uiNames.seat(botSeats[0]!)) : 'The bot'} />
         )}
         <OptionsPanel view={view} options={remaining} picked={picked} onSend={send} onPick={onRef} onClear={() => setPicked([])} />
@@ -393,7 +393,10 @@ function Log({ events, names }: { events: readonly TraceEvent[]; names: ReturnTy
   );
 }
 
-/** Training mode: the move the bot would most likely play in your seat, and the next two, labelled as the options are. */
+/**
+ * Training mode: the move the bot would play in your seat, and the next two, labelled as the options are:
+ * with their chance of winning the round when it searched them, otherwise how likely its network is to play them.
+ */
 function TrainingHints({ hints, options, bot }: { hints: Hint[]; options: Option[]; bot: string }) {
   const labels = new Map(options.map((o) => [JSON.stringify(o.command), o.label]));
   const label = (hint: Hint): string => {
@@ -403,18 +406,24 @@ function TrainingHints({ hints, options, bot }: { hints: Hint[]; options: Option
     const order = hint.command.type === 'answer' && hint.command.answer.kind === 'order-pile' ? hint.command.answer.order : null;
     return order ? `Put the pile in this order: ${order.map((c) => CARDS[c].name).join(', ')}` : 'A move';
   };
-  const pct = (p: number) => `${Math.round(100 * p)}%`;
+  const pct = (h: Hint) => (h.win === undefined ? `${Math.round(100 * h.probability)}%` : `${Math.round(100 * h.win)}% to win the round`);
+  if (hints.length === 0)
+    return (
+      <div className="training">
+        <p className="thinking">{bot} is thinking about your move…</p>
+      </div>
+    );
   const [best, ...rest] = hints;
   return (
     <div className="training">
       <p>
-        {bot} would play: <strong>{label(best!)}</strong> <span className="pct">{pct(best!.probability)}</span>
+        {bot} would play: <strong>{label(best!)}</strong> <span className="pct">{pct(best!)}</span>
       </p>
       {rest.length > 0 && (
         <ul>
           {rest.slice(0, 2).map((h) => (
             <li key={JSON.stringify(h.command)}>
-              {label(h)} <span className="pct">{pct(h.probability)}</span>
+              {label(h)} <span className="pct">{pct(h)}</span>
             </li>
           ))}
         </ul>
