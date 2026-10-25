@@ -2,8 +2,9 @@
 // rounds out to the end with the network sampling every move for both sides, each side reading its own
 // log. Jobs come over IPC:
 //   truth   the real position, n times (optionally after one given first move): wins by seat;
-//   worlds  n worlds drawn from what `me` knows, each played on once, or once per given first move
-//           (the same worlds for every move): `me`'s result per world and move, 1 won, 0 not.
+//   worlds  n worlds drawn from what `me` knows (each with its history: the opponent reads their own log
+//           of it), each played on once, or once per given first move (the same worlds for every move):
+//           `me`'s result per world and move, 1 won, 0 not.
 //   node review-worker.ts <weights>
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
@@ -11,11 +12,11 @@ import { Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { Belief } from '../src/belief.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import { Policy, sample } from '../src/policy.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { sampleHistory, worldModel } from '../src/worlds.ts';
 
 export type ReviewJob =
   | { kind: 'truth'; state: GameState; logs: [Seat, TraceEvent[]][]; first: { seat: Seat; command: Command } | null; n: number }
-  | { kind: 'worlds'; state: GameState; me: Seat; myLog: TraceEvent[]; publicLog: TraceEvent[]; commands: Command[] | null; n: number };
+  | { kind: 'worlds'; state: GameState; me: Seat; myLog: TraceEvent[]; commands: Command[] | null; n: number };
 export type ReviewResult = { wins: Partial<Record<Seat, number>>; n: number } | { rows: number[][] };
 
 const policy = Policy.load(readFileSync(process.argv[2]!));
@@ -65,20 +66,20 @@ function run(job: ReviewJob): ReviewResult {
     }
     return { wins, n: job.n };
   }
-  const { state, me, myLog, publicLog, commands } = job;
+  const { state, me, myLog, commands } = job;
   const belief = new Belief(me, { sound: true });
   const view = viewFor(state, me);
   belief.update(myLog).observe(view);
-  const model = worldModel(state, me, belief, view);
+  const model = worldModel(state, me, belief, view, myLog);
   const opponent = ((me + 2) % 4) as Seat;
-  const logs: [Seat, TraceEvent[]][] = [
-    [me, myLog],
-    [opponent, publicLog],
-  ];
   const rows: number[][] = [];
   for (let i = 0; i < job.n; i++) {
-    const world = sampleWorld(model, state, belief, random);
-    rows.push((commands ?? [null]).map((command) => (playout(world, logs, command ? { seat: me, command } : null) === me ? 1 : 0)));
+    const h = sampleHistory(model, random);
+    const logs: [Seat, TraceEvent[]][] = [
+      [me, myLog],
+      [opponent, h.logs[opponent]!],
+    ];
+    rows.push((commands ?? [null]).map((command) => (playout(h.world, logs, command ? { seat: me, command } : null) === me ? 1 : 0)));
   }
   return { rows };
 }

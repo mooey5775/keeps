@@ -16,7 +16,7 @@ import {
 } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
 import { Belief, type HiddenEvent } from '../src/belief.ts';
-import { gatherFacts, revealRoles, sampleWorld, worldModel, type Facts } from '../src/worlds.ts';
+import { canonicalView, gatherFacts, revealRoles, sampleWorld, worldModel, type Facts } from '../src/worlds.ts';
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -66,11 +66,11 @@ describe('worlds', () => {
     const random = rng(11);
     let checked = 0;
     for (const d of decisions(12, 'worlds-sound', random)) {
-      const model = worldModel(d.state, d.seat, d.belief, d.view);
+      const model = worldModel(d.state, d.seat, d.belief, d.view, eventsFor(d.events, d.seat));
       for (let k = 0; k < 2; k++) {
-        const world = sampleWorld(model, d.state, d.belief, random);
+        const world = sampleWorld(model, random);
         expect(checkInvariants(world)).toEqual([]);
-        expect(JSON.stringify(viewFor(world, d.seat))).toBe(JSON.stringify(d.view));
+        expect(canonicalView(viewFor(world, d.seat))).toBe(canonicalView(d.view));
       }
       // The truth: σ, the opponent's hidden cards by pile of origin (hand, face down), known face-down cards.
       const opp = ((d.seat + 2) % 4) as Seat;
@@ -120,11 +120,11 @@ describe('worlds', () => {
       w.read = events.length;
       const view = viewFor(d.state, me);
       w.belief.update(w.log).observe(view);
-      const model = worldModel(d.state, me, w.belief, view);
+      const model = worldModel(d.state, me, w.belief, view, w.log);
       for (let k = 0; k < 3; k++) {
-        const world = sampleWorld(model, d.state, w.belief, random);
+        const world = sampleWorld(model, random);
         expect(checkInvariants(world)).toEqual([]);
-        expect(JSON.stringify(viewFor(world, me))).toBe(JSON.stringify(view));
+        expect(canonicalView(viewFor(world, me))).toBe(canonicalView(view));
         for (const command of legalCommands(world, d.seat)) {
           const r = apply(world, d.seat, command);
           expect(r.ok ? null : r.error.message, `${d.state.prompts[0]!.kind}: ${JSON.stringify(command)}`).toBeNull();
@@ -152,10 +152,10 @@ describe('worlds', () => {
     const belief = new Belief(me, { sound: true });
     const view = viewFor(state, me);
     belief.update(eventsFor(events, me)).observe(view);
-    const model = worldModel(state, me, belief, view);
+    const model = worldModel(state, me, belief, view, eventsFor(events, me));
     const random = rng(5);
     for (let k = 0; k < 40; k++) {
-      const world = sampleWorld(model, state, belief, random);
+      const world = sampleWorld(model, random);
       expect(world.hands[decider]).toContain('joker');
       for (const command of legalCommands(world, decider)) expect(apply(world, decider, command).ok).toBe(true);
     }
@@ -171,11 +171,11 @@ describe('worlds', () => {
       const exact = enumerate(d.belief.hiddenLog, facts);
       if (!exact || exact.size < 3) continue;
       const total = [...exact.values()].reduce((a, b) => a + b, 0);
-      const model = worldModel(d.state, d.seat, d.belief, d.view);
+      const model = worldModel(d.state, d.seat, d.belief, d.view, eventsFor(d.events, d.seat));
       const samples = 3000;
       const seen = new Map<string, number>();
       for (let s = 0; s < samples; s++) {
-        const key = sampledKey(d, facts, sampleWorld(model, d.state, d.belief, random));
+        const key = sampledKey(d, facts, sampleWorld(model, random));
         expect(exact.has(key)).toBe(true);
         seen.set(key, (seen.get(key) ?? 0) + 1);
       }

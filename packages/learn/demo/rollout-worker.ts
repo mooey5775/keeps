@@ -40,13 +40,12 @@ function greedyMove(state: GameState, seat: Seat, belief: Belief, log: TraceEven
 }
 
 /** +1 if `me` wins the round after playing `first` in `world`, else -1. */
-function playout(world: GameState, events: TraceEvent[], me: Seat, first: Command, myLog: TraceEvent[]): number {
+function playout(world: GameState, me: Seat, first: Command, myLog: TraceEvent[], theirLog: TraceEvent[]): number {
   const opp = ((me + 2) % 4) as Seat;
-  // My side: what I've been shown (rebuilt from my log). The opponent's real private past
-  // refers to the real cards, not this world's, so it gets the public record.
+  // Each side reads its own log: mine as I saw it; the opponent's as they saw this world's history.
   const players = new Map<Seat, { belief: Belief; log: TraceEvent[] }>([
     [me, { belief: new Belief(me, { sound: true }), log: [...myLog] }],
-    [opp, { belief: new Belief(opp, { sound: true }), log: eventsFor(events, 'spectator') }],
+    [opp, { belief: new Belief(opp, { sound: true }), log: [...theirLog] }],
   ]);
   let state = world;
   let command = first;
@@ -64,9 +63,9 @@ function playout(world: GameState, events: TraceEvent[], me: Seat, first: Comman
   }
 }
 
-parentPort!.on('message', (job: { id: number; world: GameState; events: TraceEvent[]; myLog: TraceEvent[]; me: Seat; commands: Command[] }) => {
+parentPort!.on('message', (job: { id: number; world: GameState; myLog: TraceEvent[]; theirLog: TraceEvent[]; me: Seat; commands: Command[] }) => {
   try {
-    parentPort!.postMessage({ id: job.id, out: job.commands.map((c) => playout(job.world, job.events, job.me, c, job.myLog)) });
+    parentPort!.postMessage({ id: job.id, out: job.commands.map((c) => playout(job.world, job.me, c, job.myLog, job.theirLog)) });
   } catch (error) {
     parentPort!.postMessage({ id: job.id, error: String(error instanceof Error ? error.stack : error) });
   }

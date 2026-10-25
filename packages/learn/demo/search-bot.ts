@@ -16,7 +16,7 @@ import {
 } from '../../engine/src/index.ts';
 import { actionName, Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { Belief } from '../src/belief.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import type { BotPlayer } from '../src/bot.ts';
 import type { Policy } from '../src/policy.ts';
@@ -92,7 +92,7 @@ export class RolloutPool {
     });
   }
 
-  run(job: { world: GameState; events: TraceEvent[]; myLog: TraceEvent[]; me: Seat; commands: Command[] }): Promise<number[]> {
+  run(job: { world: GameState; myLog: TraceEvent[]; theirLog: TraceEvent[]; me: Seat; commands: Command[] }): Promise<number[]> {
     const id = this.id++;
     const worker = this.workers[this.next++ % this.workers.length]!;
     return new Promise((resolve, reject) => {
@@ -153,6 +153,7 @@ export async function searchChoose(
 ): Promise<Command> {
   const b = bot as unknown as { log: TraceEvent[]; read: number; belief: Belief; policy: Policy; seat: Seat };
   const seat = b.seat;
+  const opponent = ((seat + 2) % 4) as Seat;
   b.log.push(...eventsFor(events.slice(b.read), seat));
   b.read = events.length;
   const view = viewFor(state, seat);
@@ -163,8 +164,8 @@ export async function searchChoose(
   // pile one card at a time, each step a decision of its own: search each step in turn, the candidates
   // "this card next, then the policy's order for the rest", all scored in the same sampled worlds.
   if (decision.encodings().length === 0) {
-    const model = worldModel(state, seat, b.belief, view);
-    const worlds = Array.from({ length: WORLDS }, () => sampleWorld(model, state, b.belief, random));
+    const model = worldModel(state, seat, b.belief, view, b.log);
+    const worlds = Array.from({ length: WORLDS }, () => sampleHistory(model, random));
     const fixed: number[] = [];
     while (!decision.complete(fixed)) {
       const ids = decision.next(fixed);
@@ -177,7 +178,7 @@ export async function searchChoose(
       const p = b.policy.raw(encodeObservation2(view, b.belief, fixed, ids), mask);
       const prior = ids.map((id) => Math.max(p[id]!, 1e-9));
       const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, b.belief, b.policy, [...fixed, id]))!);
-      const results = await Promise.all(worlds.map((world) => pool.run({ world, events: [...events], myLog: [...b.log], me: seat, commands: candidates })));
+      const results = await Promise.all(worlds.map((h) => pool.run({ world: h.world, myLog: [...b.log], theirLog: h.logs[opponent]!, me: seat, commands: candidates })));
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
       fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, by).k]!);
     }
@@ -208,11 +209,10 @@ export async function searchChoose(
   const total = prior.reduce((a, c) => a + c, 0);
   early?.({ before: base.before, moves: encodings.map((ids, i) => ({ move: ids.map(actionName).join(' '), policy: prior[i]! / total, command: commands[i]! })) });
   const started = Date.now();
-  const model = worldModel(state, seat, b.belief, view);
-  const worlds = Array.from({ length: WORLDS }, () => sampleWorld(model, state, b.belief, random));
+  const model = worldModel(state, seat, b.belief, view, b.log);
+  const worlds = Array.from({ length: WORLDS }, () => sampleHistory(model, random));
   const myLog = [...b.log];
-  const plainEvents = [...events];
-  const results = await Promise.all(worlds.map((world) => pool.run({ world, events: plainEvents, myLog, me: seat, commands })));
+  const results = await Promise.all(worlds.map((h) => pool.run({ world: h.world, myLog, theirLog: h.logs[opponent]!, me: seat, commands })));
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
   const { k, searched } = pick(prior, magnet, q, by);
   const rows = encodings

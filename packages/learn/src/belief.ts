@@ -56,6 +56,25 @@ export type HiddenEvent =
   | { kind: 'no-coins' }
   | { kind: 'face-down'; known: CardId[] }
   | { kind: 'turn-up'; card: CardId };
+/**
+ * What happened to the places in the piles, in the order the player saw it (for rebuilding a deal from a
+ * sampled world: worlds.ts). Piles are physical (0..3, as dealt to positions 0..3); `at` is the index of
+ * the log event it came from.
+ *   deal     the pile was dealt `size` cards: its places, top first
+ *   pop      a card left the pile: from the top, a known index, or any position (the opponent's choice);
+ *            `card` if the player knows which, `hide` (index into hiddenLog) if it became a hidden card
+ *   push     a card was put on top (Blunder)
+ *   look     the player saw cards at places: the whole pile (`whole`), or only the top
+ *   reorder  the pile's cards were put in a new order: `order` (the player's own), or one they can't see
+ *   flip     the pile was turned over
+ */
+export type PileOp =
+  | { op: 'deal'; p: number; size: number; at: number }
+  | { op: 'pop'; p: number; from: 'top' | 'any' | number; card: CardId | null; hide: number | null; at: number }
+  | { op: 'push'; p: number; card: CardId; at: number }
+  | { op: 'look'; p: number; cards: CardId[]; whole: boolean; at: number }
+  | { op: 'reorder'; p: number; order: CardId[] | null; at: number }
+  | { op: 'flip'; p: number; at: number };
 type Character = 'count' | 'fool' | 'friar';
 const CHARACTERS: Character[] = ['count', 'fool', 'friar'];
 /** Identity of a physical pile: one of the three characters, or the Mask. */
@@ -108,6 +127,10 @@ export class Belief implements PileMap {
   private processed = 0;
   /** The opponent's hidden holdings, exactly (see HiddenEvent). */
   hiddenLog: HiddenEvent[] = [];
+  /** For each hiddenLog event, the index of the log event it came from. */
+  hiddenAt: number[] = [];
+  /** What happened to the places in the piles (see PileOp). */
+  pileOps: PileOp[] = [];
   /** Derived from `origin` (recomputed when it changes): evidence, identity weights, origins by character. */
   private derived: { counts: number[][]; weights: { assignment: Identity[]; weight: number }[]; byCharacter: Map<string, number[]>; identities?: number[][] } | null = null;
 
@@ -167,6 +190,13 @@ export class Belief implements PileMap {
     this.lastLooked.clear();
     this.fiat = null;
     this.hiddenLog = [];
+    this.hiddenAt = [];
+    this.pileOps = [];
+  }
+
+  private hide(e: HiddenEvent): void {
+    this.hiddenLog.push(e);
+    this.hiddenAt.push(this.processed);
   }
 
   private pileAt(position: Seat): number {
@@ -194,6 +224,7 @@ export class Belief implements PileMap {
         return;
       case 'pile-placed':
         this.piles[e.position] = { size: e.size, slots: Array(e.size).fill(null), members: new Set(), placed: new Set() };
+        this.pileOps.push({ op: 'deal', p: e.position, size: e.size, at: this.processed });
         return;
       case 'draw': {
         const p = this.pileAt(e.from);
@@ -239,6 +270,7 @@ export class Belief implements PileMap {
           const pile = this.piles[p]!;
           pile.slots = [...e.cards];
           for (const card of e.cards) this.addMember(p, card);
+          this.pileOps.push({ op: 'look', p, cards: [...e.cards], whole: true, at: this.processed });
         } else {
           // Top cards (Epiphany: one per pile listed; Prayer: one).
           e.piles.forEach((position, i) => {
@@ -246,6 +278,7 @@ export class Belief implements PileMap {
             const card = e.cards![i]!;
             this.piles[p]!.slots[0] = card;
             this.addMember(p, card);
+            this.pileOps.push({ op: 'look', p, cards: [card], whole: false, at: this.processed });
           });
         }
         return;
@@ -280,11 +313,11 @@ export class Belief implements PileMap {
         if (!e.cards) return;
         if (e.from === this.opponent) for (const card of e.cards) this.revealFromOpponent(card, false);
         if (e.seat === this.opponent) for (const card of e.cards) this.opponentKnown.add(card);
-        if (e.seat === this.me && e.from === this.opponent && this.lastPlayed.get(this.me) === 'pickpocket') this.hiddenLog.push({ kind: 'no-coins' });
+        if (e.seat === this.me && e.from === this.opponent && this.lastPlayed.get(this.me) === 'pickpocket') this.hide({ kind: 'no-coins' });
         return;
       case 'no-effect':
         // Our Pickpocket on them, with nothing to take (engine: effects.ts, "S<seat> has no Coin cards in hand").
-        if (e.seat === this.me && e.card === 'pickpocket' && e.reason.startsWith(`S${this.opponent} has no Coin`)) this.hiddenLog.push({ kind: 'no-coins' });
+        if (e.seat === this.me && e.card === 'pickpocket' && e.reason.startsWith(`S${this.opponent} has no Coin`)) this.hide({ kind: 'no-coins' });
         return;
       case 'give':
         if (!e.card) return;
@@ -305,7 +338,7 @@ export class Belief implements PileMap {
       case 'reveal':
         // A face-down card turned up. If the opponent hid it, it was one of their hidden cards.
         if (this.myFaceDown.delete(e.card)) return;
-        this.hiddenLog.push({ kind: 'turn-up', card: e.card });
+        this.hide({ kind: 'turn-up', card: e.card });
         if (this.opponentMaybeHidden.has(e.card)) {
           // One of the cards we knew they held: so it wasn't still in their hand.
           this.opponentKnown.delete(e.card);
@@ -320,7 +353,7 @@ export class Belief implements PileMap {
         // The opponent hid a card we can't see: it may be a Keep card we knew they held.
         if (e.seat === this.opponent && !e.card) {
           for (const card of this.opponentKnown) if (CARDS[card].keep) this.opponentMaybeHidden.add(card);
-          this.hiddenLog.push({ kind: 'face-down', known: [...this.opponentKnown].filter((card) => CARDS[card].keep) });
+          this.hide({ kind: 'face-down', known: [...this.opponentKnown].filter((card) => CARDS[card].keep) });
         }
         return;
       case 'pile-swap': {
@@ -338,15 +371,23 @@ export class Belief implements PileMap {
       case 'pile-flip': {
         const pile = this.piles[this.pileAt(e.pile)]!;
         pile.slots.reverse();
+        this.pileOps.push({ op: 'flip', p: this.pileAt(e.pile), at: this.processed });
         return;
       }
       case 'place-on-pile': {
         const p = this.pileAt(e.pile);
         const pile = this.piles[p]!;
+        // A card is in one place: if we still counted it in another pile (taken from there unseen), it isn't.
+        for (const other of this.piles) {
+          if (other === pile || !other.members.delete(e.card)) continue;
+          other.placed.delete(e.card);
+          other.slots = other.slots.map((c) => (c === e.card ? null : c));
+        }
         pile.slots.unshift(e.card);
         pile.size++;
         pile.members.add(e.card);
         pile.placed.add(e.card);
+        this.pileOps.push({ op: 'push', p, card: e.card, at: this.processed });
         return;
       }
       case 'pile-reorder': {
@@ -354,6 +395,7 @@ export class Belief implements PileMap {
         const pile = this.piles[p]!;
         // Our own reorder: we know the new order. The opponent's: positions unknown, contents unchanged.
         pile.slots = e.order ? [...e.order] : Array(pile.size).fill(null);
+        this.pileOps.push({ op: 'reorder', p, order: e.order ? [...e.order] : null, at: this.processed });
         return;
       }
       case 'piles-to-center':
@@ -404,6 +446,10 @@ export class Belief implements PileMap {
       const pile = this.piles[p]!;
       if (pile.size > 0) pile.slots[0] = top;
       if (!pile.members.has(top)) this.addMember(p, top);
+      const last = this.pileOps.at(-1);
+      if (!(last?.op === 'look' && last.p === p && last.cards[0] === top && !last.whole && last.at === this.processed)) {
+        this.pileOps.push({ op: 'look', p, cards: [top], whole: false, at: this.processed });
+      }
     }
     return this;
   }
@@ -430,6 +476,7 @@ export class Belief implements PileMap {
     const [top] = pile.slots.splice(0, 1);
     pile.size--;
     const card = top ?? seen;
+    this.pileOps.push({ op: 'pop', p, from: 'top', card: card ?? null, hide: null, at: this.processed });
     if (card) {
       pile.members.delete(card);
       pile.placed.delete(card);
@@ -444,6 +491,7 @@ export class Belief implements PileMap {
   private removeCard(p: number, card: CardId, anyPosition: boolean): void {
     const pile = this.piles[p]!;
     const index = pile.slots.indexOf(card);
+    this.pileOps.push({ op: 'pop', p, from: index >= 0 ? index : anyPosition ? 'any' : 'top', card, hide: null, at: this.processed });
     if (index >= 0) pile.slots.splice(index, 1);
     else if (anyPosition) {
       // We know which card, not where it was: the remaining positions are uncertain.
@@ -457,6 +505,7 @@ export class Belief implements PileMap {
   /** A card we can't name leaves a pile from some position. */
   private removeUnknown(p: number): void {
     const pile = this.piles[p]!;
+    this.pileOps.push({ op: 'pop', p, from: 'any', card: null, hide: null, at: this.processed });
     pile.size--;
     pile.slots = Array(pile.size).fill(null);
     this.forgetMembers(p);
@@ -474,7 +523,10 @@ export class Belief implements PileMap {
 
   /** The opponent took a card we can't name from pile `p`. */
   private hideFrom(p: number): void {
-    this.hiddenLog.push({ kind: 'hide', pile: p, placed: [...this.piles[p]!.placed] });
+    const pop = this.pileOps.at(-1);
+    if (pop?.op !== 'pop' || pop.p !== p || pop.card !== null) throw new Error('a hidden card came from no pile');
+    pop.hide = this.hiddenLog.length;
+    this.hide({ kind: 'hide', pile: p, placed: [...this.piles[p]!.placed] });
     this.opponentHidden[p]! += 1;
     this.justHidden = p;
   }
@@ -482,7 +534,7 @@ export class Belief implements PileMap {
   /** A card left the opponent's hand (or was shown from it): which of their hidden cards was it? */
   private revealFromOpponent(card: CardId, hot: boolean, log = true): void {
     if (this.opponentKnown.delete(card)) return;
-    if (log) this.hiddenLog.push({ kind: 'reveal', card, just: hot && this.justHidden !== null ? this.justHidden : null });
+    if (log) this.hide({ kind: 'reveal', card, just: hot && this.justHidden !== null ? this.justHidden : null });
     const total = this.opponentHidden.reduce((a, b) => a + b, 0);
     if (total <= 1e-9) return; // not one of their hidden cards (e.g. it came from our hand)
     let weights: number[];

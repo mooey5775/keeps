@@ -508,7 +508,7 @@ export class Reviewer {
     add: (rows: number[][]) => void,
     key: string | null = null,
   ): void {
-    const job = (n: number): ReviewJob => ({ kind: 'worlds', state, me: seat, myLog: eventsFor(events, seat), publicLog: eventsFor(events, 'spectator'), commands, n });
+    const job = (n: number): ReviewJob => ({ kind: 'worlds', state, me: seat, myLog: eventsFor(events, seat), commands, n });
     // Each world plays every command: fewer worlds per job when there are many.
     const per = Math.max(2, Math.floor(CHUNK / Math.max(1, (commands?.length ?? 1) / 2)));
     for (let left = total; left > 0; left -= per) {

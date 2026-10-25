@@ -30,7 +30,7 @@ import {
 } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
 import { Belief } from '../src/belief.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { sampleHistory, sampleWorld, worldModel } from '../src/worlds.ts';
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -49,25 +49,41 @@ interface Round {
 
 interface Position {
   round: Round;
-  /** Commands played so far. */
+  /** Commands played so far this round. */
   k: number;
   state: GameState;
-  /** The round's events so far (the server's, secrets in full). */
+  /** The game's events so far (the server's, secrets in full), and this round's (from its start). */
   events: TraceEvent[];
+  roundEvents: TraceEvent[];
 }
 
 /** Cards whose plays hide things; the biased rounds favour them. */
 const HARD = ['acquisition', 'invocation', 'joker', 'duplicity', 'resurrection', 'offering', 'pickpocket', 'pluck', 'legerdemain', 'epiphany', 'prayer', 'hocus-pocus', 'juggling', 'sanction'];
 
-/** Every position of random two-player rounds (`bias`: moves using HARD cards that many times likelier). */
+/**
+ * Every position of random two-player rounds (`bias`: moves using HARD cards that many times likelier), in
+ * games of two rounds: the second round's positions have a log that starts long before their round.
+ */
 function* positions(rounds: number, seed: string, random: () => number, bias = 1): Generator<Position> {
-  for (let g = 0; g < rounds; g++) {
-    const dealt = newGame({ players: 2, seed: `${seed}-${g}`, marksToWin: 1 }) as { state: GameState; events: TraceEvent[] };
-    const round: Round = { start: dealt.state, startEvents: dealt.events, commands: [] };
+  for (let g = 0; g < rounds; g += 2) {
+    const dealt = newGame({ players: 2, seed: `${seed}-${g}`, marksToWin: 2 }) as { state: GameState; events: TraceEvent[] };
+    let round: Round = { start: dealt.state, startEvents: dealt.events.slice(dealt.events.findIndex((e) => e.payload.type === 'round-start')), commands: [] };
     let state = dealt.state;
     let events = dealt.events;
-    while (state.phase === 'playing' || state.phase === 'post-round') {
-      yield { round, k: round.commands.length, state, events };
+    let roundEvents = round.startEvents;
+    for (;;) {
+      if (state.phase === 'round-over') {
+        if (state.round >= 2) break;
+        const r = apply(state, 0, { type: 'next-round' });
+        if (!r.ok) throw new Error(r.error.message);
+        state = r.state;
+        events = [...events, ...r.events];
+        round = { start: state, startEvents: r.events.slice(r.events.findIndex((e) => e.payload.type === 'round-start')), commands: [] };
+        roundEvents = round.startEvents;
+        continue;
+      }
+      if (state.phase !== 'playing' && state.phase !== 'post-round') break;
+      yield { round, k: round.commands.length, state, events, roundEvents };
       const seat = state.prompts[0]!.seat;
       const legal = legalCommands(state, seat).filter((c) => c.type !== 'next-round');
       const weight = (c: Command) => (HARD.some((card) => JSON.stringify(c).includes(`"${card}"`)) ? bias : 1);
@@ -78,11 +94,22 @@ function* positions(rounds: number, seed: string, random: () => number, bias = 1
       round.commands.push({ seat, command });
       state = r.state;
       events = [...events, ...r.events];
+      roundEvents = [...roundEvents, ...r.events];
     }
   }
 }
 
-const same = (a: readonly TraceEvent[], b: readonly TraceEvent[]) => a.length === b.length && a.every((e, i) => JSON.stringify(e.payload) === JSON.stringify(b[i]!.payload));
+/**
+ * Events as a player compares them: the order of cards listed from a hand says nothing (with real cards,
+ * a hand has no order; the engine keeps the order cards came in, and lists hands so).
+ */
+const canon = (e: TraceEvent) => {
+  const p = e.payload;
+  if (p.type === 'look-hands' && p.hands) return JSON.stringify({ ...p, hands: p.hands.map((h) => ({ ...h, cards: [...h.cards].sort() })) });
+  if ((p.type === 'steal' && p.cards) || (p.type === 'discard' && p.from === 'hand')) return JSON.stringify({ ...p, cards: [...p.cards!].sort() });
+  return JSON.stringify(p);
+};
+const same = (a: readonly TraceEvent[], b: readonly TraceEvent[]) => a.length === b.length && a.every((e, i) => canon(e) === canon(b[i]!));
 
 /** Replays a history (a deal and the first `k` commands); null if a command doesn't apply. */
 function replay(start: GameState, startEvents: TraceEvent[], commands: Round['commands'], k: number): { state: GameState; events: TraceEvent[] } | null {
@@ -164,7 +191,7 @@ function places(state: GameState): Map<CardId, [PileId, number]> {
  */
 function possible(pos: Position, me: Seat, world: GameState, maxUnseen: number): boolean | null {
   const { round, k } = pos;
-  const myLog = eventsFor(pos.events, me);
+  const myLog = eventsFor(pos.roundEvents, me);
   const seen = seenInPiles(myLog);
   // Which pile is which is the world's: piles move only in public, so the physical pile now at a
   // position is the one the real round has there, under the world's identity.
@@ -227,7 +254,7 @@ describe('worlds, judged by replaying the engine', () => {
     for (const pos of positions(30, 'replay-truth', random, 4)) {
       const r = replay(pos.round.start, pos.round.startEvents, pos.round.commands, pos.k)!;
       expect(JSON.stringify(r.state)).toBe(JSON.stringify(pos.state));
-      for (const me of [0, 2] as Seat[]) expect(same(eventsFor(r.events, me), eventsFor(pos.events, me))).toBe(true);
+      for (const me of [0, 2] as Seat[]) expect(same(eventsFor(r.events, me), eventsFor(pos.roundEvents, me))).toBe(true);
       checked++;
     }
     expect(checked).toBeGreaterThan(1000);
@@ -236,7 +263,7 @@ describe('worlds, judged by replaying the engine', () => {
   // Not yet (2026-10-25: 18 of 4,935 worlds impossible). The sampler ignores two things the player saw:
   // Duplicity doing nothing ("no other Keep card in hand": no Keep card in their hand), and the order of a
   // hand Pluck shows (the engine keeps hands in the order cards came, so it tells which draw was which).
-  it.fails('every sampled world is possible: some history replays to the player\'s log and ends in it', () => {
+  it('every sampled world is possible: some history replays to the player\'s log and ends in it', () => {
     const random = rng(7);
     const report = new Map<string, number>();
     const examples: string[] = [];
@@ -247,16 +274,16 @@ describe('worlds, judged by replaying the engine', () => {
       for (const pos of positions(40, seed, random, bias)) {
         for (const me of [0, 2] as Seat[]) {
           const myLog = eventsFor(pos.events, me);
-          if (hiddenPileMoves(myLog, me) || random() > 0.35) continue;
+          if (hiddenPileMoves(eventsFor(pos.roundEvents, me), me) || random() > 0.35) continue;
           const truth = possible(pos, me, pos.state, 6);
           if (truth === null) continue;
           expect(truth, `the real world, turn ${pos.state.turnNumber}`).toBe(true);
           const view = viewFor(pos.state, me);
           const belief = new Belief(me, { sound: true });
           belief.update(myLog).observe(view);
-          const model = worldModel(pos.state, me, belief, view);
+          const model = worldModel(pos.state, me, belief, view, myLog);
           for (let s = 0; s < 3; s++) {
-            const world = sampleWorld(model, pos.state, belief, random);
+            const world = sampleWorld(model, random);
             const ok = possible(pos, me, world, 6);
             tested++;
             const kind = pos.state.prompts.find((p) => p.seat !== me)?.kind ?? 'the player deciding';
@@ -274,10 +301,227 @@ describe('worlds, judged by replaying the engine', () => {
     expect(impossible).toBe(0);
   }, 900_000);
 
-  // The rewrite's contract: worlds as whole histories. `sampleHistory` (to come) returns the deal and the
-  // opponent's hidden choices; replaying them must give the player's log and the world it samples, and the
-  // opponent's own log is then the replay's. Its distribution must match the posterior above, now over
-  // histories (what the opponent knows), not only what the player can't see.
-  it.todo('every sampled world comes with a history that replays to the player\'s log and to that world');
-  it.todo("sampled histories (the opponent's own log included) follow the exact posterior over histories");
+  it("every sampled world comes with a history that replays to the player's log, and to that world", () => {
+    const random = rng(9);
+    let checked = 0;
+    for (const pos of positions(30, 'histories', random, 4)) {
+      for (const me of [0, 2] as Seat[]) {
+        if (random() > 0.3) continue;
+        const myLog = eventsFor(pos.events, me);
+        const view = viewFor(pos.state, me);
+        const belief = new Belief(me, { sound: true }).update(myLog).observe(view);
+        const model = worldModel(pos.state, me, belief, view, myLog);
+        const opp = ((me + 2) % 4) as Seat;
+        for (let s = 0; s < 2; s++) {
+          const h = sampleHistory(model, random);
+          // Replayed independently: the player's log, the opponent's own log, and the world (but its fresh chance, and the ids the engine gives prompts).
+          let state = h.start;
+          let events: TraceEvent[] = [];
+          for (const { seat, command, rng: chance } of h.commands) {
+            const r = apply(chance ? { ...state, rng: chance } : state, seat, command);
+            expect(r.ok, JSON.stringify(command)).toBe(true);
+            if (!r.ok) break;
+            state = r.state;
+            events = [...events, ...r.events];
+          }
+          const mine = eventsFor(events, me);
+          const theirs = eventsFor(events, opp);
+          expect(same(mine, myLog.slice(myLog.length - mine.length))).toBe(true);
+          expect(h.logs[opp]!.slice(h.logs[opp]!.length - theirs.length).map(canon)).toEqual(theirs.map(canon));
+          expect(hiddenKey(state, me)).toBe(hiddenKey(h.world, me));
+          checked++;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThan(500);
+  }, 600_000);
+
+  it('sampled histories follow the exact posterior, enumerated through the engine', () => {
+    // Small positions: few cards left the piles unseen. Each history (an assignment of cards to those
+    // places, and the opponent's moves the player can't tell apart) is replayed; the places never taken
+    // are counted, not replayed (nothing reads them): for each σ, the ways to fill them as the shuffle can.
+    // The sampler's (σ, opponent's hand, their face-down cards) must come in the posterior's proportions.
+    const random = rng(31);
+    let pooled = 0;
+    let df = 0;
+    let tested = 0;
+    for (const pos of positions(300, 'posterior', random, 3)) {
+      if (tested === 25) break;
+      for (const me of [0, 2] as Seat[]) {
+        if (random() > 0.15 || tested === 25) continue;
+        const exact = posterior(pos, me);
+        if (!exact || exact.size < 3) continue;
+        const total = [...exact.values()].reduce((a, b) => a + b, 0);
+        const myLog = eventsFor(pos.events, me);
+        const view = viewFor(pos.state, me);
+        const belief = new Belief(me, { sound: true }).update(myLog).observe(view);
+        const model = worldModel(pos.state, me, belief, view, myLog);
+        const samples = 4000;
+        const seen = new Map<string, number>();
+        for (let s = 0; s < samples; s++) {
+          const key = historyKey(sampleHistory(model, random), me);
+          expect(exact.has(key), key).toBe(true);
+          seen.set(key, (seen.get(key) ?? 0) + 1);
+        }
+        let accE = 0, accO = 0;
+        for (const [k, c] of [...exact].sort((a, b) => a[1] - b[1])) {
+          accE += (c / total) * samples;
+          accO += seen.get(k) ?? 0;
+          if (accE >= 5) {
+            pooled += (accO - accE) ** 2 / accE;
+            df++;
+            accE = accO = 0;
+          }
+        }
+        df--;
+        tested++;
+      }
+    }
+    expect(tested).toBe(25);
+    console.log(`posterior: ${tested} positions, chi-square ${pooled.toFixed(1)} on ${df} degrees of freedom`);
+    expect(Math.abs((pooled - df) / Math.sqrt(2 * df))).toBeLessThan(4);
+  }, 1_800_000);
 });
+
+// -- The exact posterior, through the engine ---------------------------------------------------------
+
+const CHARACTERS = ['count', 'fool', 'friar'] as const;
+type PhysicalPlace = [number, number];
+
+/** What the posterior is over: σ (by physical pile), the opponent's hand, the cards they hid face down. */
+function key(sigma: readonly string[], state: GameState, opp: Seat): string {
+  const down = state.keeps.flatMap((keep) => keep.filter((c) => c.faceDown?.placedBy === opp).map((c) => c.id)).sort();
+  return JSON.stringify({ sigma, hand: [...state.hands[opp]!].sort(), down });
+}
+
+function historyKey(h: ReturnType<typeof sampleHistory>, me: Seat): string {
+  return key([0, 1, 2, 3].map((p) => h.start.pileAt[p as Seat]), h.world, ((me + 2) % 4) as Seat);
+}
+
+/**
+ * The exact posterior over (σ, the opponent's hand and face-down cards) for `me` at `pos`, each history
+ * counted once (null when the position is out of reach: hidden pile moves, a random steal from the
+ * opponent's hand, or more than 3 places left unseen).
+ */
+function posterior(pos: Position, me: Seat): Map<string, number> | null {
+  const { round, k } = pos;
+  const opp = ((me + 2) % 4) as Seat;
+  const myLog = eventsFor(pos.roundEvents, me);
+  if (hiddenPileMoves(myLog, me)) return null;
+  if (myLog.some((e) => e.payload.type === 'steal' && e.payload.from === opp && e.payload.count === 1)) return null;
+  const seen = seenInPiles(myLog);
+  // A face-up pile's top (Revelation) is in the view, not the log.
+  const view = viewFor(pos.state, me);
+  for (const pile of view.piles) if (pile.top) seen.add(pile.top);
+  // Physical piles are the deal's positions; places by [pile, index].
+  const dealt = new Map<CardId, PhysicalPlace>();
+  for (let p = 0; p < 4; p++) round.start.piles[round.start.pileAt[p as Seat]!].cards.forEach((c, i) => dealt.set(c.id, [p, i]));
+  // Which dealt cards each command took from the piles (first time out only).
+  const out = new Set<CardId>();
+  const takes: CardId[][] = [];
+  const befores: GameState[] = [];
+  let state = round.start;
+  const inPiles = (s: GameState) => new Set(Object.values(s.piles).flatMap((pile) => pile.cards.map((c) => c.id)));
+  for (const { seat, command } of round.commands.slice(0, k)) {
+    befores.push(state);
+    const before = inPiles(state);
+    const r = apply(state, seat, command);
+    if (!r.ok) throw new Error(r.error.message);
+    const after = inPiles(r.state);
+    takes.push([...before].filter((c) => !after.has(c) && !out.has(c)));
+    for (const c of before) if (!after.has(c)) out.add(c);
+    state = r.state;
+  }
+  const unseen = new Set([...out].filter((c) => !seen.has(c)));
+  if (unseen.size < 2 || unseen.size > 3) return null;
+  const pinned = new Map([...dealt].filter(([c]) => seen.has(c)));
+  const untouched = [0, 1, 2, 3].map((p) => [...dealt].filter(([c, [q]]) => q === p && !seen.has(c) && !out.has(c)).length);
+  const pool = CARD_IDS.filter((c) => !seen.has(c));
+  const startSeen = eventsFor(round.startEvents, me).length;
+  const result = new Map<string, number>();
+  let work = 0;
+  const leaf = (s: GameState, bound: Map<CardId, PhysicalPlace>) => {
+    // Every σ, with the ways to fill the places never taken.
+    const known = [...pinned, ...bound];
+    const left = new Set(pool.filter((c) => ![...bound.keys()].includes(c)));
+    for (const sigma of permutations(['count', 'fool', 'friar', 'mask'])) {
+      const mask = sigma.indexOf('mask');
+      const count = [0, 1, 2, 3].map(() => [0, 0, 0]);
+      let ok = true;
+      for (const [c, [p]] of known) {
+        const x = CHARACTERS.indexOf(CARDS[c].character as (typeof CHARACTERS)[number]);
+        if (p !== mask && sigma[p] !== CARDS[c].character) ok = false;
+        count[p]![x]! += 1;
+      }
+      if (!ok) continue;
+      let ways = 1;
+      for (let x = 0; x < 3 && ways > 0; x++) {
+        const own = sigma.indexOf(CHARACTERS[x]!);
+        const needMask = 3 - count[mask]![x]!;
+        const rest = [...left].filter((c) => CARDS[c].character === CHARACTERS[x]).length;
+        if (needMask < 0 || rest !== needMask + (9 - count[own]![x]!) || 9 - count[own]![x]! !== untouched[own]!) ways = 0;
+        else ways *= choose(rest, needMask);
+      }
+      if (ways === 0 || untouched[mask] !== [0, 1, 2].reduce((a, x) => a + 3 - count[mask]![x]!, 0)) continue;
+      for (const u of untouched) ways *= factorial(u);
+      const sigmaIds = sigma.map((id) => id as PileId);
+      const kk = key(sigmaIds, s, opp);
+      result.set(kk, (result.get(kk) ?? 0) + ways);
+    }
+  };
+  const go = (s: GameState, j: number, cursor: number, bound: Map<CardId, PhysicalPlace>, wanted: CardId[]) => {
+    if (++work > 3e5) return;
+    if (wanted.length > 0) {
+      // A place about to be taken unseen: each card it could hold. Piles move only in public here, so the
+      // place is where the real round has it now; the card swaps in from wherever it waits in a pile
+      // (neither has been read yet, so this is the same as dealing them so).
+      const [real, ...rest] = wanted;
+      const [id, index] = where(befores[j]!, real!)!;
+      for (const c of pool) {
+        if (bound.has(c)) continue;
+        const t = structuredClone(s);
+        const at = where(t, c);
+        if (!at) continue;
+        const here = t.piles[id].cards[index]!;
+        const there = t.piles[at[0]].cards[at[1]]!;
+        [here.id, there.id] = [c, here.id];
+        go(t, j, cursor, new Map([...bound, [c, dealt.get(real!)!]]), rest);
+      }
+      return;
+    }
+    if (j === k) {
+      if (cursor === myLog.length) leaf(s, bound);
+      return;
+    }
+    const { seat, command } = round.commands[j]!;
+    const next = (t: GameState, events: TraceEvent[]) => {
+      const mine = eventsFor(events, me);
+      if (same(mine, myLog.slice(cursor, cursor + mine.length))) go(t, j + 1, cursor + mine.length, bound, j + 1 < k ? takes[j + 1]!.filter((c) => unseen.has(c)) : []);
+    };
+    for (const c of seat === me ? [command] : legalCommands(s, seat)) {
+      const r = apply(s, seat, c, { trusted: true });
+      if (r.ok) next(r.state, r.events);
+    }
+  };
+  go(structuredClone(round.start), 0, startSeen, new Map(), takes[0]!.filter((c) => unseen.has(c)));
+  return work > 3e5 ? null : result;
+}
+
+/** Where a card is in the piles: [pile id, index], or null. */
+function where(state: GameState, card: CardId): [PileId, number] | null {
+  for (const id of Object.keys(state.piles) as PileId[]) {
+    const i = state.piles[id].cards.findIndex((c) => c.id === card);
+    if (i >= 0) return [id, i];
+  }
+  return null;
+}
+
+const FACTORIALS = [1];
+function factorial(n: number): number {
+  while (FACTORIALS.length <= n) FACTORIALS.push(FACTORIALS[FACTORIALS.length - 1]! * FACTORIALS.length);
+  return FACTORIALS[n]!;
+}
+
+function choose(n: number, k: number): number {
+  return k < 0 || k > n ? 0 : factorial(n) / (factorial(k) * factorial(n - k));
+}
