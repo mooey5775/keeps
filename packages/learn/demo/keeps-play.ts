@@ -4,7 +4,8 @@
 // (SEARCH_ROLLOUTS=greedy for the policy's top move; SEARCH=off for no search: the network plays directly).
 //
 //   node keeps-play.ts new <id> <0|2>   start game <id>; you sit at seat 0 or 2 (the bot takes the other)
-//   node keeps-play.ts show <id>        your view, the prompt, your numbered options, the recent log
+//   node keeps-play.ts show <id>        your view, the prompt, your numbered options, the recent log (a bot reply
+//                                       cut short goes on first: every move is saved as it is made)
 //   node keeps-play.ts move <id> <n>    play option n; the bot answers until it's your decision again
 //   node keeps-play.ts log <id>         the whole log so far
 //   node keeps-play.ts cards            every card's rules text
@@ -103,8 +104,8 @@ class Game {
     return !this.over && this.state.prompts.some((p) => p.seat === seat);
   }
 
-  /** The bot moves until it's the human's decision or the round is over. */
-  async botPlays(): Promise<void> {
+  /** The bot moves until it's the human's decision or the round is over (`saved` after each move). */
+  async botPlays(saved?: () => void): Promise<void> {
     while (this.waitsOn(this.bot) && !this.waitsOn(this.saved.human)) {
       // SEARCH=off: the network plays directly (as its weights' threshold says), like the live site.
       const command =
@@ -113,6 +114,7 @@ class Game {
           : await searchChoose(this.player, this.state, this.events, (pool ??= new RolloutPool(Math.max(1, availableParallelism() - 4), WEIGHTS, process.env.SEARCH_ROLLOUTS !== 'greedy')));
       this.saved.commands.push({ seat: this.bot, command });
       this.applyRaw(this.bot, command);
+      saved?.();
     }
   }
 
@@ -203,6 +205,8 @@ try {
     }
     case 'show': {
       const game = load(id!);
+      // A bot reply cut short (the command timed out) goes on from where it was saved.
+      await game.botPlays(() => save(game, id!));
       game.saved.shown = Math.max(0, game.saved.shown - 15); // show some context again
       console.log(game.render());
       save(game, id!);
@@ -212,7 +216,8 @@ try {
       const game = load(id!);
       if (game.over) throw new Error('the round is over');
       game.humanMove(Number(arg));
-      await game.botPlays();
+      save(game, id!);
+      await game.botPlays(() => save(game, id!));
       console.log(game.render());
       save(game, id!);
       break;
