@@ -1,5 +1,6 @@
-// A command-line Keeps game against the bot playing the best-Q move of its search (search-bot.ts): heads-up, one round per game.
-// The bot: BOT=<name> plays weights/<name>.bin (vrpo1 by default), SEARCH_WORLDS worlds (512), sampled rollouts
+// A command-line Keeps game against the bot playing its search (search-bot.ts) as Midstrike does: a move sampled from one
+// damped policy-improvement step (SEARCH_MODE=best-q: the best-Q move), heads-up, one round per game.
+// The bot: BOT=<name> plays weights/<name>.bin (vrpo1 by default), SEARCH_WORLDS worlds (128), sampled rollouts
 // (SEARCH_ROLLOUTS=greedy for the policy's top move; SEARCH=off for no search: the network plays directly).
 //
 //   node keeps-play.ts new <id> <0|2>   start game <id>; you sit at seat 0 or 2 (the bot takes the other)
@@ -32,8 +33,8 @@ import { Policy } from '../src/policy.ts';
 import { availableParallelism } from 'node:os';
 import { appendFileSync } from 'node:fs';
 import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
-setSearchMode('best-q');
-setWorlds(Number(process.env.SEARCH_WORLDS ?? 512));
+setSearchMode(process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped');
+setWorlds(Number(process.env.SEARCH_WORLDS ?? 128));
 // The search's reasoning shows the bot's hand: it goes to a file, not the player's screen.
 setSearchLog((line) => appendFileSync(join(import.meta.dirname, 'data', 'cli-search.log'), line + '\n'));
 import { logLines } from '../../web/src/game/log.ts';
