@@ -260,9 +260,12 @@ export class Reviewer {
   }
 
   /**
-   * The live game searched `state` for `seat` (the bot's move, or training mode's advice): its estimate,
-   * the chance of the move it picked, is that player's estimate there. It replaces the review's own work
-   * for that point, which is dropped if it hasn't started.
+   * The live game searched `state` for `seat` (the bot's move, or training mode's advice), so it has that
+   * player's estimate there: its options' chances weighted by how likely the network is to play each, the
+   * same measure as the review's own (the network's usual move, then play on), in the search's worlds. Not
+   * the picked move's chance: that assumes the best move and, as the best of several noisy estimates, reads
+   * high (about 3 points on average, up to 15), which would make the line jump at the searched points.
+   * It replaces the review's own work for that point, which is dropped if it hasn't started.
    */
   searched(state: GameState, seat: Seat, report: Promise<SearchReport | null>): void {
     const at = this.positions.get(state);
@@ -274,10 +277,11 @@ export class Reviewer {
     report
       .catch(() => null)
       .then((r) => {
-        if (!r?.outcomes || r.after === null || this.games.get(g.game) !== g) return;
+        if (!r?.outcomes || !r.moves.length || this.games.get(g.game) !== g) return;
         const t = round.moves[index]?.info.get(seat);
         if (!t) return;
-        t.wins = r.after;
+        const total = r.moves.reduce((a, m) => a + m.policy, 0);
+        t.wins = r.moves.reduce((a, m) => a + (m.policy / total) * m.win, 0);
         t.n = 1;
         t.fixed = true;
         round.pending -= this.pool.drop(g.id, `${round.round}:${index}:${seat}`);
