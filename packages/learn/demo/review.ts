@@ -46,6 +46,8 @@ interface Task {
   group: string;
   /** The round it's for (work for one round can be set aside). */
   tag: number;
+  /** What it estimates (work for one estimate can be dropped once the live game has it). */
+  key: string | null;
   job: ReviewJob;
   done: (result: ReviewResult | null) => void;
   cancelled: boolean;
@@ -67,8 +69,8 @@ export class ReviewPool {
     this.weights = weights;
   }
 
-  submit(group: string, tag: number, job: ReviewJob, done: (result: ReviewResult | null) => void): void {
-    const task: Task = { id: this.next++, group, tag, job, done, cancelled: false };
+  submit(group: string, tag: number, job: ReviewJob, done: (result: ReviewResult | null) => void, key: string | null = null): void {
+    const task: Task = { id: this.next++, group, tag, key, job, done, cancelled: false };
     if (!this.queues.has(group)) {
       this.queues.set(group, []);
       this.turn.push(group);
@@ -94,6 +96,15 @@ export class ReviewPool {
     const out = queue.filter((t) => t.tag === tag);
     this.queues.set(group, queue.filter((t) => t.tag !== tag));
     return out.map((t) => ({ job: t.job, done: t.done }));
+  }
+
+  /** Drops the group's queued jobs for one estimate (the live game worked it out); running ones finish. How many were dropped. */
+  drop(group: string, key: string): number {
+    const queue = this.queues.get(group);
+    if (!queue) return 0;
+    const keep = queue.filter((t) => t.key !== key);
+    this.queues.set(group, keep);
+    return queue.length - keep.length;
   }
 
   /** Jobs queued or running, for the status page and tests. */
@@ -176,6 +187,8 @@ export class ReviewPool {
 interface Tally {
   wins: number;
   n: number;
+  /** Taken from the live game's search: playouts finishing later don't change it. */
+  fixed?: boolean;
 }
 interface MoveData {
   turn: number;
@@ -232,6 +245,10 @@ export interface ReviewedGame {
 
 export class Reviewer {
   private games = new WeakMap<ReviewedGame, GameData>();
+  /** The position after each move of a reviewed round, by the game's state there. */
+  private positions = new WeakMap<GameState, { g: GameData; round: RoundData; index: number }>();
+  /** Searches of a position that started before the move leading to it was recorded (training mode's advice starts at once). */
+  private early = new WeakMap<GameState, { seat: Seat; report: Promise<SearchReport | null> }[]>();
 
   private readonly pool: ReviewPool;
   /** Sends a review to the person. */
@@ -240,6 +257,32 @@ export class Reviewer {
   constructor(pool: ReviewPool, send: (game: ReviewedGame, review: RoundReview) => void) {
     this.pool = pool;
     this.send = send;
+  }
+
+  /**
+   * The live game searched `state` for `seat` (the bot's move, or training mode's advice): its estimate,
+   * the chance of the move it picked, is that player's estimate there. It replaces the review's own work
+   * for that point, which is dropped if it hasn't started.
+   */
+  searched(state: GameState, seat: Seat, report: Promise<SearchReport | null>): void {
+    const at = this.positions.get(state);
+    if (!at) {
+      this.early.set(state, [...(this.early.get(state) ?? []), { seat, report }]);
+      return;
+    }
+    const { g, round, index } = at;
+    report
+      .catch(() => null)
+      .then((r) => {
+        if (!r?.outcomes || r.after === null || this.games.get(g.game) !== g) return;
+        const t = round.moves[index]?.info.get(seat);
+        if (!t) return;
+        t.wins = r.after;
+        t.n = 1;
+        t.fixed = true;
+        round.pending -= this.pool.drop(g.id, `${round.round}:${index}:${seat}`);
+        this.updated(g, round);
+      });
   }
 
   /** Whether the game is being reviewed. */
@@ -308,6 +351,8 @@ export class Reviewer {
     newEvents: TraceEvent[],
     /** The live game's search of this decision, if it ran one (training mode's advice, or the bot's own move). */
     searched?: Promise<SearchReport | null>,
+    /** The game's own object for `after` (live searches of the next decision are keyed by it). */
+    afterInGame?: GameState,
   ): void {
     const g = this.games.get(game);
     if (!g || !(before.phase === 'playing' || before.phase === 'post-round')) return;
@@ -391,12 +436,30 @@ export class Reviewer {
           move.truth.n += r.n;
         }
       });
+      // Each player's own estimate. When the live game searches this position for that player (the
+      // bot's move, training mode's advice), the search's estimate replaces this work (see searched()).
       for (const s of [g.person, g.bot]) {
-        this.worlds(g, round, after, s, roundEvents, null, SIZES.worlds, (rows) => {
-          const t = move.info.get(s)!;
-          t.wins += rows.reduce((a, r) => a + r[0]!, 0);
-          t.n += rows.length;
-        });
+        this.worlds(
+          g,
+          round,
+          after,
+          s,
+          roundEvents,
+          null,
+          SIZES.worlds,
+          (rows) => {
+            const t = move.info.get(s)!;
+            if (t.fixed) return;
+            t.wins += rows.reduce((a, r) => a + r[0]!, 0);
+            t.n += rows.length;
+          },
+          `${round.round}:${index}:${s}`,
+        );
+      }
+      for (const state of [after, ...(afterInGame ? [afterInGame] : [])]) {
+        this.positions.set(state, { g, round, index });
+        for (const { seat: s, report } of this.early.get(state) ?? []) this.searched(state, s, report);
+        this.early.delete(state);
       }
     } else {
       // The round is over: nothing left to estimate.
@@ -430,17 +493,33 @@ export class Reviewer {
   }
 
   /** Worlds from `seat`'s information in `state`: each played on (commands null), or once per command. */
-  private worlds(g: GameData, round: RoundData, state: GameState, seat: Seat, events: TraceEvent[], commands: Command[] | null, total: number, add: (rows: number[][]) => void): void {
+  private worlds(
+    g: GameData,
+    round: RoundData,
+    state: GameState,
+    seat: Seat,
+    events: TraceEvent[],
+    commands: Command[] | null,
+    total: number,
+    add: (rows: number[][]) => void,
+    key: string | null = null,
+  ): void {
     const job = (n: number): ReviewJob => ({ kind: 'worlds', state, me: seat, myLog: eventsFor(events, seat), publicLog: eventsFor(events, 'spectator'), commands, n });
     // Each world plays every command: fewer worlds per job when there are many.
     const per = Math.max(2, Math.floor(CHUNK / Math.max(1, (commands?.length ?? 1) / 2)));
     for (let left = total; left > 0; left -= per) {
       round.pending++;
-      this.pool.submit(g.id, round.round, job(Math.min(per, left)), (result) => {
-        round.pending--;
-        if (result && 'rows' in result) add(result.rows);
-        this.updated(g, round);
-      });
+      this.pool.submit(
+        g.id,
+        round.round,
+        job(Math.min(per, left)),
+        (result) => {
+          round.pending--;
+          if (result && 'rows' in result) add(result.rows);
+          this.updated(g, round);
+        },
+        key,
+      );
     }
   }
 

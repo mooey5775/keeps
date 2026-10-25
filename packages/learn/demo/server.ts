@@ -303,9 +303,12 @@ type RoomInternals = {
 // The live game's searches, by the position they searched (the bot's own moves, training mode's advice):
 // the round review reuses them rather than search again.
 const liveSearches = new WeakMap<GameState, Promise<SearchReport | null>>();
-function liveSearch(state: GameState): (report: SearchReport | null) => void {
+function liveSearch(state: GameState, seat: Seat): (report: SearchReport | null) => void {
   let resolve!: (report: SearchReport | null) => void;
-  liveSearches.set(state, new Promise((r) => (resolve = r)));
+  const report = new Promise<SearchReport | null>((r) => (resolve = r));
+  liveSearches.set(state, report);
+  // Also the seat's own estimate of the position, for the round review's lines.
+  reviewer?.searched(state, seat, report);
   return resolve;
 }
 // SEARCH=off: the room's own bot plays instead, straight from its network (no search, instant moves).
@@ -327,7 +330,7 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
     const error = this.command(player, bot.choose(game.state, game.events as never));
     if (error !== null) console.error(`room ${this.code}: the network's own move failed too: ${error}`);
   };
-  const found = liveSearch(state);
+  const found = liveSearch(state, bot.seat);
   searchChoose(bot, state, game.events as never, pool, (r) => {
     record(this.code, r);
     found(r);
@@ -351,7 +354,7 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
 // "thinking" until it's ready, and falls back to the network's suggestion if it fails).
 if (SEARCH)
   (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) => {
-    const found = liveSearch(state);
+    const found = liveSearch(state, bot.seat);
     return searchAdvise(bot, state, events, pool, found).finally(() => found(null));
   };
 
@@ -410,7 +413,10 @@ if (reviewer) {
     if (!reviewer.has(game)) return error;
     // The move's own result, recomputed (the engine is deterministic): the bot may already have moved since.
     const r = apply(before, player.seat as Seat, cmd);
-    if (r.ok) reviewer.moved(game, before, player.seat as Seat, cmd, r.state, [...eventsBefore, ...r.events], r.events, liveSearches.get(before));
+    // The game's own object for the position after the move (searches of the next decision are keyed by it).
+    const history = (game as unknown as { history: { state: GameState }[] }).history;
+    const afterInGame = history.at(-1)?.state === before ? game.state : undefined;
+    if (r.ok) reviewer.moved(game, before, player.seat as Seat, cmd, r.state, [...eventsBefore, ...r.events], r.events, liveSearches.get(before), afterInGame);
     return error;
   };
   // The person going away sets the round in play aside; coming back (the game sent afresh) resumes it.
