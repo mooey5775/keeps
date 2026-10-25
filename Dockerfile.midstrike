@@ -44,6 +44,6 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 
 # The admin password (for /bot/) comes from the ADMIN_TOKEN secret, never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike
+    BOT=midstrike BOT_NAME=Midstrike SEARCH_WORLDS=128 SEARCH_ROLLOUTS=sampled
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]
