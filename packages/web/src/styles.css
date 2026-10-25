@@ -1310,10 +1310,151 @@ a.buy:hover {
   font-size: 11px;
 }
 
-.review-at {
+.review-plot {
+  position: relative;
+}
+
+.review-chart circle.dot {
+  stroke: var(--bg-raised);
+  stroke-width: 1.5;
+}
+
+.review-chart circle.dot.truth {
+  fill: var(--gold-bright);
+}
+
+.review-chart circle.dot.you {
+  fill: var(--blue);
+}
+
+.review-chart circle.dot.bot {
+  fill: var(--danger);
+}
+
+/* The hovered move: what it did, the decision it made, the three chances after it. */
+.review-tip {
+  position: absolute;
+  top: 0.4rem;
+  width: min(320px, 70%);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.65rem;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.5);
+  pointer-events: none;
+  display: grid;
+  gap: 0.35rem;
   font-size: 0.82rem;
+  z-index: 1;
+}
+
+.review-tip p {
+  margin: 0;
+}
+
+.review-tip .tip-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.review-tip .tip-head .chip {
+  font-weight: normal;
+  font-size: 0.72rem;
+  border: 1px solid;
+  border-radius: 999px;
+  padding: 0 0.5em;
+}
+
+.review-tip .chip.good {
+  color: var(--ok);
+}
+
+.review-tip .chip.warn {
+  color: var(--gold);
+}
+
+.review-tip .chip.bad {
+  color: var(--danger);
+}
+
+.review-tip .chip.info {
+  color: var(--blue);
+}
+
+.review-tip .tip-log {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   color: var(--muted);
+  display: grid;
+  gap: 0.1rem;
+}
+
+.review-tip .tip-decision {
+  display: grid;
+  gap: 0.25rem;
+  border-top: 1px solid var(--line);
+  padding-top: 0.3rem;
+}
+
+.review-tip .tip-decision strong {
+  color: var(--gold-bright);
+  font-weight: normal;
+}
+
+.review-tip .tip-nums {
+  display: block;
+  color: var(--muted);
+  font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
+}
+
+.review-tip .tip-values {
+  border-collapse: collapse;
+  border-top: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+
+.review-tip .tip-values th {
+  text-align: left;
+  font-weight: normal;
+  padding: 0.2rem 0.5rem 0 0;
+  white-space: nowrap;
+}
+
+.review-tip .tip-values td {
+  text-align: right;
+  padding: 0.2rem 0 0 0.4rem;
+}
+
+.review-tip .key {
+  display: inline-block;
+  width: 12px;
+  border-top: 3px solid;
+  margin-right: 0.4em;
+  vertical-align: middle;
+}
+
+.review-tip .key.truth {
+  border-color: var(--gold-bright);
+}
+
+.review-tip .key.you {
+  border-color: var(--blue);
+}
+
+.review-tip .key.bot {
+  border-color: var(--danger);
+}
+
+.review-tip .up {
+  color: var(--ok);
+}
+
+.review-tip .down {
+  color: var(--danger);
 }
 
 .review-turn {

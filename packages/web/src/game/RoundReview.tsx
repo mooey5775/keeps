@@ -2,7 +2,7 @@ import type { Seat } from '@keeps/engine';
 import type { RoundReview } from '@keeps/protocol';
 import { useMemo, useState } from 'react';
 import { logLines } from './log.ts';
-import { makeNames } from './options.ts';
+import { makeNames, type Names } from './options.ts';
 
 // After a round against the bot: your chance of winning it after every move (as it really was, as you
 // could tell, as the bot could tell), and every decision of the round ranked by the bot, as training
@@ -72,7 +72,7 @@ export function RoundReviewView({ review, names, onClose }: { review: RoundRevie
             {flags.length > 0 && ` (${flags.join(', ')})`}.
           </p>
         )}
-        <Chart review={review} bot={bot} />
+        <Chart review={review} bot={bot} logNames={logNames} />
         <p className="note">
           At each decision, the options as {bot} ranked them from what the deciding player knew, with each one's chance of winning the round for that
           player: as they could tell, and played out with every card known. By each turn: your chance at its end, as it really was, as you could tell, and
@@ -155,7 +155,7 @@ function Ranking({ decision, mine, bot }: { decision: RoundReview['decisions'][n
 }
 
 /** Your chance of winning the round after every move: as it really was, as you could tell, as the bot could tell. */
-function Chart({ review, bot }: { review: RoundReview; bot: string }) {
+function Chart({ review, bot, logNames }: { review: RoundReview; bot: string; logNames: Names }) {
   const [at, setAt] = useState<number | null>(null);
   const moves = review.moves;
   if (moves.length < 2) return null;
@@ -178,7 +178,11 @@ function Chart({ review, bot }: { review: RoundReview; bot: string }) {
     return d;
   };
   const turnStarts = moves.flatMap((m, i) => (i === 0 || moves[i - 1]!.turn !== m.turn ? [i] : []));
-  const move = at === null ? null : moves[at]!;
+  const pick = (e: React.PointerEvent<SVGSVGElement>) => {
+    const box = e.currentTarget.getBoundingClientRect();
+    const i = Math.round(((((e.clientX - box.left) / box.width) * W - L) / (W - L - R)) * (moves.length - 1));
+    setAt(Math.max(0, Math.min(moves.length - 1, i)));
+  };
   return (
     <div className="review-chart">
       <div className="legend">
@@ -195,40 +199,116 @@ function Chart({ review, bot }: { review: RoundReview; bot: string }) {
           As {bot} could tell
         </span>
       </div>
-      <svg
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label="Your chance of winning the round after every move"
-        onPointerMove={(e) => {
-          const box = e.currentTarget.getBoundingClientRect();
-          const i = Math.round(((((e.clientX - box.left) / box.width) * W - L) / (W - L - R)) * (moves.length - 1));
-          setAt(Math.max(0, Math.min(moves.length - 1, i)));
-        }}
-        onPointerLeave={() => setAt(null)}
-      >
-        {[0, 0.25, 0.5, 0.75, 1].map((v) => (
-          <g key={v}>
-            <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={v === 0.5 ? 'mid' : 'grid'} />
-            <text x={L - 8} y={y(v) + 4} textAnchor="end">
-              {v * 100}%
+      <div className="review-plot">
+        <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Your chance of winning the round after every move" onPointerMove={pick} onPointerDown={pick} onPointerLeave={() => setAt(null)}>
+          {[0, 0.25, 0.5, 0.75, 1].map((v) => (
+            <g key={v}>
+              <line x1={L} x2={W - R} y1={y(v)} y2={y(v)} className={v === 0.5 ? 'mid' : 'grid'} />
+              <text x={L - 8} y={y(v) + 4} textAnchor="end">
+                {v * 100}%
+              </text>
+            </g>
+          ))}
+          {turnStarts.map((i) => (
+            <text key={i} x={x(i)} y={H - 10} textAnchor="middle">
+              {moves[i]!.turn}
             </text>
-          </g>
-        ))}
-        {turnStarts.map((i) => (
-          <text key={i} x={x(i)} y={H - 10} textAnchor="middle">
-            {moves[i]!.turn}
-          </text>
-        ))}
-        <path d={line('theirs')} className="bot" />
-        <path d={line('mine')} className="you" />
-        <path d={line('truth')} className="truth" />
-        {at !== null && <line x1={x(at)} x2={x(at)} y1={T} y2={H - B} className="cursor" />}
-      </svg>
-      {move && (
-        <p className="review-at">
-          Turn {move.turn}: real {pct(move.truth)} · you {pct(move.mine)} · {bot} {pct(move.theirs)}
-        </p>
+          ))}
+          <path d={line('theirs')} className="bot" />
+          <path d={line('mine')} className="you" />
+          <path d={line('truth')} className="truth" />
+          {at !== null && (
+            <g>
+              <line x1={x(at)} x2={x(at)} y1={T} y2={H - B} className="cursor" />
+              {(['theirs', 'mine', 'truth'] as const).map((key) => {
+                const v = moves[at]![key];
+                return v === null ? null : <circle key={key} cx={x(at)} cy={y(v)} r={4.5} className={`dot ${key === 'truth' ? 'truth' : key === 'mine' ? 'you' : 'bot'}`} />;
+              })}
+            </g>
+          )}
+        </svg>
+        {at !== null && <ChartTip review={review} at={at} bot={bot} logNames={logNames} left={x(at) / W} />}
+      </div>
+    </div>
+  );
+}
+
+/** What the hovered move was and did, the three chances after it and how each moved, and the decision it made. */
+function ChartTip({ review, at, bot, logNames, left }: { review: RoundReview; at: number; bot: string; logNames: Names; left: number }) {
+  const me = review.seat;
+  const move = review.moves[at]!;
+  const before = at > 0 ? review.moves[at - 1]! : null;
+  const lines = logLines(move.events, logNames).filter((l) => !l.heading);
+  const decision = review.decisions.find((d) => d.move === at);
+  const change = (key: 'truth' | 'mine' | 'theirs') => {
+    const now = move[key];
+    const was = before?.[key] ?? null;
+    if (now === null || was === null) return null;
+    const d = Math.round(100 * (now - was));
+    return d === 0 ? null : <span className={d > 0 ? 'up' : 'down'}>{d > 0 ? `+${d}` : `−${-d}`}</span>;
+  };
+  const mine = decision?.seat === me;
+  const played = decision?.options.find((o) => o.played);
+  const first = decision?.options[0];
+  const verdict = mine && decision?.verdict ? VERDICTS[decision.verdict] : null;
+  const both = (o: { known: number | null; truth: number | null }) =>
+    `${mine ? 'Your' : 'Its'} chance: ${pct(o.known)} as ${mine ? 'you' : 'it'} knew · ${pct(o.truth)} with every card`;
+  return (
+    <div className={`review-tip${left > 0.55 ? ' flip' : ''}`} style={left > 0.55 ? { right: `${(1 - left) * 100 + 1.5}%` } : { left: `${left * 100 + 1.5}%` }}>
+      <p className="tip-head">
+        Turn {move.turn} · {move.seat === me ? 'You' : bot}
+        {verdict && <span className={`chip ${verdict.tone}`}>{verdict.label}</span>}
+      </p>
+      {lines.length > 0 && (
+        <ul className="tip-log">
+          {lines.slice(0, 5).map((l) => (
+            <li key={l.seq}>{l.text}</li>
+          ))}
+          {lines.length > 5 && <li>…</li>}
+        </ul>
       )}
+      {decision && played && (
+        <div className="tip-decision">
+          <p>
+            {mine ? 'You played' : `${bot} played`}: <strong>{played.label}</strong>
+            <span className="tip-nums">{both(played)}</span>
+          </p>
+          {mine && first && first !== played && (
+            <p>
+              {bot} would play: <strong>{first.label}</strong>
+              <span className="tip-nums">{both(first)}</span>
+            </p>
+          )}
+        </div>
+      )}
+      <table className="tip-values">
+        <tbody>
+          <tr>
+            <th>
+              <i className="key truth" />
+              Your real chance
+            </th>
+            <td>{pct(move.truth)}</td>
+            <td>{change('truth')}</td>
+          </tr>
+          <tr>
+            <th>
+              <i className="key you" />
+              As you could tell
+            </th>
+            <td>{pct(move.mine)}</td>
+            <td>{change('mine')}</td>
+          </tr>
+          <tr>
+            <th>
+              <i className="key bot" />
+              As {bot} could tell
+            </th>
+            <td>{pct(move.theirs)}</td>
+            <td>{change('theirs')}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }
