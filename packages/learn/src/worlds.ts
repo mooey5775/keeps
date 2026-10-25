@@ -225,7 +225,9 @@ export function sampleWorld(model: WorldModel, random: () => number): GameState 
  * from an exact proposal over a superset is exact, and whatever the model misses costs only a retry.
  */
 export function sampleHistory(model: WorldModel, random: () => number): History {
-  for (let attempt = 0; attempt < 20000; attempt++) {
+  // A position the proposal can't reach is a bug: give up quickly (callers fall back to the network alone).
+  const deadline = Date.now() + 3000;
+  for (let attempt = 0; attempt < 20000 && (attempt % 64 !== 0 || Date.now() < deadline); attempt++) {
     model.stats.plans++;
     const result = tryHistory(model, random);
     if (typeof result !== 'string') {
