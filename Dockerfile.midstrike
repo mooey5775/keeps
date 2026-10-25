@@ -1,11 +1,11 @@
 # Midstrike: the game with the vrpo1 bot (packages/learn/demo), deployed on its own app
 # (fly.midstrike.toml) so the production site is untouched. Like the main Dockerfile, Node 24 runs
 # the TypeScript sources directly; only the web client is built.
-# The bot plays its network directly (SEARCH=off), moves under 20% dropped: the search is off until its
-# sampled worlds carry the opponent's own history (in them the opponent played from the public log only,
-# so badly that the search was over-optimistic). Training mode's advice is the network's too. Its
-# weights are baked in: export the policy first, from bot/ (with search, export it unsharpened):
-#   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> --threshold 0.2 \
+# The bot searches: worlds sampled as whole histories (the opponent plays from their own log in each),
+# 128 per decision, and a move sampled from one damped policy-improvement step; training mode's advice
+# comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened
+# (with search off, add --threshold 0.2):
+#   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> \
 #     --out ../packages/learn/demo/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
 
 FROM node:24-slim AS build
@@ -44,6 +44,6 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 
 # The admin password (for /bot/) comes from the ADMIN_TOKEN secret, never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike SEARCH=off
+    BOT=midstrike BOT_NAME=Midstrike
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]
