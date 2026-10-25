@@ -118,7 +118,7 @@ async function refresh() {
   const last = reports[reports.length - 1];
   const searched = [...reports].reverse().find((r) => r.after !== null);
   document.getElementById('sub').textContent =
-    `Room ${code} · bot at seat ${last.seat} · ${last.mode === 'best-q' ? 'plays the best rollout move' : 'samples the search policy'} · ${reports.length} bot decisions`;
+    `Room ${code} · bot at seat ${last.seat} · ${last.mode === 'best-q' ? 'plays the best rollout move' : 'samples the damped search policy'} · ${reports.length} bot decisions`;
   document.getElementById('before').textContent = pct(last.before);
   document.getElementById('after').textContent = pct(searched ? searched.after : null);
   document.getElementById('think').textContent = last.after === null ? 'forced move' : `${(last.ms / 1000).toFixed(1)} s`;

@@ -3,7 +3,7 @@
 // information only.
 //   node server.ts   → the game at http://localhost:8788, bot insight at http://localhost:8789,
 //                      the coach at http://localhost:8789/coach
-// The bot plays the best rollout move (SEARCH_MODE=sample: Ataraxos's sampling instead).
+// The bot plays a move sampled from one damped policy-improvement step (SEARCH_MODE=best-q: the best rollout move instead).
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { availableParallelism } from 'node:os';
@@ -18,7 +18,7 @@ import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
 import { ReviewPool, Reviewer, type ReviewedGame } from './review.ts';
-import { BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
+import { ALPHA, BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
 // Replays, sessions.jsonl, the admin-token file (KEEPS_DATA_DIR in a container; ./data locally).
@@ -35,7 +35,7 @@ const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
 const SEARCH = process.env.SEARCH !== 'off';
 // Not started at all when neither needs it (SEARCH=off, no coach): no second copy of the network in memory.
 const pool = (SEARCH || process.env.COACH === '1' ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null) as RolloutPool;
-const MODE = process.env.SEARCH_MODE === 'sample' ? 'sample' : 'best-q';
+const MODE = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
 setSearchMode(MODE);
 
 // What the bot thought at each of its decisions, by room, for the insight page.
@@ -483,7 +483,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `sampled, beta ${BETA}`}` : 'no search: its network plays directly'})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

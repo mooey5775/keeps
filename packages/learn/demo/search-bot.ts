@@ -2,11 +2,8 @@
 //
 // At each of the bot's decisions with a real choice: sample WORLDS hidden states exactly from
 // the chance-only posterior given what the bot knows (packages/learn/src/worlds.ts), play every
-// legal command out to the end of the round in each world (greedy policy on both sides, in
-// worker threads), and choose from
-//   pi'(c) ∝ pi(c) · exp(BETA · Q(c))
-// where pi is the policy's probability of the whole command and Q its average result (±1).
-// BETA 5 is the paper's Dou Dizhu update step size (Ataraxos, Table S31).
+// legal command out to the end of the round in each world (the policy on both sides, in worker
+// threads), and take one damped policy-improvement step from the network's policy (see `mode`).
 import { Worker } from 'node:worker_threads';
 import {
   eventsFor,
@@ -28,14 +25,21 @@ export let WORLDS = Number(process.env.SEARCH_WORLDS ?? 256);
 export function setWorlds(n: number): void {
   WORLDS = n;
 }
-export const BETA = Number(process.env.SEARCH_BETA ?? 5);
 /**
- * How the bot picks from the search: 'sample' from pi' (Ataraxos), or 'best-q': the move with the
- * best rollout value, the policy breaking near-ties (moves within TIE of the best Q; 256 worlds
- * leave each Q about ±0.06 of noise).
+ * How the bot picks from the search.
+ * 'damped' (the default): one damped policy-improvement step, as Ataraxos's Stratego search takes (its
+ * Table S12): a tabular step of magnetic mirror descent,
+ *   pi'(c) ∝ [exp(Q(c)) · rho(c)^ALPHA · pi(c)^BETA]^(1 / (ALPHA + BETA)),
+ * where Q is the command's average result (±1), pi the network's probability of the whole command, and
+ * rho the magnet: uniform at each step of a decision, as VRPO's training regularizes towards. The step
+ * stays close to the (near-equilibrium) policy, moving only where the values clearly say so. The bot's
+ * move is sampled from pi'; training mode's advice shows pi''s most likely move.
+ * 'best-q': the move with the best rollout value, the policy breaking near-ties (within TIE).
  */
-let mode: 'sample' | 'best-q' = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'sample';
-export function setSearchMode(m: 'sample' | 'best-q'): void {
+export const ALPHA = Number(process.env.SEARCH_ALPHA ?? 0.002);
+export const BETA = Number(process.env.SEARCH_BETA ?? 0.02);
+let mode: 'damped' | 'best-q' = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
+export function setSearchMode(m: 'damped' | 'best-q'): void {
   mode = m;
 }
 const TIE = 0.05;
@@ -51,7 +55,7 @@ export interface SearchReport {
   after: number | null;
   worlds: number;
   ms: number;
-  mode: 'sample' | 'best-q';
+  mode: 'damped' | 'best-q';
   overrode: boolean;
   /** Every candidate (reveals the bot's hand): its move, policy probability, rollout win chance, chosen. */
   moves: { move: string; policy: number; win: number; chosen: boolean; command: Command }[];
@@ -111,10 +115,13 @@ function completeGreedily(decision: Decision, view: ReturnType<typeof viewFor>, 
   return out;
 }
 
-/** The searched move's index, from the policy's prior and the rollouts' Q (by `mode`), and the search policy. */
-function pick(prior: number[], q: number[]): { k: number; searched: number[] } {
+/**
+ * The searched move's index, from the policy's prior, the magnet and the rollouts' Q (by `mode`), and the
+ * search policy pi'. `by`: sample the move from pi' (the bot's play), or take its most likely (advice).
+ */
+function pick(prior: number[], rho: number[], q: number[], by: 'sample' | 'mode'): { k: number; searched: number[] } {
   const total = prior.reduce((a, c) => a + c, 0);
-  const logits = prior.map((p, k) => Math.log(p / total) + BETA * q[k]!);
+  const logits = prior.map((p, k) => (q[k]! + ALPHA * Math.log(rho[k]!) + BETA * Math.log(p / total)) / (ALPHA + BETA));
   const m = Math.max(...logits);
   const weights = logits.map((l) => Math.exp(l - m));
   const z = weights.reduce((a, c) => a + c, 0);
@@ -123,6 +130,8 @@ function pick(prior: number[], q: number[]): { k: number; searched: number[] } {
   if (mode === 'best-q') {
     const top = Math.max(...q);
     for (let i = 0; i < q.length; i++) if (q[i]! >= top - TIE && (q[k]! < top - TIE || prior[i]! > prior[k]!)) k = i;
+  } else if (by === 'mode') {
+    for (let i = 0; i < searched.length; i++) if (searched[i]! > searched[k]!) k = i;
   } else {
     let u = random();
     for (; k < searched.length - 1 && u >= searched[k]!; k++) u -= searched[k]!;
@@ -139,6 +148,8 @@ export async function searchChoose(
   report?: (r: SearchReport) => void,
   /** Called once the policy's view is known, before the rollouts: each candidate with its probability. */
   early?: (e: { before: number | null; moves: { move: string; policy: number; command: Command }[] }) => void,
+  /** Sample the move from the search policy (the bot's own play), or take its most likely (training mode's advice). */
+  by: 'sample' | 'mode' = 'sample',
 ): Promise<Command> {
   const b = bot as unknown as { log: TraceEvent[]; read: number; belief: Belief; policy: Policy; seat: Seat };
   const seat = b.seat;
@@ -168,7 +179,7 @@ export async function searchChoose(
       const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, b.belief, b.policy, [...fixed, id]))!);
       const results = await Promise.all(worlds.map((world) => pool.run({ world, events: [...events], myLog: [...b.log], me: seat, commands: candidates })));
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
-      fixed.push(ids[pick(prior, q).k]!);
+      fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, by).k]!);
     }
     log(`[search] seat ${seat} turn ${state.turnNumber}: reorder searched card by card → ${fixed.map(actionName).join(' ')}`);
     return decision.complete(fixed)!;
@@ -182,7 +193,8 @@ export async function searchChoose(
     report?.({ ...base, after: null, worlds: 0, ms: 0, overrode: false, moves: [] });
     return commands[0]!;
   }
-  // The policy's probability of each whole command: the product along its ids.
+  // The policy's probability of each whole command, and the magnet's (uniform at each step): products along its ids.
+  const magnet = encodings.map((ids) => ids.reduce((r, _, i) => r / decision.next(ids.slice(0, i)).length, 1));
   const prior = encodings.map((ids) => {
     let p = 1;
     for (let i = 0; i < ids.length; i++) {
@@ -202,7 +214,7 @@ export async function searchChoose(
   const plainEvents = [...events];
   const results = await Promise.all(worlds.map((world) => pool.run({ world, events: plainEvents, myLog, me: seat, commands })));
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
-  const { k, searched } = pick(prior, q);
+  const { k, searched } = pick(prior, magnet, q, by);
   const rows = encodings
     .map((ids, i) => ({ move: ids.map(actionName).join(' '), prior: prior[i]! / total, q: q[i]!, search: searched[i]!, chosen: i === k }))
     .sort((a, c) => c.search - a.search)
@@ -239,10 +251,18 @@ export async function searchAdvise(
   onReport?: (r: SearchReport) => void,
 ): Promise<{ command: Command; probability: number; win?: number }[]> {
   let moves: SearchReport['moves'] = [];
-  const command = await searchChoose(advisor, state, events, pool, (r) => {
-    moves = r.moves;
-    onReport?.(r);
-  });
+  const command = await searchChoose(
+    advisor,
+    state,
+    events,
+    pool,
+    (r) => {
+      moves = r.moves;
+      onReport?.(r);
+    },
+    undefined,
+    'mode',
+  );
   if (moves.length === 0) return [{ command, probability: 1 }];
   const ranked = [...moves].sort((a, b) => Number(b.chosen) - Number(a.chosen) || b.win - a.win);
   return ranked.map((m) => ({ command: m.command, probability: m.policy, win: m.win }));
