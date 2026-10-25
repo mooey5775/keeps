@@ -1,4 +1,4 @@
-import type { Seat } from '@keeps/engine';
+import { coinsLabel, type Seat } from '@keeps/engine';
 import type { RoundReview } from '@keeps/protocol';
 import { useMemo, useState } from 'react';
 import { logLines } from './log.ts';
@@ -48,7 +48,8 @@ export function RoundReviewView({ review, names, onClose }: { review: RoundRevie
   }, [review]);
   const myScore = review.scores[me] ?? 0;
   const theirScore = botSeat === null ? null : review.scores[botSeat];
-  const coins = (n: number) => `${n < 0 ? '−' : ''}${Math.abs(n)}`;
+  // Scores are kept in half-coins.
+  const coins = (n: number) => `${n < 0 ? '−' : ''}${coinsLabel(Math.abs(n))}`;
   const result =
     review.winner === me ? 'You won' : review.winner === null ? 'Nobody won' : `${bot} won`;
 
