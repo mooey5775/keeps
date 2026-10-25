@@ -604,7 +604,8 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
         const want = log[cursor + j]?.payload;
         if (j < 0 || seen[j]!.payload.type !== 'steal' || want?.type !== 'steal' || want.count !== 1) continue;
         let ok = false;
-        for (let n = 0; n < 64 && !ok; n++) {
+        // (Each try draws the card with chance 1/hand: 4,000 tries miss it with chance below 10^-150.)
+        for (let n = 0; n < 4000 && !ok; n++) {
           rng = seeded(n * 7919 + step);
           const retry = apply({ ...state, rng }, c.seat, c.command, { trusted: true });
           if (!retry.ok) break;
