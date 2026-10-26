@@ -2,6 +2,7 @@
 // first move; then the round's review, whose first choice at each of your decisions must be that hint.
 //   PORT=8791 INSIGHT_PORT=8792 REVIEW_SCALE=0.15 SEARCH_WORLDS=32 SEARCH_ROLLOUTS=sampled BOT=midstrike node server.ts
 //   node review-e2e.ts [http://localhost:8791] [screenshot dir]      (build the web client first)
+//   (E2E_NAME: the player's name, Eddie; E2E_REVIEW_MS: how long to wait for the review, 60 s)
 import { mkdirSync } from 'node:fs';
 import { launch, open, sleep } from '../../server/e2e/browser.ts';
 const base = process.argv[2] ?? 'http://localhost:8791';
@@ -11,7 +12,7 @@ const browser = await launch(9339);
 try {
   const page = await open(browser, base);
   await page.waitFor(`document.body.innerText.includes('Play against')`, 'home');
-  await page.type('input[placeholder="Name"]', 'Eddie');
+  await page.type('input[placeholder="Name"]', process.env.E2E_NAME ?? 'Eddie');
   await page.click('Play against');
   await page.click('Start the game');
   await page.waitFor(`document.querySelector('.game') !== null`, 'table');
@@ -38,7 +39,7 @@ try {
     await sleep(400);
   }
   console.log(`hints seen: ${hints.length}`);
-  await page.waitFor(`document.body.innerText.includes('Round 1 review')`, 'the review button', 60000);
+  await page.waitFor(`document.body.innerText.includes('Round 1 review')`, 'the review button', Number(process.env.E2E_REVIEW_MS ?? 60000));
   await page.click('Round 1 review');
   await page.waitFor(`document.querySelector('.modal.review') !== null`, 'the review');
   // Wait for it to fill in.
