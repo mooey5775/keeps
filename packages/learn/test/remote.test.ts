@@ -39,11 +39,11 @@ describe('the remote queue', () => {
     expect(queue.connected()).toBe(true);
     const review = queue.submit<string>('review', { r: 1 }, 5_000);
     const search = queue.submit<string>('search', { s: 1 }, 5_000);
-    const a = await (await first).json();
+    const a = (await (await first).json()) as { id: number };
     // The review was queued first and handed to the waiting poller; the search goes next, ahead of any other review.
     expect(a).toMatchObject({ kind: 'review', stamp: '1:abc', payload: { r: 1 } });
     const later = queue.submit<string>('review', { r: 2 }, 5_000).catch((e: Error) => e.message);
-    const b = await (await post(url, '/remote/poll', { accept: ['search', 'review'] })).json();
+    const b = (await (await post(url, '/remote/poll', { accept: ['search', 'review'] })).json()) as { id: number };
     expect(b).toMatchObject({ kind: 'search', payload: { s: 1 } });
     await post(url, '/remote/result', { id: b.id, result: 'searched' });
     await post(url, '/remote/result', { id: a.id, result: 'reviewed' });
@@ -54,7 +54,7 @@ describe('the remote queue', () => {
     await new Promise((r) => setTimeout(r, 100));
     expect(queue.load().review.queued).toBe(1);
     void c;
-    const d = await (await post(url, '/remote/poll', { accept: ['review'] })).json();
+    const d = (await (await post(url, '/remote/poll', { accept: ['review'] })).json()) as { id: number };
     await post(url, '/remote/result', { id: d.id, error: 'boom' });
     expect(await later).toContain('boom');
   });
