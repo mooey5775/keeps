@@ -96,9 +96,18 @@ async function lane(kind: RemoteKind): Promise<never> {
       await new Promise((r) => setTimeout(r, 5_000));
       continue;
     }
+    let job: { id: number; kind: RemoteKind; stamp: string; payload: unknown };
+    try {
+      job = await res.json();
+      if (typeof job?.id !== 'number' || job.kind !== kind) throw new Error('not a job');
+    } catch {
+      // A server without remote work (an older version answers with its web page): ask again later.
+      if (failures++ % 20 === 0) log(`${kind}: the server answered without a job (no remote work there yet?); retrying`);
+      await new Promise((r) => setTimeout(r, 30_000));
+      continue;
+    }
     if (failures > 0) log(`${kind}: connected`);
     failures = 0;
-    const job = (await res.json()) as { id: number; kind: RemoteKind; stamp: string; payload: unknown };
     debug(`job ${job.id}: ${job.kind}`);
     busy[kind]++;
     void work(job).finally(() => {

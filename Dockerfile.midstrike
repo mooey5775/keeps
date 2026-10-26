@@ -1,11 +1,13 @@
 # Midstrike: the game with the vrpo1 bot (packages/learn/demo), deployed on its own app
 # (fly.midstrike.toml) so the production site is untouched. Like the main Dockerfile, Node 24 runs
 # the TypeScript sources directly; only the web client is built.
-# The bot searches: worlds sampled as whole histories (the opponent plays from their own log in each),
-# 128 per decision with sampled rollouts, and the move with the best rollout value (best-Q: the damped
-# update, as Ataraxos tuned it for Stratego, overreacted to rollout noise); training mode's advice
-# comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened
-# (with search off, add --threshold 0.2):
+# The bot searches: worlds sampled as whole histories (the opponent plays from their own log in each), with
+# sampled rollouts, and plays the move with the best rollout value (best-Q). The searching and the round
+# reviews run on gpu03 when its remote worker is connected (remote.ts; started there by ~/midstrike-remote.sh,
+# with the same weights file): 512 worlds per decision (REMOTE_WORLDS). When it isn't, this machine searches
+# 128 (SEARCH_WORLDS) and reviews here. REMOTE_TOKEN (a Fly secret) is the worker's password. Training mode's
+# advice comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened
+# (with search off, add --threshold 0.2), and copy the same file to gpu03:
 #   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> \
 #     --out ../packages/learn/demo/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
 
@@ -43,8 +45,8 @@ COPY packages/server/src packages/server/src
 COPY packages/web/src packages/web/src
 COPY --from=build /app/packages/web/dist packages/web/dist
 
-# The admin password (for /bot/) comes from the ADMIN_TOKEN secret, never the image.
+# The admin password (for /bot/) comes from the ADMIN_TOKEN secret, and the remote worker's from REMOTE_TOKEN: never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike SEARCH_WORLDS=128 SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
+    BOT=midstrike BOT_NAME=Midstrike SEARCH_WORLDS=128 REMOTE_WORLDS=512 SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]
