@@ -14,9 +14,8 @@ primary_region = "sjc"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Stop when nobody is connected (open game connections keep it running): the 16-core machine is
-  # paid for only while people play. It can't suspend (that needs 2 GB of memory or less); a stopped
-  # machine starts again on the next visit in about a second.
+  # Stop when nobody is connected (open game connections keep it running). In practice it stays up: gpu03's
+  # remote worker polls it for work all the time, which is fine on this small machine.
   auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
@@ -39,7 +38,8 @@ primary_region = "sjc"
   source = "midstrike_data"
   destination = "/app/data"
 
-# The search plays every legal move out in 128 sampled worlds at each decision (512 took about 14 s
-# on these 16 dedicated cores), for the bot's moves and for training mode's advice.
+# The searching and the round reviews run on gpu03 (Dockerfile.midstrike): this machine only serves the
+# games, so a small one does.
 [[vm]]
-  size = "performance-16x"
+  size = "shared-cpu-2x"
+  memory = "2gb"

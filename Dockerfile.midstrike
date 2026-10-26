@@ -2,12 +2,13 @@
 # (fly.midstrike.toml) so the production site is untouched. Like the main Dockerfile, Node 24 runs
 # the TypeScript sources directly; only the web client is built.
 # The bot searches: worlds sampled as whole histories (the opponent plays from their own log in each), with
-# sampled rollouts, and plays the move with the best rollout value (best-Q). The searching and the round
-# reviews run on gpu03 when its remote worker is connected (remote.ts; started there by ~/midstrike-remote.sh,
-# with the same weights file): 512 worlds per decision (REMOTE_WORLDS). When it isn't, this machine searches
-# 128 (SEARCH_WORLDS) and reviews here. REMOTE_TOKEN (a Fly secret) is the worker's password. Training mode's
-# advice comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened
-# (with search off, add --threshold 0.2), and copy the same file to gpu03:
+# sampled rollouts, and plays the move with the best rollout value (best-Q). All the searching and the round
+# reviews run on gpu03, whose remote worker asks this server for work (remote.ts; the systemd user service
+# midstrike-remote there, with the same weights file): 512 worlds per decision (REMOTE_WORLDS). This machine
+# does none of it (LOCAL_SEARCH=off): while gpu03 is away the bot waits and the player is told, training mode
+# shows no hint, and reviews wait. REMOTE_TOKEN (a Fly secret) is the worker's password. Training mode's advice
+# comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened (with
+# search off, add --threshold 0.2), and copy the same file to gpu03:
 #   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> \
 #     --out ../packages/learn/demo/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
 
@@ -47,6 +48,6 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 
 # The admin password (for /bot/) comes from the ADMIN_TOKEN secret, and the remote worker's from REMOTE_TOKEN: never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike SEARCH_WORLDS=128 REMOTE_WORLDS=512 SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
+    BOT=midstrike BOT_NAME=Midstrike REMOTE_WORLDS=512 LOCAL_SEARCH=off SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]
