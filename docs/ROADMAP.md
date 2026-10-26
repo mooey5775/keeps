@@ -49,6 +49,23 @@ Independent of accounts, and fun right away. Bots also fill seats that are ghost
 - **Training setup:** the TypeScript engine runs self-play in Node worker processes. The trainer is Python with PyTorch, talking to Node over a simple line-based connection. Trained models are exported to ONNX and run in Node (`onnxruntime-node`) or in the browser (`onnxruntime-web`).
 - **Analysis:** with a strong model, post-game review gets win chances and suggested moves, completing the chess.com-style review from Phase 0.
 
+## Open bugs to revisit
+
+- **Epiphany and Prayer on a face-up pile hide the card underneath** (rules dispute, Konwoo on Midstrike,
+  2026-10-25). Both say "**pick up** and look at the top card": on a pile Revelation turned face up, picking
+  up the top card shows everyone the face-up card beneath it while the player decides. The engine leaves the
+  cards on their piles until the choice (`effects.ts`: `epiphany`, the `prayer` branch), so that card stays
+  hidden. Preferred fix: reveal the card under each picked-up face-up top to everyone, as a public event,
+  with the cards left in place. That gives the same information as the table, and keeps the bot's inputs
+  familiar: its belief already handles a seen card at a known pile position, while cards lifted off their
+  piles mid-decision would be states it never trained on and would break its belief. Needs a clarification
+  entry, engine tests, a check of the bot (belief, world sampler), and both sites deployed. Same change: a
+  card taken into a hand from a face-up top (Epiphany, Prayer, Requisition) is logged hidden although
+  everyone saw it (`takeIntoHand`; draws of a face-up top are already public).
+- **Disputes filed on Midstrike are not kept.** keeps-midstrike has no `POSTHOG_KEY`, so a dispute there
+  only reaches the server's console log, which Fly keeps for a short time. Fix: give Midstrike the PostHog
+  key (its disputes tagged as Midstrike's), and append every dispute to a file on each site's data volume.
+
 ## Before going public
 
 Accounts, public leaderboards and matchmaking turn a private game for friends into a public product built on Keeps' rules and art. That needs permission from David & Elaina Buffkin, who may well be interested (a digital version, puzzles, and sales through their Amazon link). Ask before Phase 2 goes public.
