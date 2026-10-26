@@ -90,6 +90,11 @@ export class ReviewPool {
     this.pump();
   }
 
+  /** Hands queued jobs out again (the remote is back: RemoteQueue.onPoll). */
+  kick(): void {
+    this.pump();
+  }
+
   private useRemote(): boolean {
     return this.remote !== null && this.remote.connected() && Date.now() > this.remoteAwayUntil;
   }

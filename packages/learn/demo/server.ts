@@ -17,7 +17,7 @@ import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
-import { RemoteEvaluator, RemoteQueue } from './remote.ts';
+import { RemoteAway, RemoteEvaluator, RemoteQueue } from './remote.ts';
 import { ReviewPool, Reviewer, type ReviewedGame } from './review.ts';
 import { ALPHA, BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type Evaluator, type SearchReport } from './search-bot.ts';
 
@@ -32,16 +32,19 @@ const DISPLAY_NAME = process.env.BOT_NAME ?? 'Midstrike';
 // The admin password for /bot/: ADMIN_TOKEN, or data/admin-token (git-ignored). Without one, /bot/ is off.
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(DATA, 'admin-token')) ? readFileSync(join(DATA, 'admin-token'), 'utf8').trim() : '');
 const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
-// The search (on unless SEARCH=off), and the coach (COACH=1), play out moves in these worker threads.
-const SEARCH = process.env.SEARCH !== 'off';
-// Not started at all when neither needs it (SEARCH=off, no coach): no second copy of the network in memory.
-const pool = (SEARCH || process.env.COACH === '1' ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null) as RolloutPool;
 // The searches' and reviews' heavy work can run on another machine (remote.ts; remote-worker.ts there): REMOTE_TOKEN
-// turns it on. That machine searches REMOTE_WORLDS worlds (512); this one WORLDS, whenever it's away or slow.
+// turns it on. That machine searches REMOTE_WORLDS worlds (512); this one WORLDS, whenever it's away or slow, unless
+// LOCAL_SEARCH=off: then this server does no search or review work at all (a small machine), and while the remote is
+// away the bot plays its network's own move, training mode shows the network's suggestion, and reviews wait.
 const REMOTE_TOKEN = process.env.REMOTE_TOKEN ?? '';
 const REMOTE_WORLDS = Number(process.env.REMOTE_WORLDS ?? 512);
+const LOCAL_SEARCH = process.env.LOCAL_SEARCH !== 'off';
+// The search (on unless SEARCH=off), and the coach (COACH=1), play out moves in these worker threads.
+const SEARCH = process.env.SEARCH !== 'off' && (LOCAL_SEARCH || REMOTE_TOKEN !== '');
+// Not started at all when nothing here needs it: no second copy of the network in memory.
+const pool = LOCAL_SEARCH && (SEARCH || process.env.COACH === '1') ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null;
 const remote = REMOTE_TOKEN ? new RemoteQueue(REMOTE_TOKEN, (({ step, fingerprint }) => `${step}:${fingerprint}`)(Policy.load(readFileSync(weights)).info)) : null;
-const search: Evaluator = remote && pool ? new RemoteEvaluator(remote, pool, REMOTE_WORLDS) : pool;
+const search = (remote ? new RemoteEvaluator(remote, pool, REMOTE_WORLDS) : pool) as Evaluator;
 const MODE = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
 setSearchMode(MODE);
 
@@ -258,7 +261,7 @@ function insightPages(req: IncomingMessage, res: ServerResponse): void {
     const worlds = Number(new URL(req.url, 'http://x').searchParams.get('worlds'));
     if (Number.isInteger(worlds) && worlds > 0) setWorlds(worlds);
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ worlds: WORLDS, mode: MODE, remote: remote ? { connected: remote.connected(), worlds: REMOTE_WORLDS, load: remote.load() } : null }));
+    res.end(JSON.stringify({ worlds: WORLDS, mode: MODE, remote: remote ? { connected: remote.connected(), worlds: REMOTE_WORLDS, load: remote.load() } : null, reviews: reviewPool?.load() ?? null }));
     return;
   }
   if (req.url?.startsWith('/coach.json')) {
@@ -303,6 +306,7 @@ type RoomInternals = {
   game: { state: GameState; events: unknown[] } | null;
   botTimer: (() => void) | null;
   code: string;
+  players: { seat: number | null; bot?: boolean; send: ((m: unknown) => void) | null }[];
   playerAt(seat: number): unknown;
   command(player: unknown, command: unknown): string | null;
   scheduleBot(): void;
@@ -318,6 +322,20 @@ function liveSearch(state: GameState, seat: Seat): (report: SearchReport | null)
   reviewer?.searched(state, seat, report);
   return resolve;
 }
+// With no search here (LOCAL_SEARCH=off), the search machine being away is an error the player is told about (at most
+// once a minute per room): the bot waits for it, trying again every 15 s, and training mode shows no hint.
+const awayNoticeAt = new Map<string, number>();
+function noticeAway(room: RoomInternals, seat?: number): void {
+  const now = Date.now();
+  if (now - (awayNoticeAt.get(room.code) ?? 0) < 60_000) return;
+  awayNoticeAt.set(room.code, now);
+  console.error(`room ${room.code}: the search machine is unavailable`);
+  for (const p of room.players) {
+    if (p.bot || !p.send || (seat !== undefined && p.seat !== seat)) continue;
+    p.send({ t: 'error', message: `${DISPLAY_NAME}'s search machine is unavailable right now. ${seat === undefined ? 'It will move as soon as it is back.' : 'No hint until it is back.'}` });
+  }
+}
+
 // SEARCH=off: the room's own bot plays instead, straight from its network (no search, instant moves).
 if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot = function (
   this: RoomInternals,
@@ -353,16 +371,39 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
       found(null);
       this.botTimer = null;
       if (cancelled || this.game !== game || game.state !== state) return this.scheduleBot();
+      if (error instanceof RemoteAway) {
+        noticeAway(this);
+        const retry = setTimeout(() => {
+          if (this.botTimer !== cancel) return;
+          this.botTimer = null;
+          this.scheduleBot();
+        }, 15_000);
+        const cancel = () => clearTimeout(retry);
+        this.botTimer = cancel;
+        return;
+      }
       fallback(String(error instanceof Error ? error.stack : error));
     },
   );
 };
 // Training mode's advice comes from the same search, from the seat's own information (the room shows
-// "thinking" until it's ready, and falls back to the network's suggestion if it fails).
+// "thinking" until it's ready, and falls back to the network's suggestion if the search fails; with the
+// search machine away, no hint at all).
 if (SEARCH)
-  (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) => {
+  (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = function (
+    this: RoomInternals,
+    bot,
+    state,
+    events,
+  ) {
     const found = liveSearch(state, bot.seat);
-    return searchAdvise(bot, state, events, search, found).finally(() => found(null));
+    return searchAdvise(bot, state, events, search, found)
+      .catch((error: unknown) => {
+        if (!(error instanceof RemoteAway)) throw error;
+        noticeAway(this, bot.seat);
+        return [];
+      })
+      .finally(() => found(null));
   };
 
 // Round reviews (REVIEW=off: none): every move of a game against the bot judged as the round goes, in
@@ -373,8 +414,11 @@ type ReviewRoom = {
   players: { id: string; name: string; seat: number | null; bot?: boolean; send: ((m: unknown) => void) | null }[];
 };
 const REVIEW = process.env.REVIEW !== 'off';
-const reviewPool = REVIEW ? new ReviewPool(Math.max(1, availableParallelism() - 2), weights) : null;
-if (reviewPool) reviewPool.remote = remote;
+const reviewPool = REVIEW ? new ReviewPool(LOCAL_SEARCH ? Math.max(1, availableParallelism() - 2) : 0, weights) : null;
+if (reviewPool && remote) {
+  reviewPool.remote = remote;
+  remote.onPoll = () => reviewPool.kick();
+}
 const roomOfGame = new WeakMap<ReviewedGame, ReviewRoom>();
 const reviewedGameOf = new WeakMap<ReviewRoom, ReviewedGame>();
 const reviewer = reviewPool
@@ -492,7 +536,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'}${remote ? `; a remote worker searches ${REMOTE_WORLDS} worlds and runs the reviews when connected` : ''})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'}${remote ? `; a remote worker searches ${REMOTE_WORLDS} worlds and runs the reviews when connected${LOCAL_SEARCH ? '' : ', and nothing is searched here (the network plays while it is away)'}` : ''})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

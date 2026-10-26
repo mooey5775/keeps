@@ -2,7 +2,7 @@
 // first move; then the round's review, whose first choice at each of your decisions must be that hint.
 //   PORT=8791 INSIGHT_PORT=8792 REVIEW_SCALE=0.15 SEARCH_WORLDS=32 SEARCH_ROLLOUTS=sampled BOT=midstrike node server.ts
 //   node review-e2e.ts [http://localhost:8791] [screenshot dir]      (build the web client first)
-//   (E2E_NAME: the player's name, Eddie; E2E_REVIEW_MS: how long to wait for the review, 60 s)
+//   (E2E_NAME: the player's name, Eddie; E2E_PLAY_MS: the longest round, 15 min; E2E_REVIEW_MS: how long to wait for the review, 60 s)
 import { mkdirSync } from 'node:fs';
 import { launch, open, sleep } from '../../server/e2e/browser.ts';
 const base = process.argv[2] ?? 'http://localhost:8791';
@@ -18,7 +18,8 @@ try {
   await page.waitFor(`document.querySelector('.game') !== null`, 'table');
   await page.click('Training mode: off');
   const hints: string[] = [];
-  for (let i = 0; i < 400; i++) {
+  // Until the round is over (E2E_PLAY_MS: at most 15 minutes; a searching bot can take a while).
+  for (const deadline = Date.now() + Number(process.env.E2E_PLAY_MS ?? 900_000); Date.now() < deadline; ) {
     const phase = await page.evaluate<string>(`document.body.innerText.includes('Round 1 review') ? 'reviewable' : 'playing'`);
     if (phase === 'reviewable') break;
     const box = await page.evaluate<string | null>(`document.querySelector('.training:not(.review-rank)')?.innerText ?? null`);

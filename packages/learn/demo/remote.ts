@@ -3,7 +3,8 @@
 // body {accept: kinds it has room for}) and is handed at most one job, which it answers at /remote/result.
 // The live game's searches go before reviews. Work the remote doesn't take or answer in time is done here
 // (RemoteEvaluator falls back to the local search; ReviewPool to its local workers), so a game never waits
-// on the other machine.
+// on the other machine. A server with no search of its own (LOCAL_SEARCH=off) has nothing to fall back to:
+// the search fails at once (RemoteAway), and the bot plays its network's own move; reviews wait for the remote.
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { EvaluateJob, Evaluator } from './search-bot.ts';
 
@@ -26,12 +27,17 @@ interface Poller {
 
 const POLL_MS = 25_000;
 
+/** No remote worker to search, and no local search to fall back to. */
+export class RemoteAway extends Error {}
+
 export class RemoteQueue {
   private queue: Job[] = [];
   private inFlight = new Map<number, Job>();
   private pollers: Poller[] = [];
   private lastSeen = 0;
   private next = 1;
+  /** Called on every poll (work waiting for the remote, such as reviews, can go now). */
+  onPoll: (() => void) | null = null;
   private readonly token: string;
   /** The network's identity (step and encoder): the remote must run the same one. */
   readonly stamp: string;
@@ -97,7 +103,10 @@ export class RemoteQueue {
         return;
       }
       this.lastSeen = Date.now();
-      if (path === '/remote/poll') this.poll(res, new Set(body.accept ?? []));
+      if (path === '/remote/poll') {
+        this.poll(res, new Set(body.accept ?? []));
+        this.onPoll?.();
+      }
       else this.answer(res, body);
     });
     return true;
@@ -148,14 +157,14 @@ export class RemoteQueue {
   }
 }
 
-/** The search's evaluations on the remote (with its own, larger number of worlds), or here when it's away or slow. */
+/** The search's evaluations on the remote (with its own, larger number of worlds), or here when it's away or slow (if there's a local search). */
 export class RemoteEvaluator implements Evaluator {
   private readonly remote: RemoteQueue;
-  private readonly local: Evaluator;
+  private readonly local: Evaluator | null;
   private readonly worlds: number;
   private failures = 0;
 
-  constructor(remote: RemoteQueue, local: Evaluator, worlds: number) {
+  constructor(remote: RemoteQueue, local: Evaluator | null, worlds: number) {
     this.remote = remote;
     this.local = local;
     this.worlds = worlds;
@@ -166,9 +175,12 @@ export class RemoteEvaluator implements Evaluator {
       try {
         return await this.remote.submit<number[][]>('search', { ...job, n: this.worlds }, 120_000);
       } catch (error) {
-        if (this.failures++ < 50) console.error(`remote search failed (${error instanceof Error ? error.message : error}); searching here with ${job.n} worlds`);
+        const why = error instanceof Error ? error.message : String(error);
+        if (!this.local) throw new RemoteAway(`the remote search failed: ${why}`);
+        if (this.failures++ < 50) console.error(`remote search failed (${why}); searching here with ${job.n} worlds`);
       }
     }
+    if (!this.local) throw new RemoteAway('no remote worker is connected');
     return this.local.evaluate(job);
   }
 }
