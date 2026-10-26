@@ -536,7 +536,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'}${remote ? `; a remote worker searches ${REMOTE_WORLDS} worlds and runs the reviews when connected${LOCAL_SEARCH ? '' : ', and nothing is searched here (the network plays while it is away)'}` : ''})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'}${remote ? `; a remote worker searches ${REMOTE_WORLDS} worlds and runs the reviews when connected${LOCAL_SEARCH ? '' : ', and nothing is searched here (while it is away, the bot waits and the player is told)'}` : ''})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));
