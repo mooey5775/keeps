@@ -71,8 +71,22 @@ export function setSearchLog(sink: (line: string) => void): void {
   log = sink;
 }
 
+/** A search's expensive part: `n` worlds sampled for `me` from its log, every command played out in each. */
+export interface EvaluateJob {
+  state: GameState;
+  me: Seat;
+  myLog: TraceEvent[];
+  commands: Command[];
+  n: number;
+}
+
+/** What runs it: here (RolloutPool), or on another machine (remote.ts). One row per world: ±1 per command, `me`'s result. */
+export interface Evaluator {
+  evaluate(job: EvaluateJob): Promise<number[][]>;
+}
+
 /** Worker threads that play out commands in sampled worlds. */
-export class RolloutPool {
+export class RolloutPool implements Evaluator {
   private readonly workers: Worker[];
   private next = 0;
   private readonly waiting = new Map<number, { resolve: (out: number[]) => void; reject: (e: Error) => void }>();
@@ -90,6 +104,16 @@ export class RolloutPool {
       });
       return w;
     });
+  }
+
+  async evaluate(job: EvaluateJob): Promise<number[][]> {
+    const { state, me, myLog, commands, n } = job;
+    const opponent = ((me + 2) % 4) as Seat;
+    const view = viewFor(state, me);
+    const belief = new Belief(me, { sound: true }).update(myLog).observe(view);
+    const model = worldModel(state, me, belief, view, myLog);
+    const worlds = Array.from({ length: n }, () => sampleHistory(model, random));
+    return Promise.all(worlds.map((h) => this.run({ world: h.world, myLog, theirLog: h.logs[opponent]!, me, commands })));
   }
 
   run(job: { world: GameState; myLog: TraceEvent[]; theirLog: TraceEvent[]; me: Seat; commands: Command[] }): Promise<number[]> {
@@ -144,7 +168,7 @@ export async function searchChoose(
   bot: BotPlayer,
   state: GameState,
   events: readonly TraceEvent[],
-  pool: RolloutPool,
+  pool: Evaluator,
   report?: (r: SearchReport) => void,
   /** Called once the policy's view is known, before the rollouts: each candidate with its probability. */
   early?: (e: { before: number | null; moves: { move: string; policy: number; command: Command }[] }) => void,
@@ -153,7 +177,6 @@ export async function searchChoose(
 ): Promise<Command> {
   const b = bot as unknown as { log: TraceEvent[]; read: number; belief: Belief; policy: Policy; seat: Seat };
   const seat = b.seat;
-  const opponent = ((seat + 2) % 4) as Seat;
   b.log.push(...eventsFor(events.slice(b.read), seat));
   b.read = events.length;
   const view = viewFor(state, seat);
@@ -162,10 +185,8 @@ export async function searchChoose(
   const first = decision.next([]);
   // Tithes' reorder lists no commands (any order of up to 12 cards is legal). The network orders the
   // pile one card at a time, each step a decision of its own: search each step in turn, the candidates
-  // "this card next, then the policy's order for the rest", all scored in the same sampled worlds.
+  // "this card next, then the policy's order for the rest", each step's candidates scored in the same sampled worlds.
   if (decision.encodings().length === 0) {
-    const model = worldModel(state, seat, b.belief, view, b.log);
-    const worlds = Array.from({ length: WORLDS }, () => sampleHistory(model, random));
     const fixed: number[] = [];
     while (!decision.complete(fixed)) {
       const ids = decision.next(fixed);
@@ -178,7 +199,7 @@ export async function searchChoose(
       const p = b.policy.raw(encodeObservation2(view, b.belief, fixed, ids), mask);
       const prior = ids.map((id) => Math.max(p[id]!, 1e-9));
       const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, b.belief, b.policy, [...fixed, id]))!);
-      const results = await Promise.all(worlds.map((h) => pool.run({ world: h.world, myLog: [...b.log], theirLog: h.logs[opponent]!, me: seat, commands: candidates })));
+      const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands: candidates, n: WORLDS });
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
       fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, by).k]!);
     }
@@ -209,10 +230,7 @@ export async function searchChoose(
   const total = prior.reduce((a, c) => a + c, 0);
   early?.({ before: base.before, moves: encodings.map((ids, i) => ({ move: ids.map(actionName).join(' '), policy: prior[i]! / total, command: commands[i]! })) });
   const started = Date.now();
-  const model = worldModel(state, seat, b.belief, view, b.log);
-  const worlds = Array.from({ length: WORLDS }, () => sampleHistory(model, random));
-  const myLog = [...b.log];
-  const results = await Promise.all(worlds.map((h) => pool.run({ world: h.world, myLog, theirLog: h.logs[opponent]!, me: seat, commands })));
+  const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands, n: WORLDS });
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
   const { k, searched } = pick(prior, magnet, q, by);
   const rows = encodings
@@ -223,7 +241,7 @@ export async function searchChoose(
   report?.({
     ...base,
     after: toWin(q[k]!),
-    worlds: worlds.length,
+    worlds: results.length,
     ms: Date.now() - started,
     overrode: k !== favourite,
     moves: encodings
@@ -231,7 +249,7 @@ export async function searchChoose(
       .sort((a, c) => c.win - a.win),
     outcomes: { commands, rows: results },
   });
-  log(`[search${mode === 'best-q' ? ' best-q' : ''}] seat ${seat} turn ${state.turnNumber}: ${worlds.length} worlds × ${commands.length} moves in ${((Date.now() - started) / 1000).toFixed(1)} s`);
+  log(`[search${mode === 'best-q' ? ' best-q' : ''}] seat ${seat} turn ${state.turnNumber}: ${results.length} worlds × ${commands.length} moves in ${((Date.now() - started) / 1000).toFixed(1)} s`);
   for (const r of rows)
     log(`  ${r.chosen ? '→' : ' '} ${r.move.padEnd(36)} policy ${(100 * r.prior).toFixed(0).padStart(3)}%  Q ${r.q >= 0 ? '+' : ''}${r.q.toFixed(2)}  search ${(100 * r.search).toFixed(0).padStart(3)}%`);
   return commands[k]!;
@@ -246,7 +264,7 @@ export async function searchAdvise(
   advisor: BotPlayer,
   state: GameState,
   events: readonly TraceEvent[],
-  pool: RolloutPool,
+  pool: Evaluator,
   /** The search's full report (training mode's advice is also the round review's). */
   onReport?: (r: SearchReport) => void,
 ): Promise<{ command: Command; probability: number; win?: number }[]> {

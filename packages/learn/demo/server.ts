@@ -17,8 +17,9 @@ import { Room } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
+import { RemoteEvaluator, RemoteQueue } from './remote.ts';
 import { ReviewPool, Reviewer, type ReviewedGame } from './review.ts';
-import { ALPHA, BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type SearchReport } from './search-bot.ts';
+import { ALPHA, BETA, RolloutPool, searchAdvise, searchChoose, setSearchMode, setWorlds, WORLDS, type Evaluator, type SearchReport } from './search-bot.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
 // Replays, sessions.jsonl, the admin-token file (KEEPS_DATA_DIR in a container; ./data locally).
@@ -35,6 +36,12 @@ const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
 const SEARCH = process.env.SEARCH !== 'off';
 // Not started at all when neither needs it (SEARCH=off, no coach): no second copy of the network in memory.
 const pool = (SEARCH || process.env.COACH === '1' ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null) as RolloutPool;
+// The searches' and reviews' heavy work can run on another machine (remote.ts; remote-worker.ts there): REMOTE_TOKEN
+// turns it on. That machine searches REMOTE_WORLDS worlds (512); this one WORLDS, whenever it's away or slow.
+const REMOTE_TOKEN = process.env.REMOTE_TOKEN ?? '';
+const REMOTE_WORLDS = Number(process.env.REMOTE_WORLDS ?? 512);
+const remote = REMOTE_TOKEN ? new RemoteQueue(REMOTE_TOKEN, (({ step, fingerprint }) => `${step}:${fingerprint}`)(Policy.load(readFileSync(weights)).info)) : null;
+const search: Evaluator = remote && pool ? new RemoteEvaluator(remote, pool, REMOTE_WORLDS) : pool;
 const MODE = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
 setSearchMode(MODE);
 
@@ -171,7 +178,7 @@ function coachUpdate(room: LiveRoom): void {
   entry.bots.set(seat, bot);
   const started = Date.now();
   searchChoose(
-    bot, state, events as never, pool,
+    bot, state, events as never, search,
     (r) => {
       if (entry.key !== key) return;
       entry.status = r.after === null ? 'forced' : 'searched';
@@ -251,7 +258,7 @@ function insightPages(req: IncomingMessage, res: ServerResponse): void {
     const worlds = Number(new URL(req.url, 'http://x').searchParams.get('worlds'));
     if (Number.isInteger(worlds) && worlds > 0) setWorlds(worlds);
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ worlds: WORLDS, mode: MODE }));
+    res.end(JSON.stringify({ worlds: WORLDS, mode: MODE, remote: remote ? { connected: remote.connected(), worlds: REMOTE_WORLDS, load: remote.load() } : null }));
     return;
   }
   if (req.url?.startsWith('/coach.json')) {
@@ -331,7 +338,7 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
     if (error !== null) console.error(`room ${this.code}: the network's own move failed too: ${error}`);
   };
   const found = liveSearch(state, bot.seat);
-  searchChoose(bot, state, game.events as never, pool, (r) => {
+  searchChoose(bot, state, game.events as never, search, (r) => {
     record(this.code, r);
     found(r);
   }).then(
@@ -355,7 +362,7 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
 if (SEARCH)
   (Room.prototype as unknown as { advise: (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<unknown> }).advise = (bot, state, events) => {
     const found = liveSearch(state, bot.seat);
-    return searchAdvise(bot, state, events, pool, found).finally(() => found(null));
+    return searchAdvise(bot, state, events, search, found).finally(() => found(null));
   };
 
 // Round reviews (REVIEW=off: none): every move of a game against the bot judged as the round goes, in
@@ -367,6 +374,7 @@ type ReviewRoom = {
 };
 const REVIEW = process.env.REVIEW !== 'off';
 const reviewPool = REVIEW ? new ReviewPool(Math.max(1, availableParallelism() - 2), weights) : null;
+if (reviewPool) reviewPool.remote = remote;
 const roomOfGame = new WeakMap<ReviewedGame, ReviewRoom>();
 const reviewedGameOf = new WeakMap<ReviewRoom, ReviewedGame>();
 const reviewer = reviewPool
@@ -465,6 +473,7 @@ await createKeepsServer({
   botName: DISPLAY_NAME,
   // The bot pages, for the admin only: /bot/ (insight), /bot/spectate, /bot/coach.
   extraRoutes: (req, res, path) => {
+    if (remote?.handle(req, res, path)) return true;
     if (path !== '/bot' && !path.startsWith('/bot/')) return false;
     if (!ADMIN_TOKEN) {
       res.writeHead(404).end('Not found');
@@ -483,7 +492,7 @@ await createKeepsServer({
     return true;
   },
 });
-console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'})`);
+console.log(`search demo on http://localhost:${process.env.PORT ?? 8788}, bot insight on http://localhost:${INSIGHT_PORT}${COACH ? `, coach on http://localhost:${INSIGHT_PORT}/coach` : ''} (${botName}, ${SEARCH ? `${WORLDS} worlds per decision, ${process.env.SEARCH_ROLLOUTS === 'sampled' ? 'sampled' : 'greedy'} rollouts, ${MODE === 'best-q' ? 'best-Q play' : `damped update, alpha ${ALPHA}, beta ${BETA}`}` : 'no search: its network plays directly'}${remote ? `; a remote worker searches ${REMOTE_WORLDS} worlds and runs the reviews when connected` : ''})`);
 
 // Stop promptly when asked (Fly stops an idle machine, and deploys, with SIGINT/SIGTERM).
 for (const signal of ['SIGINT', 'SIGTERM'] as const) process.on(signal, () => process.exit(0));

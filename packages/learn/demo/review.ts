@@ -18,6 +18,7 @@ import { join } from 'node:path';
 import { eventsFor, legalCommands, scores, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import type { RoundReview } from '../../protocol/src/index.ts';
 import { describeOptions, makeNames } from '../../web/src/game/options.ts';
+import type { RemoteQueue } from './remote.ts';
 import type { ReviewJob, ReviewResult } from './review-worker.ts';
 import type { SearchReport } from './search-bot.ts';
 
@@ -53,8 +54,17 @@ interface Task {
   cancelled: boolean;
 }
 
-/** Worker processes at nice 19, started when first needed. Jobs are queued by group (a game) and taken in turn across groups. */
+/**
+ * Worker processes at nice 19, started when first needed. Jobs are queued by group (a game) and taken in turn
+ * across groups. With a remote worker connected (remote.ts), jobs go there instead, `remoteSlots` at a time;
+ * one it fails goes back in the queue for the local workers, and the remote is left alone for a minute.
+ */
 export class ReviewPool {
+  remote: RemoteQueue | null = null;
+  remoteSlots = 16;
+  private remoteRunning = 0;
+  private remoteTasks = new Set<Task>();
+  private remoteAwayUntil = 0;
   private workers: { child: ChildProcess; task: Task | null }[] = [];
   private queues = new Map<string, Task[]>();
   private turn: string[] = [];
@@ -76,8 +86,12 @@ export class ReviewPool {
       this.turn.push(group);
     }
     this.queues.get(group)!.push(task);
-    this.start();
+    if (!this.useRemote()) this.start();
     this.pump();
+  }
+
+  private useRemote(): boolean {
+    return this.remote !== null && this.remote.connected() && Date.now() > this.remoteAwayUntil;
   }
 
   /** Drops the group's queued jobs; its running ones finish, unheard. */
@@ -86,6 +100,7 @@ export class ReviewPool {
     this.queues.delete(group);
     this.turn = this.turn.filter((g) => g !== group);
     for (const w of this.workers) if (w.task?.group === group) w.task.cancelled = true;
+    for (const t of this.remoteTasks) if (t.group === group) t.cancelled = true;
     return dropped;
   }
 
@@ -107,12 +122,13 @@ export class ReviewPool {
     return queue.length - keep.length;
   }
 
-  /** Jobs queued or running, for the status page and tests. */
-  load(): { queued: number; running: number; workers: number } {
+  /** Jobs queued or running (here and remotely), for the status page and tests. */
+  load(): { queued: number; running: number; workers: number; remote: number } {
     return {
       queued: [...this.queues.values()].reduce((a, q) => a + q.length, 0),
-      running: this.workers.filter((w) => w.task).length,
+      running: this.workers.filter((w) => w.task).length + this.remoteRunning,
       workers: this.workers.length,
+      remote: this.remoteRunning,
     };
   }
 
@@ -156,6 +172,33 @@ export class ReviewPool {
   }
 
   private pump(): void {
+    while (this.useRemote() && this.remoteRunning < this.remoteSlots) {
+      const task = this.take();
+      if (!task) return;
+      this.remoteRunning++;
+      this.remoteTasks.add(task);
+      this.remote!.submit<ReviewResult>('review', task.job, 15 * 60_000).then(
+        (result) => {
+          if (!task.cancelled) task.done(result);
+        },
+        (error: unknown) => {
+          if (this.errors++ < 20) console.error(`review: the remote failed a job (${error instanceof Error ? error.message : error}); doing it here`);
+          this.remoteAwayUntil = Date.now() + 60_000;
+          if (task.cancelled) return;
+          // Back to the front of its game's queue, for the local workers.
+          if (!this.queues.has(task.group)) {
+            this.queues.set(task.group, []);
+            this.turn.push(task.group);
+          }
+          this.queues.get(task.group)!.unshift(task);
+          this.start();
+        },
+      ).finally(() => {
+        this.remoteRunning--;
+        this.remoteTasks.delete(task);
+        this.pump();
+      });
+    }
     for (const worker of this.workers) {
       if (worker.task || !worker.child.connected) continue;
       const task = this.take();
