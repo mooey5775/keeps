@@ -26,8 +26,24 @@ MAX_ROWS = 16384  # observations per forward, at most (a batch bigger than this 
 BUCKETS = [2 ** k for k in range(4, 15)]  # batch sizes with a CUDA graph each (16 … 16384), a batch padded up to the next
 
 
-def load(path, device):
-  """The policy file's header and its network as the PyTorch agent, on `device`."""
+def quantize_weights(agent, bits=8, smallest=2048):
+  """Each linear layer's weights rounded to `bits`-bit integers, symmetric, one scale per output channel, then back
+  to floats: the network as a phone runs it with quantized weights. As Core ML's linear_quantize_weights does by
+  default, layers with fewer than `smallest` weights (the one-output heads, the card embedding) stay as they are:
+  one scale for a whole small layer costs the most precision for the least memory."""
+  top = 2 ** (bits - 1) - 1
+  with torch.no_grad():
+    for module in agent.modules():
+      if isinstance(module, torch.nn.Linear) and module.weight.numel() >= smallest:
+        w = module.weight  # [out, in]
+        scale = w.abs().amax(1, keepdim=True).clamp(min=1e-12) / top
+        w.copy_(torch.round(w / scale).clamp(-top, top) * scale)
+
+
+def load(path, device, precision='float32'):
+  """The policy file's header and its network as the PyTorch agent, on `device`, in `precision`: float32 (the
+  network as trained and as the TypeScript bot runs it), float16 (as Apple's Neural Engine runs it) or int8 (int8
+  weights, float16 arithmetic: the Neural Engine with quantized weights)."""
   header, body = read(path)
   if header.get('network') != 'entity':
     raise SystemExit(f'{path}: only entity networks are served (this one is {header.get("network", "mlp")})')
@@ -40,7 +56,10 @@ def load(path, device):
   game = SimpleNamespace(layout=header['layout'], max_available_actions=header['numActions'])
   agent = Agent(SimpleNamespace(game=game))
   load_haiku_params(agent, params)
-  return header, agent.to(device).eval()
+  if precision == 'int8':
+    quantize_weights(agent)
+  agent = agent.to(device).eval()
+  return header, (agent.half() if precision in ('float16', 'int8') else agent)
 
 
 class Server:
@@ -48,6 +67,7 @@ class Server:
   def __init__(self, header, agent, device):
     self.header, self.agent, self.device = header, agent, device
     self.size = header['observationSize']
+    self.dtype = next(agent.parameters()).dtype
     self.pending = []  # (rows, rowEnds, values, indices, future), in arrival order
     self.wake = asyncio.Event()
     self.stats = {'requests': 0, 'rows': 0, 'forwards': 0, 'busy': 0.0, 'connections': 0}
@@ -60,7 +80,7 @@ class Server:
     """The forward for `rows` observations as a CUDA graph: one launch instead of one per layer (eager
     PyTorch spends milliseconds a forward launching kernels; the arithmetic is a small part). The same
     kernels, so the same numbers."""
-    x = torch.zeros(rows, self.size, device=self.device)
+    x = torch.zeros(rows, self.size, device=self.device, dtype=self.dtype)
     side = torch.cuda.Stream()
     side.wait_stream(torch.cuda.current_stream())
     with torch.cuda.stream(side), torch.inference_mode():
@@ -154,12 +174,12 @@ class Server:
         # Rows don't mix in this network, so the padding rows past `total` (whatever they hold) change nothing.
         x, out, graph = self.graphs[bucket]
         x[:total].zero_()
-        x[rows, columns] = values
+        x[rows, columns] = values.to(self.dtype)
         graph.replay()
         logits = out[:total]
       else:
-        x = torch.zeros(total, self.size, device=self.device)
-        x[rows, columns] = values
+        x = torch.zeros(total, self.size, device=self.device, dtype=self.dtype)
+        x[rows, columns] = values.to(self.dtype)
         logits = self.agent.logits(x)
       logits = logits.float().cpu().numpy().astype('<f4')
     self.stats['requests'] += len(part)
@@ -187,18 +207,20 @@ async def main():
   parser.add_argument('policy')
   parser.add_argument('socket')
   parser.add_argument('--device', default='cuda:0' if torch.cuda.is_available() else 'cpu')
+  parser.add_argument('--precision', choices=['float32', 'float16', 'int8'], default='float32',
+                      help='float32: as trained; float16 and int8 (weights): as a phone\'s Neural Engine would run it')
   parser.add_argument('--stats-every', type=float, default=600, help='seconds between the log\'s usage lines')
   args = parser.parse_args()
   torch.backends.cuda.matmul.allow_tf32 = False
   torch.backends.cudnn.allow_tf32 = False
   torch.set_float32_matmul_precision('highest')
-  header, agent = load(args.policy, args.device)
+  header, agent = load(args.policy, args.device, args.precision)
   server = Server(header, agent, args.device)  # captures its CUDA graphs (seconds) before the first search waits on them
   if os.path.exists(args.socket):
     os.unlink(args.socket)
   listener = await asyncio.start_unix_server(server.connection, path=args.socket, limit=1 << 24)
   os.chmod(args.socket, 0o600)
-  print(f'serving {args.policy} (step {header["step"]}, fingerprint {header["fingerprint"]}) on {args.device} at {args.socket}', flush=True)
+  print(f'serving {args.policy} (step {header["step"]}, fingerprint {header["fingerprint"]}) on {args.device} in {args.precision} at {args.socket}', flush=True)
   async with listener:
     await asyncio.gather(server.run(), server.report(args.stats_every), listener.serve_forever())
 
