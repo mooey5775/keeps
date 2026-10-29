@@ -3,18 +3,21 @@
 // rollouts, worlds as whole histories (the live bot's search). Each deal is played twice, A in one seat and
 // then the other, one round each.
 //   node sizematch.ts <weights> <worldsA> <worldsB> <deals> <seed> <threads>  → one JSON line per round
+// SEARCH_INFERENCE=<socket of bot/keeps_bot/serve.py>: the searches batched, the network on that GPU server.
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
-import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
+import { BatchedPool } from './batch-search.ts';
+import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds, type Evaluator } from './search-bot.ts';
 
 const [weights, aArg, bArg, dealsArg, seed, threadsArg] = process.argv.slice(2);
 setSearchMode('best-q');
 setSearchLog(() => {});
 const worlds = { A: Number(aArg), B: Number(bArg) };
 const policy = Policy.load(readFileSync(weights!));
-const pool = new RolloutPool(Number(threadsArg), weights!, true);
+const inference = process.env.SEARCH_INFERENCE || null;
+const pool: Evaluator = inference ? new BatchedPool(Number(threadsArg), weights!, inference, true) : new RolloutPool(Number(threadsArg), weights!, true);
 let x = 99991;
 const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;
 
