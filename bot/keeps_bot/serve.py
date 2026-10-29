@@ -1,0 +1,207 @@
+"""Midstrike's network on a GPU, for the batched search (packages/learn/demo/batch-search.ts).
+
+Loads an exported policy file (KPNN, as the TypeScript bot reads it) into the PyTorch agent VRPO trains
+(keeps_bot/vrpo/models.py, ported line for line from networks.entity) and answers batches of observations with
+the network's logits over a Unix socket; the protocol is in packages/learn/demo/inference.ts. Requests from every
+connection that arrive while the GPU is busy go through together, in one forward. Float32 throughout (no TF32),
+so the logits match the TypeScript forward's to float rounding.
+
+  .venv-torch/bin/python -m keeps_bot.serve <policy.bin> <socket> [--device cuda:0]
+"""
+import argparse
+import asyncio
+import json
+import os
+import struct
+import time
+from types import SimpleNamespace
+
+import numpy as np
+import torch
+
+from keeps_bot.export import read
+from keeps_bot.vrpo.models import Agent, load_haiku_params
+
+MAX_ROWS = 16384  # observations per forward, at most (a batch bigger than this goes through in parts)
+BUCKETS = [2 ** k for k in range(4, 15)]  # batch sizes with a CUDA graph each (16 … 16384), a batch padded up to the next
+
+
+def load(path, device):
+  """The policy file's header and its network as the PyTorch agent, on `device`."""
+  header, body = read(path)
+  if header.get('network') != 'entity':
+    raise SystemExit(f'{path}: only entity networks are served (this one is {header.get("network", "mlp")})')
+  floats = np.frombuffer(body, dtype='<f4')
+  params = {}
+  for t in header['tensors']:
+    size = int(np.prod(t['shape']))
+    module, name = t['name'].rsplit('/', 1)
+    params.setdefault(module, {})[name] = floats[t['offset']:t['offset'] + size].reshape(t['shape']).copy()
+  game = SimpleNamespace(layout=header['layout'], max_available_actions=header['numActions'])
+  agent = Agent(SimpleNamespace(game=game))
+  load_haiku_params(agent, params)
+  return header, agent.to(device).eval()
+
+
+class Server:
+
+  def __init__(self, header, agent, device):
+    self.header, self.agent, self.device = header, agent, device
+    self.size = header['observationSize']
+    self.pending = []  # (rows, rowEnds, values, indices, future), in arrival order
+    self.wake = asyncio.Event()
+    self.stats = {'requests': 0, 'rows': 0, 'forwards': 0, 'busy': 0.0, 'connections': 0}
+    self.graphs = {}  # bucket → (input, logits, CUDA graph)
+    if self.device.startswith('cuda'):
+      for rows in BUCKETS:
+        self.graphs[rows] = self.capture(rows)
+
+  def capture(self, rows):
+    """The forward for `rows` observations as a CUDA graph: one launch instead of one per layer (eager
+    PyTorch spends milliseconds a forward launching kernels; the arithmetic is a small part). The same
+    kernels, so the same numbers."""
+    x = torch.zeros(rows, self.size, device=self.device)
+    side = torch.cuda.Stream()
+    side.wait_stream(torch.cuda.current_stream())
+    with torch.cuda.stream(side), torch.inference_mode():
+      for _ in range(3):
+        self.agent.logits(x)
+    torch.cuda.current_stream().wait_stream(side)
+    graph = torch.cuda.CUDAGraph()
+    with torch.cuda.graph(graph), torch.inference_mode():
+      out = self.agent.logits(x)
+    return x, out, graph
+
+  def refusal(self, hello):
+    for key in ('fingerprint', 'step', 'observationSize', 'numActions'):
+      if hello.get(key) != self.header[key]:
+        return f'{key}: the client has {hello.get(key)!r}, the server {self.header[key]!r}'
+    return None
+
+  async def connection(self, reader, writer):
+    replies = asyncio.Queue()
+    sender = None
+    try:
+      head = await reader.readexactly(8)
+      if head[:4] != b'KPI1':
+        return
+      hello = json.loads(await reader.readexactly(struct.unpack('<I', head[4:])[0]))
+      problem = self.refusal(hello)
+      answer = json.dumps({'error': problem} if problem else {'ok': True}).encode()
+      writer.write(struct.pack('<I', len(answer)) + answer)
+      await writer.drain()
+      if problem:
+        print(f'refused a client: {problem}', flush=True)
+        return
+      self.stats['connections'] += 1
+      sender = asyncio.create_task(self.send(replies, writer))
+      loop = asyncio.get_running_loop()
+      while True:
+        rows, nonzeros = struct.unpack('<II', await reader.readexactly(8))
+        body = await reader.readexactly(4 * rows + 6 * nonzeros)
+        ends = np.frombuffer(body, '<u4', rows, 0)
+        values = np.frombuffer(body, '<f4', nonzeros, 4 * rows)
+        indices = np.frombuffer(body, '<u2', nonzeros, 4 * rows + 4 * nonzeros)
+        future = loop.create_future()
+        self.pending.append((rows, ends, values, indices, future))
+        self.wake.set()
+        await replies.put(future)
+    except (asyncio.IncompleteReadError, ConnectionError):
+      pass
+    finally:
+      if sender:
+        sender.cancel()
+      writer.close()
+
+  async def send(self, replies, writer):
+    """Each request's logits, in the order the connection sent them."""
+    while True:
+      future = await replies.get()
+      writer.write(await future)
+      await writer.drain()
+
+  async def run(self):
+    while True:
+      await self.wake.wait()
+      self.wake.clear()
+      batch, self.pending = self.pending, []
+      while batch:
+        part, rows = [], 0
+        while batch and (not part or rows + batch[0][0] <= MAX_ROWS):
+          rows += batch[0][0]
+          part.append(batch.pop(0))
+        try:
+          outs = await asyncio.to_thread(self.forward, part)
+          for request, out in zip(part, outs):
+            request[4].set_result(out)
+        except Exception as error:  # a failed forward fails its requests (the clients fall back to the CPU), not the server
+          print(f'forward failed: {error!r}', flush=True)
+          for request in part:
+            request[4].set_exception(error)
+
+  def forward(self, part):
+    """The logits for each request in `part`, as the bytes of its reply."""
+    started = time.perf_counter()
+    counts = [request[0] for request in part]
+    total = sum(counts)
+    per_row = np.concatenate([np.diff(request[1], prepend=np.uint32(0)) for request in part]).astype(np.int64)
+    rows = torch.from_numpy(np.repeat(np.arange(total, dtype=np.int64), per_row)).to(self.device)
+    columns = torch.from_numpy(np.concatenate([request[3] for request in part]).astype(np.int64)).to(self.device)
+    values = torch.from_numpy(np.concatenate([request[2] for request in part])).to(self.device)
+    with torch.inference_mode():
+      bucket = next((b for b in BUCKETS if b >= total), None)
+      if bucket in self.graphs:
+        # Rows don't mix in this network, so the padding rows past `total` (whatever they hold) change nothing.
+        x, out, graph = self.graphs[bucket]
+        x[:total].zero_()
+        x[rows, columns] = values
+        graph.replay()
+        logits = out[:total]
+      else:
+        x = torch.zeros(total, self.size, device=self.device)
+        x[rows, columns] = values
+        logits = self.agent.logits(x)
+      logits = logits.float().cpu().numpy().astype('<f4')
+    self.stats['requests'] += len(part)
+    self.stats['rows'] += total
+    self.stats['forwards'] += 1
+    self.stats['busy'] += time.perf_counter() - started
+    bounds = np.cumsum([0] + counts)
+    return [logits[a:b].tobytes() for a, b in zip(bounds[:-1], bounds[1:])]
+
+  async def report(self, every):
+    last = dict(self.stats)
+    while True:
+      await asyncio.sleep(every)
+      now = dict(self.stats)
+      d = {k: now[k] - last[k] for k in now}
+      if d['forwards']:
+        print(f'{time.strftime("%Y-%m-%dT%H:%M:%S")} {d["forwards"]} forwards, {d["rows"]} observations '
+              f'({d["rows"] / d["forwards"]:.0f} per forward, {d["requests"] / d["forwards"]:.1f} requests), '
+              f'GPU thread busy {d["busy"]:.1f} s; {now["connections"]} connections so far', flush=True)
+      last = now
+
+
+async def main():
+  parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+  parser.add_argument('policy')
+  parser.add_argument('socket')
+  parser.add_argument('--device', default='cuda:0' if torch.cuda.is_available() else 'cpu')
+  parser.add_argument('--stats-every', type=float, default=600, help='seconds between the log\'s usage lines')
+  args = parser.parse_args()
+  torch.backends.cuda.matmul.allow_tf32 = False
+  torch.backends.cudnn.allow_tf32 = False
+  torch.set_float32_matmul_precision('highest')
+  header, agent = load(args.policy, args.device)
+  server = Server(header, agent, args.device)  # captures its CUDA graphs (seconds) before the first search waits on them
+  if os.path.exists(args.socket):
+    os.unlink(args.socket)
+  listener = await asyncio.start_unix_server(server.connection, path=args.socket, limit=1 << 24)
+  os.chmod(args.socket, 0o600)
+  print(f'serving {args.policy} (step {header["step"]}, fingerprint {header["fingerprint"]}) on {args.device} at {args.socket}', flush=True)
+  async with listener:
+    await asyncio.gather(server.run(), server.report(args.stats_every), listener.serve_forever())
+
+
+if __name__ == '__main__':
+  asyncio.run(main())

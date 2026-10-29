@@ -99,12 +99,22 @@ export class Policy {
     return new Policy(info, info.layers.map((_, i) => linear(`torso.${i}`)), linear('policy'), null);
   }
 
-  /** The network's policy over the legal actions (the softmax, before post-processing). */
-  raw(obs: Float32Array, legal: ArrayLike<number>): Float32Array {
-    if (this.entity) return legalPolicy(this.entity.logits(obs), legal);
+  /** The network's output: a logit per action id. */
+  logits(obs: Float32Array): Float32Array {
+    if (this.entity) return this.entity.logits(obs);
     let x = obs;
     for (const layer of this.torso) x = forward(layer, x, true);
-    return legalPolicy(forward(this.head!, x, false), legal);
+    return forward(this.head!, x, false);
+  }
+
+  /** The network's policy over the legal actions (the softmax, before post-processing). */
+  raw(obs: Float32Array, legal: ArrayLike<number>): Float32Array {
+    return legalPolicy(this.logits(obs), legal);
+  }
+
+  /** raw() from logits computed elsewhere (a batched forward: packages/learn/demo/inference.ts). */
+  rawFrom(logits: Float32Array, legal: ArrayLike<number>): Float32Array {
+    return legalPolicy(logits, legal);
   }
 
   /**
@@ -117,8 +127,13 @@ export class Policy {
 
   /** The policy as the bot plays it: post-processed like R-NaD at test time. */
   probabilities(obs: Float32Array, legal: ArrayLike<number>): Float32Array {
+    return this.probabilitiesFrom(this.logits(obs), legal);
+  }
+
+  /** probabilities() from logits computed elsewhere. */
+  probabilitiesFrom(logits: Float32Array, legal: ArrayLike<number>): Float32Array {
     const { threshold, discretization } = this.info.postprocess;
-    return discretize(thresholded(this.raw(obs, legal), legal, threshold), discretization);
+    return discretize(thresholded(legalPolicy(logits, legal), legal, threshold), discretization);
   }
 }
 
