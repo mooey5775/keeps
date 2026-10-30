@@ -5,11 +5,12 @@
 import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { Belief } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
+import { encodeObservation2, OBSERVATION2_SIZE } from '../src/observation2.ts';
 import { sample, type Policy } from '../src/policy.ts';
 
 /** What a playout asks the network: an observation, and the ids legal there. */
 export interface Ask {
+  /** Valid until the playout is resumed: each playout reuses one buffer for all its observations. */
   obs: Float32Array;
   ids: number[];
   mask: Uint8Array;
@@ -33,7 +34,7 @@ export function greedyPick(policy: Policy): Pick {
   };
 }
 
-function* move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[], pick: Pick): Generator<Ask, Command, Float32Array> {
+function* move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[], pick: Pick, obs: Float32Array): Generator<Ask, Command, Float32Array> {
   const view = viewFor(state, seat);
   belief.update(log).observe(view);
   const decision = new Decision(view, legalCommands(state, seat));
@@ -42,7 +43,7 @@ function* move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[], 
     const ids = decision.next(prefix);
     const mask = new Uint8Array(NUM_ACTIONS);
     for (const id of ids) mask[id] = 1;
-    const ask = { obs: encodeObservation2(view, belief, prefix, ids), ids, mask };
+    const ask = { obs: encodeObservation2(view, belief, prefix, ids, obs), ids, mask };
     prefix.push(pick(yield ask, ask));
     const command = decision.complete(prefix);
     if (command) return command;
@@ -67,6 +68,7 @@ export function* playout(
   let state = world;
   let command = first;
   let seat = me;
+  const obs = new Float32Array(OBSERVATION2_SIZE);
   for (let step = 0; ; step++) {
     if (step > 3000) throw new Error('playout did not end');
     const r = apply(state, seat, command, { trusted: true });
@@ -76,7 +78,7 @@ export function* playout(
     if (state.phase !== 'playing' && state.phase !== 'post-round') return state.lastRoundWinner === me ? 1 : -1;
     seat = state.prompts[0]!.seat;
     const p = players.get(seat)!;
-    command = yield* move(state, seat, p.belief, p.log, pick);
+    command = yield* move(state, seat, p.belief, p.log, pick, obs);
   }
 }
 
