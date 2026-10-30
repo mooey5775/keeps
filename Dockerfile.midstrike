@@ -4,7 +4,8 @@
 # The bot searches: worlds sampled as whole histories (the opponent plays from their own log in each), with
 # sampled rollouts, and plays the move with the best rollout value (best-Q). All the searching and the round
 # reviews run on gpu03, whose remote worker asks this server for work (remote.ts; the systemd user service
-# midstrike-remote there, with the same weights file): 512 worlds per decision (REMOTE_WORLDS). This machine
+# midstrike-remote there, with the same weights file; its network runs batched on GPU 1, the user service
+# midstrike-inference): 2,048 worlds per decision (REMOTE_WORLDS), near-ties within 0.025 (SEARCH_TIE). This machine
 # does none of it (LOCAL_SEARCH=off): while gpu03 is away the bot waits and the player is told, training mode
 # shows no hint, and reviews wait. REMOTE_TOKEN (a Fly secret) is the worker's password. Training mode's advice
 # comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened (with
@@ -48,6 +49,6 @@ COPY --from=build /app/packages/web/dist packages/web/dist
 
 # The admin password (for /bot/) comes from the ADMIN_TOKEN secret, and the remote worker's from REMOTE_TOKEN: never the image.
 ENV NODE_ENV=production PORT=8080 KEEPS_DATA_DIR=/app/data \
-    BOT=midstrike BOT_NAME=Midstrike REMOTE_WORLDS=512 LOCAL_SEARCH=off SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
+    BOT=midstrike BOT_NAME=Midstrike REMOTE_WORLDS=2048 SEARCH_TIE=0.025 LOCAL_SEARCH=off SEARCH_ROLLOUTS=sampled SEARCH_MODE=best-q
 EXPOSE 8080
 CMD ["node", "packages/learn/demo/server.ts"]

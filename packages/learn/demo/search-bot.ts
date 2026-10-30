@@ -42,7 +42,11 @@ let mode: 'damped' | 'best-q' = process.env.SEARCH_MODE === 'best-q' ? 'best-q' 
 export function setSearchMode(m: 'damped' | 'best-q'): void {
   mode = m;
 }
-const TIE = 0.05;
+/**
+ * best-Q's near-tie margin. It should shrink as the worlds grow (Q's noise goes as 1/√worlds): 0.05 suits 512
+ * worlds, 0.025 2,048 (held-out worlds, scratch splits.py: the decision's loss is least about there).
+ */
+const TIE = Number(process.env.SEARCH_TIE ?? 0.05);
 
 /** What the bot thought at one decision, for the demo's insight page. Evaluations are its chance to win (0..1). */
 export interface SearchReport {
