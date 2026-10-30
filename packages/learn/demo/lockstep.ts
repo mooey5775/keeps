@@ -3,7 +3,7 @@
 // playout's next observation goes to the network in one batch. The playouts are split into groups that take
 // turns, so one group's engine work overlaps the other's wait for the network.
 import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import type { Policy } from '../src/policy.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { greedyPick, playout, sampledPick, type Ask } from './playout.ts';
@@ -30,13 +30,15 @@ export function worldGames(job: WorldsJob, policy: Policy, sampled: boolean): Ge
   const opponent = ((me + 2) % 4) as Seat;
   const random = seeded(seed, 0);
   const view = viewFor(state, me);
-  const belief = new Belief(me, { sound: true }).update(myLog).observe(view);
-  const model = worldModel(state, me, belief, view, myLog);
+  // The log notes what the player saw at their decisions (BotPlayer's does), this one too.
+  const log = noteObservation([...myLog], view, me);
+  const belief = new Belief(me, { sound: true }).update(log);
+  const model = worldModel(state, me, belief, view, log);
   const worlds = Array.from({ length: n }, () => sampleHistory(model, random));
   return worlds.flatMap((h, w) =>
     commands.map((c, k) => {
       const pick = sampled ? sampledPick(policy, seeded(seed, 1 + w * commands.length + k)) : greedyPick(policy);
-      return playout(h.world, me, c, myLog, h.logs[opponent]!, pick);
+      return playout(h.world, me, c, log, h.logs[opponent]!, pick);
     }),
   );
 }

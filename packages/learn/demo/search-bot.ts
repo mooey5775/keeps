@@ -15,7 +15,7 @@ import {
   type TraceEvent,
 } from '../../engine/src/index.ts';
 import { actionName, Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import type { BotPlayer } from '../src/bot.ts';
@@ -115,10 +115,12 @@ export class RolloutPool implements Evaluator {
     const { state, me, myLog, commands, n } = job;
     const opponent = ((me + 2) % 4) as Seat;
     const view = viewFor(state, me);
-    const belief = new Belief(me, { sound: true }).update(myLog).observe(view);
-    const model = worldModel(state, me, belief, view, myLog);
+    // The log notes what the player saw at their decisions (BotPlayer's does), this one too.
+    const log = noteObservation([...myLog], view, me);
+    const belief = new Belief(me, { sound: true }).update(log);
+    const model = worldModel(state, me, belief, view, log);
     const worlds = Array.from({ length: n }, () => sampleHistory(model, random));
-    return Promise.all(worlds.map((h) => this.run({ world: h.world, myLog, theirLog: h.logs[opponent]!, me, commands })));
+    return Promise.all(worlds.map((h) => this.run({ world: h.world, myLog: log, theirLog: h.logs[opponent]!, me, commands })));
   }
 
   run(job: { world: GameState; myLog: TraceEvent[]; theirLog: TraceEvent[]; me: Seat; commands: Command[] }): Promise<number[]> {
@@ -186,7 +188,7 @@ export async function searchChoose(
   b.log.push(...eventsFor(events.slice(b.read), seat));
   b.read = events.length;
   const view = viewFor(state, seat);
-  b.belief.update(b.log).observe(view);
+  b.belief.update(noteObservation(b.log, view, seat));
   const decision = new Decision(view, legalCommands(state, seat));
   const first = decision.next([]);
   // Tithes' reorder lists no commands (any order of up to 12 cards is legal). The network orders the

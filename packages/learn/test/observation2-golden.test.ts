@@ -11,9 +11,9 @@
 // in every world consistent with what they know.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
+import { apply, CARD_IDS, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision } from '../src/actions.ts';
-import { Belief, noteObservation } from '../src/belief.ts';
+import { Belief, isObserved, noteObservation } from '../src/belief.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { seeded } from '../demo/random.ts';
@@ -106,6 +106,86 @@ describe("a player's observation", () => {
       });
     }
     expect(checked).toBeGreaterThan(6000);
+  });
+
+  it('comes from worlds that showed them what they saw', () => {
+    let checked = 0;
+    for (let g = 0; g < 12; g++) {
+      const random = seeded(g, 77);
+      const logs = new Map<Seat, TraceEvent[]>();
+      let read = 0;
+      let n = 0;
+      play(g, ({ state, events, seat, prefix }) => {
+        for (const s of [0, 2] as Seat[]) {
+          const log = logs.get(s) ?? [];
+          logs.set(s, log);
+          log.push(...eventsFor(events.slice(read), s));
+        }
+        read = events.length;
+        const view = viewFor(state, seat);
+        const myLog = noteObservation(logs.get(seat)!, view, seat);
+        if (prefix.length || n++ % 5 !== 0) return;
+        const model = worldModel(state, seat, new Belief(seat, { sound: true }).update(myLog), view, myLog);
+        const round = myLog.slice(myLog.findLastIndex((e) => e.payload.type === 'round-start'));
+        for (let w = 0; w < 3; w++) {
+          const h = sampleHistory(model, random);
+          // Replayed independently: what the player would have noted at each of their decisions in this world.
+          let world = h.start;
+          const noted: TraceEvent[] = [];
+          for (const { seat: s, command, rng: chance } of h.commands) {
+            if (s === seat) noteObservation(noted, viewFor(world, seat), seat);
+            const r = apply(chance ? { ...world, rng: chance } : world, s, command);
+            if (!r.ok) throw new Error(r.error.message);
+            world = r.state;
+            noted.push(...eventsFor(r.events, seat));
+          }
+          noteObservation(noted, viewFor(world, seat), seat);
+          // (A hand's order says nothing: worlds may hold the same cards in another order.)
+          const seen = (log: TraceEvent[]) =>
+            log.filter(isObserved).map((e) => {
+              const o = e.payload as unknown as { tops: unknown[]; visible: string[] };
+              return { tops: o.tops, visible: [...o.visible].sort() };
+            });
+          expect(seen(noted)).toEqual(seen(round));
+          checked++;
+        }
+      });
+    }
+    expect(checked).toBeGreaterThan(300);
+  });
+
+  it("rules out every world that didn't show them what their log says they saw", () => {
+    let tested = 0;
+    for (let g = 0; g < 4; g++) {
+      const logs = new Map<Seat, TraceEvent[]>();
+      let read = 0;
+      let done = false;
+      play(g, ({ state, events, seat, prefix }) => {
+        for (const s of [0, 2] as Seat[]) {
+          const log = logs.get(s) ?? [];
+          logs.set(s, log);
+          log.push(...eventsFor(events.slice(read), s));
+        }
+        read = events.length;
+        const view = viewFor(state, seat);
+        const myLog = noteObservation(logs.get(seat)!, view, seat);
+        const notes = myLog.map((e, i) => [e, i] as const).filter(([e]) => isObserved(e));
+        if (done || prefix.length || notes.length < 4 || myLog.slice(notes[0]![1]).some((e) => e.payload.type === 'round-start')) return;
+        // The model from the true log; then an earlier observation in it claims a card in sight that wasn't.
+        const model = worldModel(state, seat, new Belief(seat, { sound: true }).update(myLog), view, myLog);
+        const [entry] = notes[1]!;
+        const seen = entry.payload as unknown as { visible: string[] };
+        const absent = CARD_IDS.find((c) => !seen.visible.includes(c))!;
+        const tampered = { ...entry, payload: { ...entry.payload, visible: [...seen.visible, absent] } as unknown as TraceEvent['payload'] };
+        const at = model.log.indexOf(entry);
+        expect(at).toBeGreaterThan(0);
+        (model.log as TraceEvent[])[at] = tampered;
+        expect(() => sampleHistory(model, seeded(g, 3))).toThrow(/no history replays/);
+        tested++;
+        done = true;
+      });
+    }
+    expect(tested).toBe(4);
   });
 
   it('is the same in every world consistent with what they know', () => {

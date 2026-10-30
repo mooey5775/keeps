@@ -4,6 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { BotPlayer } from '../src/bot.ts';
+import { noteObservation } from '../src/belief.ts';
 import { eventsFor, viewFor } from '../../engine/src/index.ts';
 import { Policy } from '../src/policy.ts';
 import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds, type SearchReport } from './search-bot.ts';
@@ -22,11 +23,11 @@ for (const sampled of process.env.ROLLOUTS === 'sampled' ? [true] : process.env.
   const pool = new RolloutPool(12, weights!, sampled);
   let { state, events } = newGame(lines[0].options) as { state: GameState; events: TraceEvent[] };
   const bot = new BotPlayer(policy, seat);
-  const b = bot as unknown as { log: TraceEvent[]; read: number; belief: { update: (l: TraceEvent[]) => { observe: (v: unknown) => void } } };
+  const b = bot as unknown as { log: TraceEvent[]; read: number; belief: { update: (l: TraceEvent[]) => unknown } };
   for (const { seat: s, command } of lines.slice(1, 1 + K)) {
     if (s === seat) {
       b.log.push(...eventsFor(events.slice(b.read), seat)); b.read = events.length;
-      b.belief.update(b.log).observe(viewFor(state, seat));
+      b.belief.update(noteObservation(b.log, viewFor(state, seat), seat as Seat));
     }
     const r = apply(state, s, command);
     if (!r.ok) throw new Error(r.error.message);

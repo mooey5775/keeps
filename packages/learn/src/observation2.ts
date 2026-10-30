@@ -200,7 +200,7 @@ export function encodeObservation2(
     const slots = pile.slots;
     for (let i = 0; i < slots.length; i++) {
       const card = slots[i];
-      if (card && DEPTH[CARD_NUMBER[card]] < 0) DEPTH[CARD_NUMBER[card]] = i;
+      if (card && DEPTH[CARD_NUMBER[card]]! < 0) DEPTH[CARD_NUMBER[card]] = i;
     }
   }
   const PL = PLACES.length;

@@ -29,7 +29,7 @@ import {
   type TraceEvent,
 } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import { sampleHistory, sampleWorld, worldModel } from '../src/worlds.ts';
 
 function rng(seed: number) {
@@ -317,15 +317,18 @@ describe('worlds, judged by replaying the engine', () => {
           // Replayed independently: the player's log, the opponent's own log, and the world (but its fresh chance, and the ids the engine gives prompts).
           let state = h.start;
           let events: TraceEvent[] = [];
+          // The opponent's log as BotPlayer would keep it: their events, and what they saw at each of their decisions.
+          const theirs: TraceEvent[] = [];
           for (const { seat, command, rng: chance } of h.commands) {
+            if (seat === opp) noteObservation(theirs, viewFor(state, opp), opp);
             const r = apply(chance ? { ...state, rng: chance } : state, seat, command);
             expect(r.ok, JSON.stringify(command)).toBe(true);
             if (!r.ok) break;
             state = r.state;
             events = [...events, ...r.events];
+            theirs.push(...eventsFor(r.events, opp));
           }
           const mine = eventsFor(events, me);
-          const theirs = eventsFor(events, opp);
           expect(same(mine, myLog.slice(myLog.length - mine.length))).toBe(true);
           expect(h.logs[opp]!.slice(h.logs[opp]!.length - theirs.length).map(canon)).toEqual(theirs.map(canon));
           expect(hiddenKey(state, me)).toBe(hiddenKey(h.world, me));

@@ -109,13 +109,20 @@ export interface Observed {
   visible: CardId[];
 }
 
-const isObserved = (e: TraceEvent): boolean => (e.payload as { type: string }).type === 'observed';
+export const isObserved = (e: TraceEvent): boolean => (e.payload as { type: string }).type === 'observed';
 
 /** What `view` shows of the cards, as an observation entry's payload. */
 function observedIn(view: PlayerView, me: Seat): Observed {
   const visible = [...(view.hands[me]!.cards ?? []), ...view.discard];
   for (const keep of view.keeps) for (const c of keep.cards) if (c.id) visible.push(c.id);
   return { type: 'observed', tops: view.piles.map((p) => p.top), visible };
+}
+
+/** Whether an observation entry is what `view` shows `me` (the visible cards in any order). */
+export function observes(entry: TraceEvent, view: PlayerView, me: Seat): boolean {
+  const seen = entry.payload as unknown as Observed;
+  const now = observedIn(view, me);
+  return JSON.stringify(seen.tops) === JSON.stringify(now.tops) && JSON.stringify([...seen.visible].sort()) === JSON.stringify(now.visible.sort());
 }
 
 /**
@@ -125,7 +132,11 @@ function observedIn(view: PlayerView, me: Seat): Observed {
 export function noteObservation(log: TraceEvent[], view: PlayerView, me: Seat): TraceEvent[] {
   const payload = observedIn(view, me);
   const last = log.at(-1);
-  if (last && isObserved(last) && JSON.stringify(last.payload) === JSON.stringify(payload)) return log;
+  if (last && isObserved(last)) {
+    const was = last.payload as unknown as Observed;
+    const same = (a: readonly (CardId | null)[], b: readonly (CardId | null)[]) => a.length === b.length && a.every((x, i) => x === b[i]);
+    if (same(was.tops, payload.tops) && same(was.visible, payload.visible)) return log;
+  }
   log.push({
     seq: last?.seq ?? 0,
     round: last?.round ?? 0,

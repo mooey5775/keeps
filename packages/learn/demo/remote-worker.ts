@@ -102,7 +102,7 @@ async function lane(kind: RemoteKind): Promise<never> {
     }
     let job: { id: number; kind: RemoteKind; stamp: string; payload: unknown };
     try {
-      job = await res.json();
+      job = (await res.json()) as typeof job;
       if (typeof job?.id !== 'number' || job.kind !== kind) throw new Error('not a job');
     } catch {
       // A server without remote work (an older version answers with its web page): ask again later.

@@ -1,6 +1,6 @@
 import { eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision, NUM_ACTIONS } from './actions.ts';
-import { Belief } from './belief.ts';
+import { Belief, noteObservation } from './belief.ts';
 import { encodeObservation } from './observation.ts';
 import { encodeObservation2 } from './observation2.ts';
 import { sample, type Policy } from './policy.ts';
@@ -110,7 +110,8 @@ export class BotPlayer {
     this.log.push(...eventsFor(events.slice(this.read), this.seat));
     this.read = events.length;
     const view = viewFor(state, this.seat);
-    this.belief.update(this.log).observe(view);
+    // What the view shows goes in the log (the search is given the log), and the belief learns it from there.
+    this.belief.update(noteObservation(this.log, view, this.seat));
     return view;
   }
 }

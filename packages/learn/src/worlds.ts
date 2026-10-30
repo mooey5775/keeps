@@ -14,7 +14,7 @@ import {
   type Seat,
   type TraceEvent,
 } from '@keeps/engine';
-import type { Belief, HiddenEvent, PileOp } from './belief.ts';
+import { isObserved, noteObservation, observes, type Belief, type HiddenEvent, type PileOp } from './belief.ts';
 
 // Whole histories a player can't tell from the real one, sampled exactly from the chance-only posterior.
 //
@@ -533,7 +533,9 @@ const seeded = (n: number) => ({ a: Math.imul(n + 1, 0x9e3779b1) >>> 0, b: Math.
  * player's, or the opponent's) whose events are the log's next ones and whose hidden effects are the
  * plan's (the piles as rebuilt, the card hidden face down). Legerdemain's random steal takes the card the
  * log shows (each card is equally likely, in every world). Null if no command fits: a history the
- * proposal counted that the engine doesn't allow.
+ * proposal counted that the engine doesn't allow. What the player's log says they saw at their decisions
+ * (its Observed entries: what was face up) the world must have shown them too; and the opponent's log in
+ * the world notes what they saw at theirs, as BotPlayer's does.
  */
 const strict = Boolean(process.env.WORLDS_STRICT);
 
@@ -565,6 +567,9 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
     return snap >= 0 ? deal.snapshots[snap]!.piles : deal.piles;
   };
   const commands: History['commands'] = [];
+  // Each player's log in the world: the player's own is theirs, observations included; the opponent's notes theirs.
+  const mine: TraceEvent[] = [...seen0];
+  const theirs = eventsFor(start.events, opponent);
   const fits = (seen: TraceEvent[]) => seen.length > 0 && cursor + seen.length <= log.length && seen.every((e, i) => canonical(e) === canonical(log[cursor + i]!));
   const consistent = (s: GameState, from: number, to: number) => {
     const before = snap;
@@ -581,6 +586,12 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
     return true;
   };
   while (cursor < log.length) {
+    if (isObserved(log[cursor]!)) {
+      if (!observes(log[cursor]!, viewFor(state, me), me)) return 'replay: the player saw otherwise';
+      mine.push(log[cursor]!);
+      cursor++;
+      continue;
+    }
     const step = commands.length;
     const candidates = [me, opponent].flatMap((seat) => legalCommands(state, seat).map((command) => ({ seat, command, key: JSON.stringify(command) })));
     // A reorder (Tithes) lists no commands, any order being legal: the order is the one the pile was left in.
@@ -632,6 +643,9 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
     if (!found) return `replay: no command fits (${log[cursor]!.payload.type})`;
     model.tried.set(step, found.key);
     commands.push(found.rng ? { seat: found.seat, command: found.command, rng: found.rng } : { seat: found.seat, command: found.command });
+    if (found.seat === opponent) noteObservation(theirs, viewFor(state, opponent), opponent);
+    mine.push(...eventsFor(found.events, me));
+    theirs.push(...eventsFor(found.events, opponent));
     events.push(...found.events);
     state = found.state;
     cursor += found.seen;
@@ -646,7 +660,7 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
     traceSeq: model.state.traceSeq,
     rng: seeded(Math.floor(random() * 2 ** 31)),
   };
-  return { world, start: s0, commands, logs: { [me]: eventsFor(events, me), [opponent]: eventsFor(events, opponent) } };
+  return { world, start: s0, commands, logs: { [me]: mine, [opponent]: theirs } };
 }
 
 /** Where counting fails, for an error message: per σ that fits the known origins, the stage that leaves nothing. */

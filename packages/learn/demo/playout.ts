@@ -4,7 +4,7 @@
 // yields each observation the policy must read and takes back the network's logits for it.
 import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import { encodeObservation2, OBSERVATION2_SIZE } from '../src/observation2.ts';
 import { sample, type Policy } from '../src/policy.ts';
 
@@ -36,7 +36,8 @@ export function greedyPick(policy: Policy): Pick {
 
 function* move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[], pick: Pick, obs: Float32Array): Generator<Ask, Command, Float32Array> {
   const view = viewFor(state, seat);
-  belief.update(log).observe(view);
+  // As BotPlayer does: the view noted in the player's own log, and learned from there.
+  belief.update(noteObservation(log, view, seat));
   const decision = new Decision(view, legalCommands(state, seat));
   const prefix: number[] = [];
   for (;;) {
