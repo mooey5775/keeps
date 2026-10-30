@@ -1,0 +1,106 @@
+import Foundation
+import WebKit
+
+/// The app's core (ios/core): the game server the app plays on, with Midstrike, in a web view that is never shown
+/// (WebKit's JIT runs the rules and the search; its network runs in Core ML, through the keeps:// scheme).
+///
+/// It speaks JSON strings both ways: messages go in through keepsCore.receive(json), and come back through the
+/// `core` message handler. A connection is one client of the core's server, speaking the website's protocol.
+@MainActor
+final class Core: NSObject, WKScriptMessageHandler {
+  /// The web view: it must be in the window for its page to run at full speed (CoreView puts it there, unseen).
+  let webView: WKWebView
+  private var started: CheckedContinuation<[String: Any], Error>?
+  private var connections: [Int: ([String: Any]) -> Void] = [:]
+  private var nextConnection = 1
+  /// Each of Midstrike's searches, as it finishes (its room, seat, turn, worlds, moves, ms).
+  var onSearch: (([String: Any]) -> Void)?
+  /// Something in the core failed (its message).
+  var onFailure: ((String) -> Void)?
+
+  /// Throws if the network (Core ML) or the core's files aren't in `bundle`.
+  init(bundle: Bundle = .main) throws {
+    guard let root = bundle.url(forResource: "core", withExtension: nil) else { throw KeepsError("the core isn't in the app") }
+    // The scheme handler goes in the configuration before the web view is made from it (the view takes a copy).
+    let config = WKWebViewConfiguration()
+    config.setURLSchemeHandler(SchemeHandler(root: root, inference: try Inference()), forURLScheme: "keeps")
+    webView = WKWebView(frame: CGRect(x: 0, y: 0, width: 1, height: 1), configuration: config)
+    super.init()
+    // (The controller is shared with the view; a handler holds its target strongly: the core lives as long as the app.)
+    config.userContentController.add(self, name: "core")
+    webView.isInspectable = true
+  }
+
+  /// Loads the core and waits until it's ready: its network loaded, its search workers started. Returns what it said.
+  func start() async throws -> [String: Any] {
+    try await withCheckedThrowingContinuation { continuation in
+      started = continuation
+      webView.load(URLRequest(url: URL(string: "keeps://app/index.html")!))
+    }
+  }
+
+  /// A new client of the core's server; its messages arrive at `receive`. Returns the connection's id.
+  func connect(_ receive: @escaping ([String: Any]) -> Void) -> Int {
+    let id = nextConnection
+    nextConnection += 1
+    connections[id] = receive
+    deliver(["t": "connect", "id": id])
+    return id
+  }
+
+  /// Sends a client message (the website's protocol, as JSON) on connection `id`.
+  func send(_ id: Int, _ message: [String: Any]) {
+    deliver(["t": "client", "id": id, "message": message])
+  }
+
+  func close(_ id: Int) {
+    deliver(["t": "close", "id": id])
+    connections[id] = nil
+  }
+
+  /// How long Midstrike waits before each move, so a person can follow it.
+  func configure(botDelayMs: Int) {
+    deliver(["t": "config", "botDelayMs": botDelayMs])
+  }
+
+  private func deliver(_ message: [String: Any]) {
+    guard let data = try? JSONSerialization.data(withJSONObject: message), let json = String(data: data, encoding: .utf8) else {
+      onFailure?("could not encode \(message)")
+      return
+    }
+    webView.callAsyncJavaScript("keepsCore.receive(json)", arguments: ["json": json], in: nil, in: .page) { result in
+      if case .failure(let error) = result { self.onFailure?("keepsCore.receive: \(error)") }
+    }
+  }
+
+  nonisolated func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
+    guard let json = message.body as? String else { return }
+    MainActor.assumeIsolated { self.received(json) }
+  }
+
+  private func received(_ json: String) {
+    guard let data = json.data(using: .utf8), let m = try? JSONSerialization.jsonObject(with: data) as? [String: Any], let t = m["t"] as? String else {
+      onFailure?("unreadable message from the core: \(json.prefix(200))")
+      return
+    }
+    switch t {
+    case "ready":
+      started?.resume(returning: m)
+      started = nil
+    case "failed":
+      let why = m["message"] as? String ?? "?"
+      if let started {
+        started.resume(throwing: KeepsError("the core failed to start: \(why)"))
+        self.started = nil
+      } else {
+        onFailure?(why)
+      }
+    case "server":
+      if let id = m["id"] as? Int { connections[id]?(m) }
+    case "search":
+      onSearch?(m)
+    default:
+      onFailure?("unknown message from the core: \(t)")
+    }
+  }
+}

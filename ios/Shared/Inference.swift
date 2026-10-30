@@ -30,13 +30,13 @@ final class Inference {
   }
 
   init() throws {
-    guard let url = Bundle.main.url(forResource: "KeepsPolicy", withExtension: "mlmodelc") else { throw SpikeError("KeepsPolicy.mlmodelc isn't in the app") }
+    guard let url = Bundle.main.url(forResource: "KeepsPolicy", withExtension: "mlmodelc") else { throw KeepsError("KeepsPolicy.mlmodelc isn't in the app") }
     self.url = url
     model = try Self.load(url, units: "ane")
     metadata = model.modelDescription.metadata[.creatorDefinedKey] as? [String: String] ?? [:]
     guard let size = Int(metadata["observationSize"] ?? ""), let actions = Int(metadata["numActions"] ?? ""),
           case let batches = (metadata["batches"] ?? "").split(separator: ",").compactMap({ Int($0) }), !batches.isEmpty
-    else { throw SpikeError("the model's metadata lacks its sizes: \(metadata)") }
+    else { throw KeepsError("the model's metadata lacks its sizes: \(metadata)") }
     (self.size, self.actions, self.batches) = (size, actions, batches.sorted())
   }
 
@@ -52,7 +52,7 @@ final class Inference {
     case "gpu": return .cpuAndGPU
     case "cpu": return .cpuOnly
     case "all": return .all
-    default: throw SpikeError("unknown compute units \(name)")
+    default: throw KeepsError("unknown compute units \(name)")
     }
   }
 
@@ -124,7 +124,7 @@ final class Inference {
       lap(\.fill)
       let result = try model.prediction(from: MLDictionaryFeatureProvider(dictionary: ["obs": MLFeatureValue(multiArray: input)]))
       lap(\.predict)
-      guard let logits = result.featureValue(for: "logits")?.multiArrayValue else { throw SpikeError("no logits") }
+      guard let logits = result.featureValue(for: "logits")?.multiArrayValue else { throw KeepsError("no logits") }
       let strides = logits.strides.map(\.intValue)
       out.withUnsafeMutableBytes { raw in
         let y = raw.bindMemory(to: Float32.self)
@@ -222,12 +222,12 @@ private struct Request {
   let indices: [UInt16]
 
   init(_ body: Data) throws {
-    guard body.count >= 8 else { throw SpikeError("short request") }
+    guard body.count >= 8 else { throw KeepsError("short request") }
     let (rows, nonzeros): (Int, Int) = body.withUnsafeBytes { raw in
       (Int(UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 0, as: UInt32.self))),
        Int(UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 4, as: UInt32.self))))
     }
-    guard body.count == 8 + 4 * rows + 6 * nonzeros else { throw SpikeError("request of \(body.count) bytes for \(rows) rows, \(nonzeros) nonzeros") }
+    guard body.count == 8 + 4 * rows + 6 * nonzeros else { throw KeepsError("request of \(body.count) bytes for \(rows) rows, \(nonzeros) nonzeros") }
     self.rows = rows
     (ends, values, indices) = body.withUnsafeBytes { raw in
       let ends = (0..<rows).map { Int(UInt32(littleEndian: raw.loadUnaligned(fromByteOffset: 8 + 4 * $0, as: UInt32.self))) }

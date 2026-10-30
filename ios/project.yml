@@ -1,6 +1,6 @@
-# The iOS spike: Midstrike's search on the phone (ios/README.md). XcodeGen makes the Xcode project from this file;
+# The iOS app (Keeps) and the spike that measured it (KeepsSpike). XcodeGen makes the Xcode project from this file;
 # the project itself isn't kept (ios/sync.sh generates it on the Mac).
-name: KeepsSpike
+name: Keeps
 options:
   bundleIdPrefix: online.playkeeps
   deploymentTarget:
@@ -11,16 +11,36 @@ settings:
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
 targets:
+  Keeps:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+      - path: Shared
+      # The core (ios/core, bundled by sync.sh) and the network's weights: served by the keeps:// scheme.
+      - path: build/core
+        type: folder
+        buildPhase: resources
+      # Made on the Mac by bot/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
+      - path: build/KeepsPolicy.mlpackage
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.Keeps
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Keeps
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        TARGETED_DEVICE_FAMILY: "1,2"
   KeepsSpike:
     type: application
     platform: iOS
     sources:
       - path: Spike
-      # The page, its workers, the weights and the benchmark positions, built by sync.sh: served by the keeps:// scheme.
+      - path: Shared
+      # The spike's page, its workers, the weights and the benchmark positions, built by sync.sh.
       - path: build/web
         type: folder
         buildPhase: resources
-      # Made on the Mac by bot/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
       - path: build/KeepsPolicy.mlpackage
     settings:
       base:
