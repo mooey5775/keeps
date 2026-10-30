@@ -1,7 +1,7 @@
 // The batched search (demo/lockstep.ts, demo/inference.ts): playouts in lockstep give exactly the results of the
 // same playouts one at a time, and the inference socket carries observations and logits exactly.
 import { createServer, type Server } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -65,15 +65,21 @@ function randomPolicy(fingerprint = encoderFingerprint(2)): Policy {
 const policy = randomPolicy();
 const local = new LocalInference(policy);
 
-/** The first decision of a seeded game with a real choice (the game played up to it by its first legal commands). */
-function position(seed: string): Omit<WorldsJob, 'n' | 'seed'> {
+/**
+ * A decision with a real choice from a seeded game: the first one after `moves` moves (each a seeded pick from the
+ * legal commands; 0: the game's first decision with a choice, reached by first legal commands).
+ */
+function position(seed: string, moves = 0): Omit<WorldsJob, 'n' | 'seed'> {
   let { state, events } = newGame({ players: 2, seed, marksToWin: 3 }) as { state: GameState; events: TraceEvent[] };
-  for (;;) {
+  const random = seeded(seed.length, moves);
+  for (let played = 0; ; played++) {
+    if (state.phase !== 'playing') throw new Error(`${seed}: the round ended after ${played} moves`);
     const me = state.prompts[0]!.seat as Seat;
     const decision = new Decision(viewFor(state, me), legalCommands(state, me));
     const commands = decision.encodings().map((ids) => decision.complete(ids)!);
-    if (commands.length > 1) return { state, me, myLog: eventsFor(events, me), commands };
-    const r = apply(state, me, legalCommands(state, me)[0]!);
+    if (commands.length > 1 && played >= moves) return { state, me, myLog: eventsFor(events, me), commands };
+    const legal = legalCommands(state, me).filter((c) => c.type !== 'reveal-duplicity');
+    const r = apply(state, me, played < moves ? legal[Math.floor(random() * legal.length)]! : legal[0]!);
     if (!r.ok) throw new Error(r.error.message);
     state = r.state;
     events = [...events, ...r.events];
@@ -185,5 +191,38 @@ describe('the inference socket', () => {
     const other = randomPolicy();
     (other.info as { fingerprint: string }).fingerprint = 'another';
     await expect(SocketInference.connect(path, other)).rejects.toThrow(/refused/);
+  });
+});
+
+/** FNV-1a over the observations' float bits, in the order the network was asked. */
+function hashObservations(rows: Float32Array[], hash: { value: number; count: number }): void {
+  for (const obs of rows) {
+    const bits = new Uint32Array(obs.buffer, obs.byteOffset, obs.length);
+    let h = hash.value;
+    for (let i = 0; i < bits.length; i++) h = Math.imul(h ^ bits[i]!, 16777619) >>> 0;
+    hash.value = h;
+    hash.count++;
+  }
+}
+
+describe('the search, against a recorded run', () => {
+  // Small searches' results and every observation they sent the network, recorded from code known to play right
+  // (3ceacaa, before the playouts' speed-ups): a change that should leave the search's play alone must reproduce
+  // them exactly. After a change meant to change play (the rules, the encoding, the belief), record them again:
+  //   UPDATE_GOLDEN=1 pnpm --filter @keeps/learn exec vitest run test/batch-search.test.ts
+  const path = new URL('./fixtures/search-golden.json', import.meta.url);
+  it('plays exactly as recorded', async () => {
+    const hash = { value: 2166136261, count: 0 };
+    const logits = (rows: Float32Array[]) => {
+      hashObservations(rows, hash);
+      return local.logits(rows);
+    };
+    const results = [];
+    for (const [i, [seed, moves]] of ([['golden-1', 0], ['golden-2', 10], ['golden-3', 20], ['golden-4', 30]] as const).entries()) {
+      results.push(await playWorlds({ ...position(seed, moves), n: 5, seed: 300 + i }, policy, true, logits));
+    }
+    const run = { results, observations: hash.count, hash: hash.value };
+    if (process.env.UPDATE_GOLDEN || !existsSync(path)) writeFileSync(path, JSON.stringify(run) + '\n');
+    expect(run).toEqual(JSON.parse(readFileSync(path, 'utf8')));
   });
 });
