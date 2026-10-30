@@ -148,6 +148,10 @@ export async function searchChoose(
   b.read = events.length;
   const view = viewFor(state, seat);
   b.belief.update(noteObservation(b.log, view, seat));
+  // What the seat knew as it decided: the bot's own log and belief move on with the game while this search awaits (a
+  // seat training mode advises may well answer first), so the search keeps copies.
+  const myLog = [...b.log];
+  const belief = b.belief.clone();
   const decision = new Decision(view, legalCommands(state, seat));
   const first = decision.next([]);
   // Tithes' reorder lists no commands (any order of up to 12 cards is legal). The network orders the
@@ -163,10 +167,10 @@ export async function searchChoose(
       }
       const mask = new Uint8Array(NUM_ACTIONS);
       for (const id of ids) mask[id] = 1;
-      const p = b.policy.raw(encodeObservation2(view, b.belief, fixed, ids), mask);
+      const p = b.policy.raw(encodeObservation2(view, belief, fixed, ids), mask);
       const prior = ids.map((id) => Math.max(p[id]!, 1e-9));
-      const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, b.belief, b.policy, [...fixed, id]))!);
-      const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands: candidates, n: WORLDS });
+      const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, belief, b.policy, [...fixed, id]))!);
+      const results = await pool.evaluate({ state, me: seat, myLog, commands: candidates, n: WORLDS });
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
       fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, results.length, by).k]!);
     }
@@ -175,7 +179,7 @@ export async function searchChoose(
   }
   const encodings = decision.encodings();
   const commands = encodings.map((ids) => decision.complete(ids)!);
-  const before = b.policy.value(encodeObservation2(view, b.belief, [], first));
+  const before = b.policy.value(encodeObservation2(view, belief, [], first));
   const kind = state.prompts.find((p) => p.seat === seat)?.kind ?? '?';
   const base = { seat, turn: state.turnNumber, kind, before: before === null ? null : toWin(before), mode };
   if (encodings.length === 1) {
@@ -190,14 +194,14 @@ export async function searchChoose(
       const next = decision.next(ids.slice(0, i));
       const mask = new Uint8Array(NUM_ACTIONS);
       for (const id of next) mask[id] = 1;
-      p *= b.policy.raw(encodeObservation2(view, b.belief, ids.slice(0, i), next), mask)[ids[i]!]!;
+      p *= b.policy.raw(encodeObservation2(view, belief, ids.slice(0, i), next), mask)[ids[i]!]!;
     }
     return Math.max(p, 1e-9);
   });
   const total = prior.reduce((a, c) => a + c, 0);
   early?.({ before: base.before, moves: encodings.map((ids, i) => ({ move: ids.map(actionName).join(' '), policy: prior[i]! / total, command: commands[i]! })) });
   const started = Date.now();
-  const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands, n: WORLDS });
+  const results = await pool.evaluate({ state, me: seat, myLog, commands, n: WORLDS });
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
   const { k, searched } = pick(prior, magnet, q, results.length, by);
   const rows = encodings
