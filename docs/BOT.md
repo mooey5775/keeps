@@ -36,8 +36,11 @@ Decisions (2026-10-21):
   world sampler no longer suffers from it (2026-10-30: its guided rebuild of the deal follows the places the pile ops
   remember, so these positions sample at a plan a world instead of failing), but the network's observation still
   shows those cards as unplaced. The fix: track a pile as its known places less k cards taken from unknown positions,
-  and recover it when a taken card is identified. It changes what the network sees, so it goes in with the next
-  training run (with the encoder fingerprint changed), not into the live bot.
+  and recover it when a taken card is identified. Same kind, same run: "just taken" (`justHidden`) ends when the
+  Duplicity holder turns a face-down card up while the opponent chooses a keep for the HOT card they drew unseen, so
+  when they play it, the belief can't tell it came from that pile (the sampler has its own `waitingTake`). It changes
+  what the network sees, so it goes in with the next training run (with the encoder fingerprint changed), not into
+  the live bot.
 
 ## Milestones
 
