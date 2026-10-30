@@ -36,6 +36,15 @@ type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
 const { apply } = await import('../../../packages/engine/src/index.ts');
 
+// Anything the server or the bot reports as gone wrong (a search or training mode's advice that failed and fell back to
+// the network, a review job the sampler gave up on) is logged and play goes on, as on the site; here it fails the run.
+const problems: string[] = [];
+const logError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  problems.push(args.map((a) => (a instanceof Error ? a.message : String(a))).join(' ').slice(0, 300));
+  logError(...args);
+};
+
 const policy = Policy.load(readFileSync(WEIGHTS));
 const pool = new RolloutPool(4, WEIGHTS, true);
 setSearchMode('best-q');
@@ -73,7 +82,7 @@ const reviews: ReviewJobs = {
 function pump(): void {
   const task = queue.shift();
   if (!task) return;
-  // A job that fails counts as done with nothing, as review-pool.ts has it (the sampler can give up on a world).
+  // A job that fails counts as done with nothing, as review-pool.ts has it, so the games go on; the run fails at the end.
   let result: ReturnType<typeof run> | null = null;
   try {
     result = run(task.job);
@@ -332,8 +341,12 @@ const wantServer = ['error', 'game', 'gone', 'replaced', 'review', 'room', 'welc
 const unseen = [...wantClient.filter((t) => !client.has(t)).map((t) => `client ${t}`), ...wantServer.filter((t) => !serverTypes.has(t)).map((t) => `server ${t}`), ...missing()];
 const excused = [...madeEvents].filter(([, shown]) => !shown).map(([t]) => t);
 console.log(`${fromApp.length} messages to the core, ${toApp.length} from it, from 3 games and ${coverageGames} more for coverage; ${(Object.keys(KINDS) as Kind[]).map((k) => `${k}s ${seen[k].size}/${want[k].size}`).join(', ')}${excused.length ? ` (never shown to a client: ${excused.join(', ')})` : ''}`);
+if (problems.length) {
+  logError(`${problems.length} problem(s) while recording (above): the first, ${problems[0]}`);
+  process.exit(1);
+}
 if (unseen.length) {
-  console.error(`never came up: ${unseen.join(', ')}`);
+  logError(`never came up: ${unseen.join(', ')}`);
   process.exit(1);
 }
 process.exit(0);
