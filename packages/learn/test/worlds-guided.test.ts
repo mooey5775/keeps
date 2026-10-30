@@ -1,3 +1,8 @@
+// Positions where the world sampler gave up, and what fixed it.
+//
+// The opponent's card waiting for its keep: drawn unseen, it stays theirs while Duplicity's holder turns a
+// face-down card up (Belief.waitingTake), so the position samples.
+//
 // The guided rebuild of the deal (worlds.ts, rebuildDeal). Unguided, the sampler draws the position each unseen
 // take came from and the order of each pile uniformly, and turns down the draws that contradict what the player saw:
 // exact, but where the player saw a pile whole and the opponent then took from it unseen, hardly any draw fits (1 in
@@ -120,6 +125,29 @@ function* positions(games: number, random: () => number): Generator<{ state: Gam
     }
   }
 }
+
+describe("the opponent's card waiting for its keep", () => {
+  it('stays theirs while the Duplicity holder turns the face-down card up: those positions sample, every history replaying', () => {
+    // The belief ended "just taken" at any event but a prompt or a play, so after the reveal the model had the HOT card
+    // they drew unseen held in their hand, which a HOT card never is: no history fitted.
+    const { games } = JSON.parse(readFileSync(new URL('./fixtures/worlds-duplicity-reveal.json', import.meta.url), 'utf8')) as {
+      games: { options: Parameters<typeof newGame>[0]; commands: { seat: Seat; command: Command }[]; me: Seat }[];
+    };
+    for (const { options, commands, me } of games) {
+      let { state, events } = newGame(options) as { state: GameState; events: TraceEvent[] };
+      for (const { seat, command } of commands) {
+        const r = apply(state, seat, command);
+        if (!r.ok) throw new Error(r.error.message);
+        state = r.state;
+        events = [...events, ...r.events];
+      }
+      expect(eventsFor(events, me).at(-1)!.payload.type).toBe('reveal');
+      const model = modelOf(state, me, eventsFor(events, me));
+      const random = rng(3);
+      for (let i = 0; i < 50; i++) expect(replays(sampleHistory(model, random), me, model.log)).toBe(true);
+    }
+  });
+});
 
 describe('the guided rebuild of the deal', () => {
   it('samples the positions the unguided sampler gave up on, keeping most plans; every history replays', () => {

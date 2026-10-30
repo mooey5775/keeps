@@ -156,6 +156,8 @@ export interface Facts {
   faceDownSlots: [Seat, number][];
   /** The opponent's last hidden card, drawn unseen, waits for its keep: the cell it's in (5 HOT Keep card, 6 any Keep card), or null. */
   waiting: 5 | 6 | null;
+  /** The hidden-log index of the take that card came from (when `waiting` is set). */
+  waitingAt: number | null;
   /** The kind bits that can matter (see gatherFacts). */
   kindMask: number;
   /** The opponent's hidden-card history the worlds follow (the belief's, and what an open prompt shows). */
@@ -807,7 +809,10 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
   const opponentKnown = new Set(belief.opponentKnown);
   const lastHidden = belief.hiddenLog.at(-1);
   const jokerShown =
-    view.prompts.some((p) => p.seat === opponent && p.kind === 'joker-copy') && !opponentKnown.has('joker') && belief.waitingUnseen() !== null && lastHidden?.kind === 'hide';
+    view.prompts.some((p) => p.seat === opponent && p.kind === 'joker-copy') &&
+    !opponentKnown.has('joker') &&
+    belief.waitingUnseen()?.at === belief.hiddenLog.length - 1 &&
+    lastHidden?.kind === 'hide';
   if (jokerShown) {
     hiddenLog = [...hiddenLog, { kind: 'reveal', card: 'joker', just: lastHidden.pile }];
     opponentKnown.add('joker');
@@ -849,9 +854,10 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
     }
   });
   // A card waiting for its keep in the opponent's hand: the one they just took unseen, or one we know.
+  // (Not always the last hidden event: Duplicity's holder may turn a face-down card up while its keep is chosen.)
   const unseen = view.prompts.some((p) => p.seat === opponent && p.kind === 'hot-target') ? belief.waitingUnseen() : null;
-  const waiting = unseen === 'hot' ? 5 : unseen === 'any' ? 6 : null;
-  if (waiting && belief.hiddenLog.at(-1)?.kind !== 'hide') throw new Error('a card waits for its keep, but the last hidden event is not a draw');
+  const waiting = unseen?.kind === 'hot' ? 5 : unseen?.kind === 'any' ? 6 : null;
+  if (unseen && hiddenLog[unseen.at]?.kind !== 'hide') throw new Error('a card waits for its keep, but its hidden event is not a draw');
   // The kind bits that can matter now (the rest are merged, which counts the same worlds with fewer
   // classes): Coin only if they held no Coin cards at some point, Keep only with cards hidden face down
   // or waiting for a keep, HOT only if they hold or held hidden cards at all.
@@ -880,6 +886,7 @@ export function gatherFacts(state: GameState, me: Seat, opponent: Seat, belief: 
     handSize: view.hands.find((h) => h.seat === opponent)!.count,
     faceDownSlots,
     waiting,
+    waitingAt: unseen?.at ?? null,
     kindMask,
     hiddenLog,
   };
@@ -974,7 +981,7 @@ function steps(s: HiddenState, i: number, c: LogContext): { t: HiddenState; m: n
         break;
       }
       const t = copyState(s);
-      const cell = facts.waiting !== null && i === log.length - 1 ? facts.waiting : 1;
+      const cell = facts.waiting !== null && i === facts.waitingAt ? facts.waiting : 1;
       t.held[e.pile]![cell]! += 1;
       out.push({ t, m: 1, label: { kind: 'in', p: e.pile, cell } });
       break;

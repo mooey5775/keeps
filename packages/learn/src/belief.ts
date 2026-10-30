@@ -173,6 +173,13 @@ export class Belief implements PileMap {
    * enters a hand). Not after a steal: Legerdemain plays a random card.
    */
   private justHidden: number | null = null;
+  /**
+   * For the world sampler: the hidden-log index of the card the opponent last took unseen, while it may still be
+   * waiting to be played (its keep chosen). As justHidden, except that a face-down card turning up (Duplicity's
+   * reveal, which the holder may make while that keep is being chosen) doesn't end it: the card turned up isn't
+   * in their hand. (justHidden feeds what the network sees, so it stays as the network was trained; see docs/BOT.md.)
+   */
+  private waitingTake: number | null = null;
   /** The last card each seat played, for telling Requisition's takes (any position) from top takes. */
   private lastPlayed = new Map<Seat, CardId>();
   /** The piles each seat last looked at (Prayer's discard comes off the top of that one). */
@@ -219,9 +226,9 @@ export class Belief implements PileMap {
    * its keep, or Invocation's draw): 'hot' after an ordinary draw or take (only a HOT card waits), 'any'
    * under Invocation (any card drawn waits, played as if HOT). Null if no card they took unseen is waiting.
    */
-  waitingUnseen(): 'hot' | 'any' | null {
-    if (this.justHidden === null) return null;
-    return this.lastPlayed.get(this.opponent) === 'invocation' ? 'any' : 'hot';
+  waitingUnseen(): { kind: 'hot' | 'any'; at: number } | null {
+    if (this.waitingTake === null) return null;
+    return { kind: this.lastPlayed.get(this.opponent) === 'invocation' ? 'any' : 'hot', at: this.waitingTake };
   }
 
   /** Reads the player's log from where it left off (a new round starts over). */
@@ -246,6 +253,7 @@ export class Belief implements PileMap {
     this.opponentMaybeHidden.clear();
     this.myFaceDown.clear();
     this.justHidden = null;
+    this.waitingTake = null;
     this.lastPlayed.clear();
     this.lastLooked.clear();
     this.fiat = null;
@@ -277,6 +285,7 @@ export class Belief implements PileMap {
     if (this.fiat && e.type !== 'pile-claim' && e.type !== 'prompt') this.finishFiat();
     // A HOT card's keep prompt can come between its draw and its play; anything else ends "just taken".
     if (e.type !== 'prompt' && e.type !== 'play') this.justHidden = null;
+    if (e.type !== 'prompt' && e.type !== 'play' && e.type !== 'reveal') this.waitingTake = null;
     this.history.record(e, this);
     switch (e.type) {
       case 'round-start':
@@ -359,8 +368,9 @@ export class Belief implements PileMap {
       }
       case 'play':
         this.lastPlayed.set(e.seat, e.copy ?? e.card);
-        if (e.seat === this.opponent) this.revealFromOpponent(e.card, e.hot && this.justHidden !== null);
+        if (e.seat === this.opponent) this.revealFromOpponent(e.card, e.hot);
         this.justHidden = null;
+        this.waitingTake = null;
         return;
       case 'reveal-card':
         // Joker shows a card from the opponent's hand; it stays there.
@@ -590,6 +600,7 @@ export class Belief implements PileMap {
     const pop = this.pileOps.at(-1);
     if (pop?.op !== 'pop' || pop.p !== p || pop.card !== null) throw new Error('a hidden card came from no pile');
     pop.hide = this.hiddenLog.length;
+    this.waitingTake = this.hiddenLog.length;
     this.hide({ kind: 'hide', pile: p, placed: [...this.piles[p]!.placed] });
     this.opponentHidden[p]! += 1;
     this.justHidden = p;
@@ -598,7 +609,8 @@ export class Belief implements PileMap {
   /** A card left the opponent's hand (or was shown from it): which of their hidden cards was it? */
   private revealFromOpponent(card: CardId, hot: boolean, log = true): void {
     if (this.opponentKnown.delete(card)) return;
-    if (log) this.hide({ kind: 'reveal', card, just: hot && this.justHidden !== null ? this.justHidden : null });
+    const waiting = this.waitingTake === null ? null : (this.hiddenLog[this.waitingTake] as Extract<HiddenEvent, { kind: 'hide' }>);
+    if (log) this.hide({ kind: 'reveal', card, just: hot && waiting ? waiting.pile : null });
     const total = this.opponentHidden.reduce((a, b) => a + b, 0);
     if (total <= 1e-9) return; // not one of their hidden cards (e.g. it came from our hand)
     let weights: number[];
