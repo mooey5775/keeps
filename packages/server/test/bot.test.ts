@@ -67,6 +67,29 @@ function join(room: Room, name: string): Client {
 }
 
 describe('the bot in a room', () => {
+  it('plays at a difficulty the host chooses, where the server offers one', () => {
+    const { room } = botRoom({ bot: { policy, schedule: () => () => {}, delay: () => 0, levels: true } });
+    const host = join(room, 'Ana');
+    room.handle(host.id, { t: 'add-bot' });
+    expect(host.last('room').room.botLevels).toBe(true);
+    room.handle(host.id, { t: 'settings', settings: { marksToWin: 3, firstPlayer: 'random', botLevel: 'easy' } });
+    expect(host.errors()).toEqual([]);
+    expect(host.last('room').room.settings.botLevel).toBe('easy');
+    room.handle(host.id, { t: 'settings', settings: { marksToWin: 3, firstPlayer: 'random', botLevel: 'expert' as never } });
+    expect(host.errors()).toEqual(['Invalid difficulty.']);
+    expect(host.last('room').room.settings.botLevel).toBe('easy');
+  });
+
+  it('has no difficulty to choose where the server offers none', () => {
+    const { room } = botRoom();
+    const host = join(room, 'Ana');
+    room.handle(host.id, { t: 'add-bot' });
+    expect(host.last('room').room.botLevels).toBeUndefined();
+    room.handle(host.id, { t: 'settings', settings: { marksToWin: 3, firstPlayer: 'random', botLevel: 'easy' } });
+    expect(host.errors()).toEqual(['Invalid difficulty.']);
+    expect(host.last('room').room.settings.botLevel).toBeUndefined();
+  });
+
   it('can be added by the host to a room for two, and shows as a connected bot', () => {
     const { room } = botRoom();
     const host = join(room, 'Ana');

@@ -14,8 +14,10 @@ import {
   type TraceEvent,
 } from '@keeps/engine';
 import {
+  BOT_LEVELS,
   DEFAULT_SETTINGS,
   NAME_MAX,
+  type BotLevel,
   type ClientMessage,
   type Hint,
   type RoomPlayer,
@@ -61,6 +63,8 @@ export interface BotDeps {
   delay: () => number;
   /** Its name at the table (default "Bot"). */
   name?: string;
+  /** Whether it plays at a chosen difficulty (Settings.botLevel; the server's own bot decides what each means). */
+  levels?: boolean;
 }
 
 /** Analytics id for the bot's own events (one person for every bot game). */
@@ -247,7 +251,13 @@ export class Room {
           const chosen =
             typeof first === 'object' && first !== null && 'player' in first && typeof first.player === 'string' ? this.find(first.player) : undefined;
           if (first !== 'random' && !chosen) return 'Invalid first player.';
-          this.settings = { marksToWin: message.settings.marksToWin, firstPlayer: chosen ? { player: chosen.id } : 'random' };
+          const level: unknown = message.settings.botLevel;
+          if (level !== undefined && !(this.deps.bot?.levels && BOT_LEVELS.includes(level as BotLevel))) return 'Invalid difficulty.';
+          this.settings = {
+            marksToWin: message.settings.marksToWin,
+            firstPlayer: chosen ? { player: chosen.id } : 'random',
+            ...(level !== undefined ? { botLevel: level as BotLevel } : {}),
+          };
         }
         this.broadcastRoom();
         return null;
@@ -437,7 +447,7 @@ export class Room {
   private botProperties(): Record<string, unknown> {
     if (!this.game?.bots.length) return {};
     const { run, step } = this.deps.bot!.policy.info;
-    return { vs_bot: true, bot_policy: `${run}-${step}` };
+    return { vs_bot: true, bot_policy: `${run}-${step}`, ...(this.deps.bot!.levels ? { bot_level: this.settings.botLevel ?? 'hard' } : {}) };
   }
 
   /** Analytics for what a command did: cards played, and rounds or the game ending. */
@@ -667,6 +677,7 @@ export class Room {
       settings: this.settings,
       you: player.id,
       botAvailable: this.deps.bot !== undefined,
+      ...(this.deps.bot?.levels ? { botLevels: true } : {}),
       training: player.training,
     };
   }

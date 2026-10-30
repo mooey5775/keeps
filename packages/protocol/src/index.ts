@@ -10,7 +10,13 @@ export interface Settings {
    * host (by player id). Back to random if the chosen player leaves.
    */
   firstPlayer: 'random' | { player: string };
+  /** How hard the bot plays, where the server offers a choice (RoomSummary.botLevels); absent: hard. */
+  botLevel?: BotLevel;
 }
+
+/** The bot's difficulty: its network's own move (easy), or searched over few worlds (medium) or many (hard). */
+export type BotLevel = 'easy' | 'medium' | 'hard';
+export const BOT_LEVELS: readonly BotLevel[] = ['easy', 'medium', 'hard'];
 
 export const DEFAULT_SETTINGS: Settings = { marksToWin: 3, firstPlayer: 'random' };
 
@@ -34,6 +40,8 @@ export interface RoomSummary {
   you: string;
   /** Whether this server can add a bot player. */
   botAvailable: boolean;
+  /** Whether the host can choose the bot's difficulty (Settings.botLevel). */
+  botLevels?: boolean;
   /** Whether your training mode is on: in games against the bot, its suggestion for your moves. */
   training?: boolean;
 }

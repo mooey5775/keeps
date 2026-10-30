@@ -37,6 +37,8 @@ export interface ServerOptions {
   botDelay?: () => number;
   /** The bot's name at the table (default "Bot"). */
   botName?: string;
+  /** The host chooses the bot's difficulty (Settings.botLevel); the caller's bot plays it (room.ts BotDeps.levels). */
+  botLevels?: boolean;
   /** Extra pages, tried before the static files: returns true if it served the request. */
   extraRoutes?: (req: IncomingMessage, res: ServerResponse, path: string) => boolean;
 }
@@ -84,7 +86,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const buildFile = options.webDir ? join(options.webDir, 'build-id.txt') : null;
   const build = buildFile && existsSync(buildFile) ? readFileSync(buildFile, 'utf8').trim() : undefined;
 
-  const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay, options.botName) : { deps: undefined, status: 'off (no weights configured)' };
+  const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay, options.botName, options.botLevels) : { deps: undefined, status: 'off (no weights configured)' };
 
   const deps: RoomDeps = {
     ...(bot.deps ? { bot: bot.deps } : {}),
@@ -358,7 +360,7 @@ function sendFile(res: ServerResponse, file: string | null, cache: string): void
  * moves, but silently bad). Then the server runs without the bot and says why,
  * at startup and on the admin page, rather than taking human games down too.
  */
-function loadBot(path: string, delay?: () => number, name?: string): { deps: BotDeps | undefined; status: string } {
+function loadBot(path: string, delay?: () => number, name?: string, levels?: boolean): { deps: BotDeps | undefined; status: string } {
   try {
     const policy = Policy.load(readFileSync(path));
     const { run, step, fingerprint } = policy.info;
@@ -372,6 +374,7 @@ function loadBot(path: string, delay?: () => number, name?: string): { deps: Bot
         },
         delay: delay ?? (() => 800 + Math.random() * 400),
         ...(name ? { name } : {}),
+        ...(levels ? { levels } : {}),
       },
       status: `on: ${run} step ${step}`,
     };

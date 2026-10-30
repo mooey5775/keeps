@@ -34,7 +34,7 @@ export function setWorlds(n: number): void {
  * rho the magnet: uniform at each step of a decision, as VRPO's training regularizes towards. The step
  * stays close to the (near-equilibrium) policy, moving only where the values clearly say so. The bot's
  * move is sampled from pi'; training mode's advice shows pi''s most likely move.
- * 'best-q': the move with the best rollout value, the policy breaking near-ties (within TIE).
+ * 'best-q': the move with the best rollout value, the policy breaking near-ties (within tie(worlds)).
  */
 export const ALPHA = Number(process.env.SEARCH_ALPHA ?? 0.002);
 export const BETA = Number(process.env.SEARCH_BETA ?? 0.02);
@@ -43,10 +43,11 @@ export function setSearchMode(m: 'damped' | 'best-q'): void {
   mode = m;
 }
 /**
- * best-Q's near-tie margin. It should shrink as the worlds grow (Q's noise goes as 1/√worlds): 0.05 suits 512
- * worlds, 0.025 2,048 (held-out worlds, scratch splits.py: the decision's loss is least about there).
+ * best-Q's near-tie margin for a search of `worlds` worlds: it shrinks as Q's noise does, as 1/√worlds, from 0.05 at
+ * 512 (0.025 at 2,048, 0.14 at 64). Judged on held-out worlds (30 decisions of 8,192 worlds each, split), it loses
+ * the least, or within 0.05 points of it, at every size from 16 to 2,048 worlds.
  */
-const TIE = Number(process.env.SEARCH_TIE ?? 0.05);
+const tie = (worlds: number) => 0.05 * Math.sqrt(512 / worlds);
 
 /** What the bot thought at one decision, for the demo's insight page. Evaluations are its chance to win (0..1). */
 export interface SearchReport {
@@ -147,7 +148,7 @@ function completeGreedily(decision: Decision, view: ReturnType<typeof viewFor>, 
  * The searched move's index, from the policy's prior, the magnet and the rollouts' Q (by `mode`), and the
  * search policy pi'. `by`: sample the move from pi' (the bot's play), or take its most likely (advice).
  */
-function pick(prior: number[], rho: number[], q: number[], by: 'sample' | 'mode'): { k: number; searched: number[] } {
+function pick(prior: number[], rho: number[], q: number[], worlds: number, by: 'sample' | 'mode'): { k: number; searched: number[] } {
   const total = prior.reduce((a, c) => a + c, 0);
   const logits = prior.map((p, k) => (q[k]! + ALPHA * Math.log(rho[k]!) + BETA * Math.log(p / total)) / (ALPHA + BETA));
   const m = Math.max(...logits);
@@ -157,7 +158,8 @@ function pick(prior: number[], rho: number[], q: number[], by: 'sample' | 'mode'
   let k = 0;
   if (mode === 'best-q') {
     const top = Math.max(...q);
-    for (let i = 0; i < q.length; i++) if (q[i]! >= top - TIE && (q[k]! < top - TIE || prior[i]! > prior[k]!)) k = i;
+    const margin = tie(worlds);
+    for (let i = 0; i < q.length; i++) if (q[i]! >= top - margin && (q[k]! < top - margin || prior[i]! > prior[k]!)) k = i;
   } else if (by === 'mode') {
     for (let i = 0; i < searched.length; i++) if (searched[i]! > searched[k]!) k = i;
   } else {
@@ -205,7 +207,7 @@ export async function searchChoose(
       const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, b.belief, b.policy, [...fixed, id]))!);
       const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands: candidates, n: WORLDS });
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
-      fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, by).k]!);
+      fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, results.length, by).k]!);
     }
     log(`[search] seat ${seat} turn ${state.turnNumber}: reorder searched card by card → ${fixed.map(actionName).join(' ')}`);
     return decision.complete(fixed)!;
@@ -236,7 +238,7 @@ export async function searchChoose(
   const started = Date.now();
   const results = await pool.evaluate({ state, me: seat, myLog: [...b.log], commands, n: WORLDS });
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
-  const { k, searched } = pick(prior, magnet, q, by);
+  const { k, searched } = pick(prior, magnet, q, results.length, by);
   const rows = encodings
     .map((ids, i) => ({ move: ids.map(actionName).join(' '), prior: prior[i]! / total, q: q[i]!, search: searched[i]!, chosen: i === k }))
     .sort((a, c) => c.search - a.search)

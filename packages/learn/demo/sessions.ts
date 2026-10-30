@@ -13,7 +13,7 @@ const lastRestart = existsSync(join(DATA, 'last-restart')) ? readFileSync(join(D
 const raw = sinceArg ?? lastRestart;
 const since = /^\d+$/.test(raw) ? Number(raw) : Date.parse(raw);
 
-type Session = { replay: string; room: string; startedAt: number; bot: string; players: { seat: number; name: string; bot: boolean; training?: boolean }[] };
+type Session = { replay: string; room: string; startedAt: number; bot: string; level?: string; players: { seat: number; name: string; bot: boolean; training?: boolean }[] };
 type TrainingSwitch = { event: 'training'; on: boolean; replay: string | null; name: string; seat: number | null; round?: number; turn?: number };
 const sessions = new Map<string, Session>();
 const switches = new Map<string, TrainingSwitch[]>();
@@ -71,5 +71,5 @@ for (const { f, mtime } of files) {
     result = `unfinished after ${roundsDone} round${roundsDone === 1 ? '' : 's'} (${marks}${tied ? ', level' : `, ${name(leader)} ahead`}; first to ${state.config.marksToWin})`;
   }
   const trained = training(f, s);
-  console.log(`${f.slice(0, 4)} ${time(isNaN(started) ? mtime : started)}–${time(mtime)}: ${who}${s ? ` [${s.bot}]` : ''}: ${result}${trained ? `. ${trained}` : ''}`);
+  console.log(`${f.slice(0, 4)} ${time(isNaN(started) ? mtime : started)}–${time(mtime)}: ${who}${s ? ` [${s.bot}${s.level ? `, ${s.level}` : ''}]` : ''}: ${result}${trained ? `. ${trained}` : ''}`);
 }

@@ -313,7 +313,8 @@ export class Reviewer {
    * same measure as the review's own (the network's usual move, then play on), in the search's worlds. Not
    * the picked move's chance: that assumes the best move and, as the best of several noisy estimates, reads
    * high (about 3 points on average, up to 15), which would make the line jump at the searched points.
-   * It replaces the review's own work for that point, which is dropped if it hasn't started.
+   * It replaces the review's own work for that point, which is dropped if it hasn't started, unless it searched
+   * fewer worlds than that work would (the bot's medium level): then the review's own estimate stands.
    */
   searched(state: GameState, seat: Seat, report: Promise<SearchReport | null>): void {
     const at = this.positions.get(state);
@@ -325,7 +326,7 @@ export class Reviewer {
     report
       .catch(() => null)
       .then((r) => {
-        if (!r?.outcomes || !r.moves.length || this.games.get(g.game) !== g) return;
+        if (!r?.outcomes || !r.moves.length || r.worlds < SIZES.worlds || this.games.get(g.game) !== g) return;
         const t = round.moves[index]?.info.get(seat);
         if (!t) return;
         const total = r.moves.reduce((a, m) => a + m.policy, 0);
@@ -450,7 +451,7 @@ export class Reviewer {
           this.judge(g, round, decision, before, eventsBefore);
         });
       if (searched) {
-        // The live search's worlds, as they were: no need to play them again.
+        // The live search's worlds, as they were: no need to play them again (if there are as many as the review's own).
         round.pending++;
         searched
           .catch(() => null)
@@ -458,7 +459,7 @@ export class Reviewer {
             round.pending--;
             if (this.games.get(game) !== g) return;
             const out = report?.outcomes;
-            if (!out) return search();
+            if (!out || out.rows.length < SIZES.optionWorlds) return search();
             const at = legal.map((c) => out.commands.findIndex((o) => same(o, c)));
             decision.rows = out.rows.map((row) => at.map((j) => (j < 0 ? null : row[j]! > 0 ? 1 : 0)));
             const pick = report.moves.find((m) => m.chosen);

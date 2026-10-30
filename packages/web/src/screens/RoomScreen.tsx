@@ -1,4 +1,4 @@
-import { NAME_MAX, type RoomSummary, type RoundReview } from '@keeps/protocol';
+import { BOT_LEVELS, NAME_MAX, type BotLevel, type RoomSummary, type RoundReview } from '@keeps/protocol';
 import { useEffect, useState } from 'react';
 import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
@@ -7,6 +7,8 @@ import { natoSpelling } from '../game/nato.ts';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';
+
+const LEVEL_NAMES: Record<BotLevel, string> = { easy: 'Easy', medium: 'Medium', hard: 'Hard' };
 
 export function RoomScreen({ code }: { code: string }) {
   const state = useRoomState();
@@ -142,6 +144,8 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
   // The bot only plays two-player games: no open seats to fill.
   const emptySeats = hasBot ? 0 : Math.max(0, 4 - count);
   const { marksToWin, firstPlayer } = room.settings;
+  const botLevel = room.settings.botLevel ?? 'hard';
+  const levels = hasBot && room.botLevels;
   const firstName = firstPlayer === 'random' ? null : (room.players.find((p) => p.id === firstPlayer.player)?.name ?? null);
 
   const copy = () => {
@@ -207,6 +211,18 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
         <h3>Game</h3>
         {host ? (
           <div className="settings">
+            {levels && (
+              <label>
+                Difficulty{' '}
+                <select value={botLevel} onChange={(e) => roomStore.settings({ ...room.settings, botLevel: e.target.value as BotLevel })}>
+                  {BOT_LEVELS.map((level) => (
+                    <option key={level} value={level}>
+                      {LEVEL_NAMES[level]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label>
               Marks to win{' '}
               <select value={marksToWin} onChange={(e) => roomStore.settings({ ...room.settings, marksToWin: Number(e.target.value) })}>
@@ -235,7 +251,7 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
           </div>
         ) : (
           <p className="settings-summary">
-            First to {marksToWin} {marksToWin === 1 ? 'mark' : 'marks'} wins · {firstName ? `${firstName} goes first` : 'random first player'}
+            {levels && `${LEVEL_NAMES[botLevel]} · `}First to {marksToWin} {marksToWin === 1 ? 'mark' : 'marks'} wins · {firstName ? `${firstName} goes first` : 'random first player'}
           </p>
         )}
         <p className="hint">Seats are random. With fewer than four players, the empty seats keep their piles as “ghosts”.</p>

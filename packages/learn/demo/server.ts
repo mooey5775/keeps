@@ -9,6 +9,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 import { apply, CARDS, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
+import type { BotLevel, Settings } from '../../protocol/src/index.ts';
 import { logLines } from '../../web/src/game/log.ts';
 import { describeOptions, makeNames } from '../../web/src/game/options.ts';
 import { BotPlayer } from '../src/bot.ts';
@@ -45,6 +46,14 @@ const SEARCH = process.env.SEARCH !== 'off' && (LOCAL_SEARCH || REMOTE_TOKEN !==
 const pool = LOCAL_SEARCH && (SEARCH || process.env.COACH === '1') ? new RolloutPool(Math.max(1, availableParallelism() - 2), weights) : null;
 const remote = REMOTE_TOKEN ? new RemoteQueue(REMOTE_TOKEN, (({ step, fingerprint }) => `${step}:${fingerprint}`)(Policy.load(readFileSync(weights)).info)) : null;
 const search = (remote ? new RemoteEvaluator(remote, pool, REMOTE_WORLDS) : pool) as Evaluator;
+// The bot's difficulty (the room's Settings.botLevel, chosen by the host): hard searches as above; medium searches
+// MEDIUM_WORLDS worlds (64), wherever it searches; easy plays its network's own move. On 30 decisions judged on
+// held-out worlds, a decision loses about 1.9 points of win chance against the best move with the network alone,
+// 0.4 at 64 worlds and 0.07 at 2,048. Training mode's advice and the round reviews are the same at every level.
+const MEDIUM_WORLDS = Number(process.env.MEDIUM_WORLDS ?? 64);
+const capped = (n: number): Evaluator | null => pool && { evaluate: (job) => pool.evaluate({ ...job, n: Math.min(job.n, n) }) };
+const medium = (remote ? new RemoteEvaluator(remote, capped(MEDIUM_WORLDS), MEDIUM_WORLDS) : capped(MEDIUM_WORLDS)) as Evaluator;
+const levelOf = (room: unknown): BotLevel => (room as { settings?: Settings }).settings?.botLevel ?? 'hard';
 const MODE = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
 setSearchMode(MODE);
 
@@ -90,7 +99,7 @@ function noteSession(room: LiveRoom): void {
   if (noted.has(replay)) return;
   noted.add(replay);
   const players = room.players.filter((p) => p.seat !== null).map((p) => ({ seat: p.seat, name: p.name, bot: !!p.bot, training: !!p.training }));
-  appendFileSync(join(DATA, 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, players }) + '\n');
+  appendFileSync(join(DATA, 'sessions.jsonl'), JSON.stringify({ replay, room: room.code, startedAt, bot: botName, ...(SEARCH ? { level: levelOf(room) } : {}), players }) + '\n');
 }
 const handle = (Room.prototype as unknown as { handle: (id: string, message: { t: string }) => void }).handle;
 (Room.prototype as unknown as { handle: (id: string, message: { t: string }) => void }).handle = function (this: LiveRoom, id, message) {
@@ -336,12 +345,15 @@ function noticeAway(room: RoomInternals, seat?: number): void {
   }
 }
 
-// SEARCH=off: the room's own bot plays instead, straight from its network (no search, instant moves).
+// SEARCH=off, or the easy level: the room's own bot plays instead, straight from its network (no search, instant moves).
+const playBot = (Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot;
 if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'], bot: BotPlayer) => void }).playBot = function (
   this: RoomInternals,
   game,
   bot,
 ) {
+  const level = levelOf(this);
+  if (level === 'easy') return playBot.call(this, game, bot);
   const player = this.playerAt(bot.seat);
   if (!player || !game) return;
   const state = game.state;
@@ -356,7 +368,7 @@ if (SEARCH) (Room.prototype as unknown as { playBot: (game: RoomInternals['game'
     if (error !== null) console.error(`room ${this.code}: the network's own move failed too: ${error}`);
   };
   const found = liveSearch(state, bot.seat);
-  searchChoose(bot, state, game.events as never, search, (r) => {
+  searchChoose(bot, state, game.events as never, level === 'medium' ? medium : search, (r) => {
     record(this.code, r);
     found(r);
   }).then(
@@ -515,6 +527,7 @@ await createKeepsServer({
   dataDir: DATA,
   botWeights: weights,
   botName: DISPLAY_NAME,
+  botLevels: SEARCH,
   // The bot pages, for the admin only: /bot/ (insight), /bot/spectate, /bot/coach.
   extraRoutes: (req, res, path) => {
     if (remote?.handle(req, res, path)) return true;
