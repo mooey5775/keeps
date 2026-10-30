@@ -5,8 +5,9 @@
 //   3. the bridge alone: requests of real observations sent to the app and answered without the network;
 //   4. whole searches: each position's worlds in chunks the workers take as they're free, the network in Core ML;
 //   5. the same with the network in JavaScript (a few positions, fewer worlds): what the bridge and Core ML buy.
-// The query string can change the plan: ?positions=24&worlds=512&units=ane,all&js=2&big=4&chunk=32, and
-// &workers=4,6 to compare worker counts (by default one per core, as the app reports them).
+// The query string can change the plan: ?positions=24&worlds=512&units=ane,all&js=2&big=4&chunk=64, and
+// &workers=4,6 to compare worker counts. By default: one per core but two, as the app reports its cores (the page,
+// WebKit's own processes and Core ML's CPU-side work need the rest; on the iPhone Air, 6 workers were slower than 4).
 import type { Command, GameState, Seat, TraceEvent } from '../../packages/engine/src/index.ts';
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { worldGames, type WorldsJob } from '../../packages/learn/demo/lockstep.ts';
@@ -18,7 +19,7 @@ const query = new URLSearchParams(location.search);
 const option = (name: string, fallback: number) => Number(query.get(name) ?? fallback);
 const POSITIONS = option('positions', 24);
 const WORLDS = option('worlds', 512);
-const CHUNK = option('chunk', 32);
+const CHUNK = option('chunk', 64);
 const UNITS = (query.get('units') ?? 'ane,all').split(',');
 const JS_POSITIONS = option('js', 2);
 const BIG = option('big', 4);
@@ -166,7 +167,7 @@ async function main(): Promise<void> {
   });
   log(`\n2. Core ML vs JavaScript on ${asks.length} real observations: total variation mean ${((100 * tv) / asks.length).toFixed(2)}%, max ${(100 * worstTv).toFixed(1)}%; top move changed in ${changed}; max |logit difference| ${worstLogit.toFixed(3)}`);
 
-  for (const count of (query.get('workers') ?? info.cores!).split(',').map(Number)) {
+  for (const count of (query.get('workers') ?? String(Math.max(1, Number(info.cores) - 2))).split(',').map(Number)) {
     log(`\n=== ${count} workers ===`);
     const workers = new Workers();
     await workers.start(count, weights);
