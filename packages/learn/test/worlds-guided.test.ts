@@ -5,8 +5,9 @@
 // and each history is kept with a chance that makes it as likely as unguided. These tests hold it to that:
 //   1. the positions it gave up on: sampled, nearly every plan kept, every history replaying to the player's log;
 //   2. elsewhere (nothing taken unseen from a pile the player saw into), the very same draws as unguided;
-//   3. the same posterior as the unguided sampler, at positions of random rounds where the player saw into piles and
-//      the opponent took from them unseen (two-sample chi-square, pooled over positions).
+//   3. the same posterior as the unguided sampler (two-sample chi-square, pooled over positions): where the opponent took
+//      from a pile seen into twice (saved positions), and at positions of random rounds where the player saw into piles
+//      and the opponent took from them unseen.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
@@ -152,6 +153,45 @@ describe('the guided rebuild of the deal', () => {
     }
     expect(tested).toBe(60);
   }, 600_000);
+
+  it('draws the same posterior as the unguided sampler where the opponent took from a seen pile twice', () => {
+    // Positions found by random rounds favouring Requisition (fixtures/worlds-repeated-takes.json): after a first unseen
+    // take, the bound for the second one is loose, so its correction is below 1 (the guided draws keep a history less often).
+    const { positions: saved } = JSON.parse(readFileSync(new URL('./fixtures/worlds-repeated-takes.json', import.meta.url), 'utf8')) as {
+      positions: { state: GameState; me: Seat; myLog: TraceEvent[] }[];
+    };
+    const random = rng(17);
+    const N = 800;
+    let x2 = 0;
+    let df = 0;
+    for (const pos of saved) {
+      const models = [true, false].map((guided) => {
+        const model = modelOf(pos.state, pos.me, pos.myLog);
+        model.guided = guided;
+        return model;
+      });
+      // The pile taken from most: its top two cards; and the opponent's hand.
+      const takes = [0, 0, 0, 0];
+      for (const op of models[0]!.belief.pileOps) if (op.op === 'pop' && op.from === 'any') takes[op.p]!++;
+      const position = models[0]!.belief.at.indexOf(takes.indexOf(Math.max(...takes))) as Seat;
+      const counts = models.map(() => [new Map<string, number>(), new Map<string, number>()]);
+      models.forEach((model, j) => {
+        for (let i = 0; i < N; i++) {
+          const world = sampleHistory(model, random).world;
+          const keys = [JSON.stringify(world.piles[world.pileAt[position]!].cards.slice(0, 2).map((c) => c.id)), handKey(world, pos.me)];
+          keys.forEach((key, q) => counts[j]![q]!.set(key, (counts[j]![q]!.get(key) ?? 0) + 1));
+        }
+      });
+      for (const q of [0, 1]) {
+        const r = twoSample(counts[0]![q]!, counts[1]![q]!, N, N);
+        x2 += r.x2;
+        df += r.df;
+      }
+    }
+    console.log(`repeated takes: ${saved.length} positions, chi-square ${x2.toFixed(1)} on ${df}`);
+    expect(saved.length).toBe(10);
+    expect(Math.abs((x2 - df) / Math.sqrt(2 * df))).toBeLessThan(4);
+  }, 900_000);
 
   it('draws the same posterior as the unguided sampler', () => {
     const random = rng(11);
