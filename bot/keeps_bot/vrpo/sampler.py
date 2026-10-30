@@ -221,8 +221,9 @@ class Sampler:
       probs[j, :n] = e_probs
       rewards[j, n - 1] = (result, -result)
       terminal[j, n - 1] = True
-    # A blocking copy: the next collection overwrites these buffers.
-    return TensorDict({name: t.to(self.device) for name, t in batch.items()}, batch_size=[B], device=self.device)
+    # A blocking copy: the next collection overwrites these buffers. (copy=True: on the CPU, .to() would hand back
+    # the buffers themselves, and every rollout would be the last one collected.)
+    return TensorDict({name: t.to(self.device, copy=True) for name, t in batch.items()}, batch_size=[B], device=self.device)
 
   def close(self):
     self._settle()
