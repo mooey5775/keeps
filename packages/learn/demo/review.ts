@@ -21,6 +21,7 @@ import { describeOptions, makeNames } from '../../web/src/game/options.ts';
 import type { RemoteQueue } from './remote.ts';
 import type { ReviewJob, ReviewResult } from './review-worker.ts';
 import type { SearchReport } from './search-bot.ts';
+import { noteObservation } from '../src/belief.ts';
 
 /** Sample sizes (REVIEW_SCALE scales them all, for tests). */
 const SCALE = Number(process.env.REVIEW_SCALE ?? 1);
@@ -282,6 +283,14 @@ interface GameData {
   bot: Seat;
   names: (string | null)[];
   rounds: Map<number, RoundData>;
+  /**
+   * Each player's log, kept as BotPlayer keeps the bot's: their events as the game goes, and what their view showed
+   * at each of their decisions (noteObservation). A view shows what no event names (a face-up pile's top), so a
+   * player's estimates come from what they saw, not only from what happened.
+   */
+  logs: Map<Seat, TraceEvent[]>;
+  /** How many of the game's events the logs have read. */
+  read: number;
 }
 
 /** What a game looks like to the reviewer. */
@@ -345,7 +354,7 @@ export class Reviewer {
 
   /** Starts reviewing a game against the bot (one person, one bot). */
   start(code: string, game: ReviewedGame, person: Seat, bot: Seat, names: (string | null)[]): void {
-    this.games.set(game, { id: `${code}-${game.startedAt}`, game, person, bot, names: [...names], rounds: new Map() });
+    this.games.set(game, { id: `${code}-${game.startedAt}`, game, person, bot, names: [...names], rounds: new Map(), logs: new Map([[person, []], [bot, []]]), read: 0 });
   }
 
   /** Drops everything left to do for a game (its room closed, or another game started there). */
@@ -408,13 +417,12 @@ export class Reviewer {
     afterInGame?: GameState,
   ): void {
     const g = this.games.get(game);
-    if (!g || !(before.phase === 'playing' || before.phase === 'post-round')) return;
+    if (!g) return;
+    const playing = before.phase === 'playing' || before.phase === 'post-round';
+    const logs = this.follow(g, events, newEvents, playing ? { state: before, seat } : null);
+    if (!playing) return;
     const round = g.rounds.get(before.round) ?? this.newRound(g, before.round);
     const live = after.phase === 'playing' || after.phase === 'post-round';
-    // The round so far, for the players' logs (each player's knowledge starts at the round's start).
-    const start = events.findLastIndex((e) => e.payload.type === 'round-start' && e.round === before.round);
-    const roundEvents = events.slice(Math.max(0, start));
-    const eventsBefore = roundEvents.slice(0, roundEvents.length - newEvents.length);
     const move: MoveData = {
       turn: before.turnNumber,
       seat,
@@ -444,11 +452,12 @@ export class Reviewer {
         rechecked: false,
       };
       round.decisions.push(decision);
-      const logs: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, eventsFor(eventsBefore, s)]);
+      const myLog = logs.before.get(seat)!;
+      const both: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, logs.before.get(s)!]);
       const search = () =>
-        this.worlds(g, round, before, seat, eventsBefore, legal, SIZES.optionWorlds, (rows) => {
+        this.worlds(g, round, before, seat, myLog, legal, SIZES.optionWorlds, (rows) => {
           decision.rows.push(...rows);
-          this.judge(g, round, decision, before, eventsBefore);
+          this.judge(g, round, decision, before, myLog);
         });
       if (searched) {
         // The live search's worlds, as they were: no need to play them again (if there are as many as the review's own).
@@ -465,25 +474,25 @@ export class Reviewer {
             const pick = report.moves.find((m) => m.chosen);
             decision.chosen = pick ? legal.findIndex((c) => same(c, pick.command)) : null;
             if (decision.chosen === -1) decision.chosen = null;
-            this.judge(g, round, decision, before, eventsBefore);
+            this.judge(g, round, decision, before, myLog);
             this.updated(g, round);
           });
       } else search();
       legal.forEach((c, k) =>
-        this.chunks(g, round, SIZES.optionTruth, (n) => ({ kind: 'truth', state: before, logs, first: { seat, command: c }, n }), (r) => {
+        this.chunks(g, round, SIZES.optionTruth, (n) => ({ kind: 'truth', state: before, logs: both, first: { seat, command: c }, n }), (r) => {
           if ('wins' in r) {
             decision.truth[k]!.wins += r.wins[seat] ?? 0;
             decision.truth[k]!.n += r.n;
           }
-          this.judge(g, round, decision, before, eventsBefore);
+          this.judge(g, round, decision, before, myLog);
         }),
       );
     }
 
     // The position after it.
     if (live) {
-      const logs: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, eventsFor(roundEvents, s)]);
-      this.chunks(g, round, SIZES.truth, (n) => ({ kind: 'truth', state: after, logs, first: null, n }), (r) => {
+      const both: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, logs.after.get(s)!]);
+      this.chunks(g, round, SIZES.truth, (n) => ({ kind: 'truth', state: after, logs: both, first: null, n }), (r) => {
         if ('wins' in r) {
           move.truth.wins += r.wins[g.person] ?? 0;
           move.truth.n += r.n;
@@ -497,7 +506,7 @@ export class Reviewer {
           round,
           after,
           s,
-          roundEvents,
+          logs.after.get(s)!,
           null,
           SIZES.worlds,
           (rows) => {
@@ -527,6 +536,28 @@ export class Reviewer {
     }
   }
 
+  /**
+   * Brings the players' logs (GameData.logs) through a move: their events up to it, what the view showed the player
+   * who made it (`decided`: as they decided), then the move's own events. The logs as they were at the decision and
+   * after the move, as copies (the jobs keep them while the logs grow).
+   */
+  private follow(
+    g: GameData,
+    events: TraceEvent[],
+    newEvents: TraceEvent[],
+    decided: { state: GameState; seat: Seat } | null,
+  ): { before: Map<Seat, TraceEvent[]>; after: Map<Seat, TraceEvent[]> } {
+    const seats = [g.person, g.bot];
+    const upTo = events.length - newEvents.length;
+    for (const s of seats) g.logs.get(s)!.push(...eventsFor(events.slice(g.read, upTo), s));
+    if (decided) noteObservation(g.logs.get(decided.seat)!, viewFor(decided.state, decided.seat), decided.seat);
+    const copies = () => new Map(seats.map((s) => [s, [...g.logs.get(s)!]]));
+    const before = copies();
+    for (const s of seats) g.logs.get(s)!.push(...eventsFor(events.slice(upTo), s));
+    g.read = events.length;
+    return { before, after: copies() };
+  }
+
   private newRound(g: GameData, n: number): RoundData {
     const round: RoundData = { round: n, over: false, winner: null, scores: [], moves: [], decisions: [], pending: 0, timer: null, parked: [] };
     g.rounds.set(n, round);
@@ -545,19 +576,19 @@ export class Reviewer {
     }
   }
 
-  /** Worlds from `seat`'s information in `state`: each played on (commands null), or once per command. */
+  /** Worlds from `seat`'s information in `state` (their log, `myLog`): each played on (commands null), or once per command. */
   private worlds(
     g: GameData,
     round: RoundData,
     state: GameState,
     seat: Seat,
-    events: TraceEvent[],
+    myLog: TraceEvent[],
     commands: Command[] | null,
     total: number,
     add: (rows: number[][]) => void,
     key: string | null = null,
   ): void {
-    const job = (n: number): ReviewJob => ({ kind: 'worlds', state, me: seat, myLog: eventsFor(events, seat), commands, n });
+    const job = (n: number): ReviewJob => ({ kind: 'worlds', state, me: seat, myLog, commands, n });
     // Each world plays every command: fewer worlds per job when there are many.
     const per = Math.max(2, Math.floor(CHUNK / Math.max(1, (commands?.length ?? 1) / 2)));
     for (let left = total; left > 0; left -= per) {
@@ -577,14 +608,14 @@ export class Reviewer {
   }
 
   /** The person's decisions: when one looks like a mistake that isn't clear yet, more worlds for the best option and the one played. */
-  private judge(g: GameData, round: RoundData, d: DecisionData, before: GameState, events: TraceEvent[]): void {
+  private judge(g: GameData, round: RoundData, d: DecisionData, before: GameState, myLog: TraceEvent[]): void {
     if (d.seat !== g.person || d.rechecked) return;
     if (d.chosen === null && d.rows.length < SIZES.optionWorlds) return;
     const v = verdictOf(d);
     if (v.unclear) {
       d.rechecked = true;
       const pair = [v.best, d.played];
-      this.worlds(g, round, before, d.seat, events, pair.map((k) => d.commands[k]!), SIZES.recheck, (rows) => {
+      this.worlds(g, round, before, d.seat, myLog, pair.map((k) => d.commands[k]!), SIZES.recheck, (rows) => {
         d.rows.push(...rows.map((r) => d.commands.map((_, k) => (k === pair[0] ? r[0]! : k === pair[1] ? r[1]! : null))));
       });
     }

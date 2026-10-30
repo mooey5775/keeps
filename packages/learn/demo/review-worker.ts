@@ -9,7 +9,7 @@
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import { Policy, sample } from '../src/policy.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
@@ -26,7 +26,8 @@ const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;
 /** The network's move for `seat`, sampled id by id, as the bot plays. */
 function move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[]): Command {
   const view = viewFor(state, seat);
-  belief.update(log).observe(view);
+  // As BotPlayer does: the view noted in the player's own log, and learned from there.
+  belief.update(noteObservation(log, view, seat));
   const decision = new Decision(view, legalCommands(state, seat));
   const prefix: number[] = [];
   for (;;) {
@@ -66,10 +67,12 @@ function run(job: ReviewJob): ReviewResult {
     }
     return { wins, n: job.n };
   }
-  const { state, me, myLog, commands } = job;
+  const { state, me, commands } = job;
   const belief = new Belief(me, { sound: true });
   const view = viewFor(state, me);
-  belief.update(myLog).observe(view);
+  // The player's log notes what they saw at their decisions; this view too (what they see now).
+  const myLog = noteObservation([...job.myLog], view, me);
+  belief.update(myLog);
   const model = worldModel(state, me, belief, view, myLog);
   const opponent = ((me + 2) % 4) as Seat;
   const rows: number[][] = [];
