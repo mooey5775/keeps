@@ -40,6 +40,16 @@ public enum ActionChoice: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     }
   }
+
+  /** The case's "action", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .ability: return "ability"
+    case .draw: return "draw"
+    case .pass: return "pass"
+    case .play: return "play"
+    }
+  }
 }
 
 public enum ActionChoiceAbility: Codable, Equatable, Sendable {
@@ -84,6 +94,18 @@ public enum ActionChoiceAbility: Codable, Equatable, Sendable {
       try container.encode("shackles", forKey: .tag)
     case .tithes:
       try container.encode("tithes", forKey: .tag)
+    }
+  }
+
+  /** The case's "card", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .acquisition: return "acquisition"
+    case .blunder: return "blunder"
+    case .juggling: return "juggling"
+    case .sanction: return "sanction"
+    case .shackles: return "shackles"
+    case .tithes: return "tithes"
     }
   }
 }
@@ -317,6 +339,29 @@ public enum Answer: Codable, Equatable, Sendable {
     case .takeOrDiscard(let value):
       try container.encode("take-or-discard", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "kind", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .action: return "action"
+    case .chooseDirection: return "choose-direction"
+    case .chooseDiscardCard: return "choose-discard-card"
+    case .chooseHandCard: return "choose-hand-card"
+    case .chooseKeepPair: return "choose-keep-pair"
+    case .choosePile: return "choose-pile"
+    case .choosePileCard: return "choose-pile-card"
+    case .choosePlayer: return "choose-player"
+    case .chooseTopCard: return "choose-top-card"
+    case .claimPile: return "claim-pile"
+    case .duplicityHide: return "duplicity-hide"
+    case .giveCard: return "give-card"
+    case .hotTarget: return "hot-target"
+    case .jokerCopy: return "joker-copy"
+    case .orderPile: return "order-pile"
+    case .revealWindow: return "reveal-window"
+    case .takeOrDiscard: return "take-or-discard"
     }
   }
 }
@@ -830,6 +875,25 @@ public enum ClientMessage: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     }
   }
+
+  /** The case's "t", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .addBot: return "add-bot"
+    case .backToLobby: return "back-to-lobby"
+    case .command: return "command"
+    case .create: return "create"
+    case .join: return "join"
+    case .leave: return "leave"
+    case .proposeUndo: return "propose-undo"
+    case .removeBot: return "remove-bot"
+    case .resume: return "resume"
+    case .settings: return "settings"
+    case .start: return "start"
+    case .training: return "training"
+    case .voteUndo: return "vote-undo"
+    }
+  }
 }
 
 public struct ClientMessageCommand: Codable, Equatable, Sendable {
@@ -1045,6 +1109,15 @@ public enum Command: Codable, Equatable, Sendable {
       try container.encode("reveal-duplicity", forKey: .tag)
     }
   }
+
+  /** The case's "type", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .answer: return "answer"
+    case .nextRound: return "next-round"
+    case .revealDuplicity: return "reveal-duplicity"
+    }
+  }
 }
 
 public struct CommandAnswer: Codable, Equatable, Sendable {
@@ -1108,6 +1181,16 @@ public enum FromApp: Codable, Equatable, Sendable {
     case .connect(let value):
       try container.encode("connect", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "t", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .client: return "client"
+    case .close: return "close"
+    case .config: return "config"
+    case .connect: return "connect"
     }
   }
 }
@@ -1261,6 +1344,14 @@ public enum KeepCardView: Codable, Equatable, Sendable {
     case .faceDown(let value):
       try container.encode(true, forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "faceDown", as the JSON has it. */
+  public var caseTag: Bool {
+    switch self {
+    case .notFaceDown: return false
+    case .faceDown: return true
     }
   }
 }
@@ -1768,6 +1859,28 @@ public enum PromptView: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     }
   }
+
+  /** The case's "mine", as the JSON has it. */
+  public var caseTag: Bool {
+    switch self {
+    case .notMine: return false
+    case .mine: return true
+    }
+  }
+
+  public var id: String {
+    switch self {
+    case .notMine(let value): return value.id
+    case .mine(let value): return value.id
+    }
+  }
+
+  public var seat: Int {
+    switch self {
+    case .notMine(let value): return value.seat
+    case .mine(let value): return value.seat
+    }
+  }
 }
 
 public enum PromptViewMine: Codable, Equatable, Sendable {
@@ -1869,6 +1982,73 @@ public enum PromptViewMine: Codable, Equatable, Sendable {
     case .takeOrDiscard(let value):
       try container.encode("take-or-discard", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "kind", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .action: return "action"
+    case .chooseDirection: return "choose-direction"
+    case .chooseDiscardCard: return "choose-discard-card"
+    case .chooseHandCard: return "choose-hand-card"
+    case .chooseKeepPair: return "choose-keep-pair"
+    case .choosePile: return "choose-pile"
+    case .choosePileCard: return "choose-pile-card"
+    case .choosePlayer: return "choose-player"
+    case .chooseTopCard: return "choose-top-card"
+    case .claimPile: return "claim-pile"
+    case .duplicityHide: return "duplicity-hide"
+    case .giveCard: return "give-card"
+    case .hotTarget: return "hot-target"
+    case .jokerCopy: return "joker-copy"
+    case .orderPile: return "order-pile"
+    case .revealWindow: return "reveal-window"
+    case .takeOrDiscard: return "take-or-discard"
+    }
+  }
+
+  public var id: String {
+    switch self {
+    case .action(let value): return value.id
+    case .chooseDirection(let value): return value.id
+    case .chooseDiscardCard(let value): return value.id
+    case .chooseHandCard(let value): return value.id
+    case .chooseKeepPair(let value): return value.id
+    case .choosePile(let value): return value.id
+    case .choosePileCard(let value): return value.id
+    case .choosePlayer(let value): return value.id
+    case .chooseTopCard(let value): return value.id
+    case .claimPile(let value): return value.id
+    case .duplicityHide(let value): return value.id
+    case .giveCard(let value): return value.id
+    case .hotTarget(let value): return value.id
+    case .jokerCopy(let value): return value.id
+    case .orderPile(let value): return value.id
+    case .revealWindow(let value): return value.id
+    case .takeOrDiscard(let value): return value.id
+    }
+  }
+
+  public var seat: Int {
+    switch self {
+    case .action(let value): return value.seat
+    case .chooseDirection(let value): return value.seat
+    case .chooseDiscardCard(let value): return value.seat
+    case .chooseHandCard(let value): return value.seat
+    case .chooseKeepPair(let value): return value.seat
+    case .choosePile(let value): return value.seat
+    case .choosePileCard(let value): return value.seat
+    case .choosePlayer(let value): return value.seat
+    case .chooseTopCard(let value): return value.seat
+    case .claimPile(let value): return value.seat
+    case .duplicityHide(let value): return value.seat
+    case .giveCard(let value): return value.seat
+    case .hotTarget(let value): return value.seat
+    case .jokerCopy(let value): return value.seat
+    case .orderPile(let value): return value.seat
+    case .revealWindow(let value): return value.seat
+    case .takeOrDiscard(let value): return value.seat
     }
   }
 }
@@ -2715,6 +2895,14 @@ public enum RoundEnd: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     }
   }
+
+  /** The case's "kind", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .emptyPile: return "empty-pile"
+    case .tokens: return "tokens"
+    }
+  }
 }
 
 public struct RoundEndEmptyPile: Codable, Equatable, Sendable {
@@ -3001,6 +3189,19 @@ public enum ServerMessage: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     }
   }
+
+  /** The case's "t", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .error: return "error"
+    case .game: return "game"
+    case .gone: return "gone"
+    case .replaced: return "replaced"
+    case .review: return "review"
+    case .room: return "room"
+    case .welcome: return "welcome"
+    }
+  }
 }
 
 public struct ServerMessageError: Codable, Equatable, Sendable {
@@ -3261,6 +3462,16 @@ public enum ToApp: Codable, Equatable, Sendable {
     case .server(let value):
       try container.encode("server", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "t", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .failed: return "failed"
+    case .ready: return "ready"
+    case .search: return "search"
+    case .server: return "server"
     }
   }
 }
@@ -3669,6 +3880,51 @@ public enum TracePayload: Codable, Equatable, Sendable {
     case .turnStart(let value):
       try container.encode("turn-start", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "type", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .action: return "action"
+    case .discard: return "discard"
+    case .draw: return "draw"
+    case .emptyDraw: return "empty-draw"
+    case .extraActions: return "extra-actions"
+    case .gameOver: return "game-over"
+    case .gameStart: return "game-start"
+    case .give: return "give"
+    case .keepSwap: return "keep-swap"
+    case .lastLaugh: return "last-laugh"
+    case .look: return "look"
+    case .lookHands: return "look-hands"
+    case .mark: return "mark"
+    case .noEffect: return "no-effect"
+    case .note: return "note"
+    case .pileClaim: return "pile-claim"
+    case .pileDealt: return "pile-dealt"
+    case .pileFlip: return "pile-flip"
+    case .pilePlaced: return "pile-placed"
+    case .pileReorder: return "pile-reorder"
+    case .pileRotate: return "pile-rotate"
+    case .pileSwap: return "pile-swap"
+    case .pilesToCenter: return "piles-to-center"
+    case .placeFaceDown: return "place-face-down"
+    case .placeOnPile: return "place-on-pile"
+    case .play: return "play"
+    case .prompt: return "prompt"
+    case .reveal: return "reveal"
+    case .revealCard: return "reveal-card"
+    case .roundEnd: return "round-end"
+    case .roundStart: return "round-start"
+    case .score: return "score"
+    case .shackled: return "shackled"
+    case .steal: return "steal"
+    case .take: return "take"
+    case .trigger: return "trigger"
+    case .triggers: return "triggers"
+    case .turnEnd: return "turn-end"
+    case .turnStart: return "turn-start"
     }
   }
 }
@@ -4662,6 +4918,14 @@ public enum TracePayloadRoundEnd: Codable, Equatable, Sendable {
     case .tokens(let value):
       try container.encode("tokens", forKey: .tag)
       try value.encode(to: encoder)
+    }
+  }
+
+  /** The case's "reason", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .emptyPile: return "empty-pile"
+    case .tokens: return "tokens"
     }
   }
 }

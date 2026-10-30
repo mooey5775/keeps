@@ -17,7 +17,7 @@
 //   `x?: T | null` (three states: absent, null, a value) an optional Nullable<T>.
 //   anything else becomes JSONValue, and is listed as a warning (none, as the types are now).
 // TypeScript 5's compiler API (ios/tools/swift-types/package.json): TypeScript 7's isn't stable yet.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
@@ -36,7 +36,11 @@ const exports = checker.getExportsOfModule(checker.getSymbolAtLocation(main)!);
 const warnings: string[] = [];
 const declarations: string[] = [];
 const named = new Map<string, string>(); // a type's identity → its Swift name
-const used = new Set<string>(['JSONValue']);
+const used = new Set<string>(['JSONValue', 'Nullable']);
+/** The fields each struct has, and the ones each tagged enum's cases all have (Swift name → Swift type): accessors. */
+const fieldsOf = new Map<string, Map<string, string>>();
+/** Each tagged enum's tag field and values, for the goldens' coverage check (ios/build/protocol-tags.json). */
+const tags: Record<string, { tag: string; values: (string | boolean)[] }> = {};
 
 // ---- names ----------------------------------------------------------------------------------------------------------
 
@@ -222,7 +226,30 @@ function tagged(type: ts.Type, parts: ts.Type[], tag: string, hint: string, excl
     cases.push({ value, caseName: ident(caseName), payload });
   }
   const tagType = typeof cases[0]!.value === 'boolean' ? 'Bool' : 'String';
+  tags[name] = { tag, values: cases.map((c) => c.value) };
   const lit = (v: string | boolean) => (typeof v === 'boolean' ? String(v) : JSON.stringify(v));
+  // Fields every case has, the same type in each (a prompt's id and seat): read without switching.
+  const shared = cases.every((c) => c.payload && fieldsOf.has(c.payload))
+    ? [...fieldsOf.get(cases[0]!.payload!)!].filter(([f, t]) => cases.every((c) => fieldsOf.get(c.payload!)!.get(f) === t))
+    : [];
+  fieldsOf.set(name, new Map(shared));
+  const accessors = shared.flatMap(([f, t]) => [
+    '',
+    `  public var ${f}: ${t} {`,
+    '    switch self {',
+    ...cases.map((c) => `    case .${c.caseName.replace(/`/g, '')}(let value): return value.${f}`),
+    '    }',
+    '  }',
+  ]);
+  const caseTag = [
+    '',
+    `  /** The case's ${JSON.stringify(tag)}, as the JSON has it. */`,
+    `  public var caseTag: ${tagType} {`,
+    '    switch self {',
+    ...cases.map((c) => `    case .${c.caseName.replace(/`/g, '')}: return ${lit(c.value)}`),
+    '    }',
+    '  }',
+  ];
   declarations.push(
     [
       `public enum ${name}: Codable, Equatable, Sendable {`,
@@ -248,6 +275,8 @@ function tagged(type: ts.Type, parts: ts.Type[], tag: string, hint: string, excl
       ),
       '    }',
       '  }',
+      ...caseTag,
+      ...accessors,
       '}',
     ].join('\n'),
   );
@@ -329,6 +358,7 @@ function struct(t: ts.Type, hint: string, exclude: readonly string[], preferred:
   // Absent and null both possible: Nullable<T>, optional (absent: nil; null: .null).
   const fieldType = (f: (typeof fields)[number]) => (f.isOptional && f.nullable ? `Nullable<${f.type}>` : f.type);
   const field = (f: (typeof fields)[number]) => `  public var ${f.swiftName}: ${fieldType(f)}${f.isOptional || f.nullable ? '?' : ''}`;
+  fieldsOf.set(name, new Map(fields.map((f) => [f.swiftName, `${fieldType(f)}${f.isOptional || f.nullable ? '?' : ''}`])));
   const keys = fields.length ? ['  private enum CodingKeys: String, CodingKey {', ...fields.map((f) => `    case ${f.swiftName}${f.plain === f.json ? '' : ` = ${JSON.stringify(f.json)}`}`), '  }'] : [];
   const decode = fields.map((f) =>
     f.isOptional && f.nullable
@@ -453,6 +483,9 @@ const text = [
 ].join('\n\n');
 
 for (const w of warnings) console.warn(`warning: ${w}`);
+// Every tagged union's values, for ios/tools/swift-types/goldens.ts: it plays until each has come up.
+mkdirSync(join(IOS, 'build'), { recursive: true });
+writeFileSync(join(IOS, 'build', 'protocol-tags.json'), JSON.stringify(tags, null, 1) + '\n');
 if (process.argv.includes('--check')) {
   const now = readFileSync(OUT, 'utf8');
   if (now !== text) {

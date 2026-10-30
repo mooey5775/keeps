@@ -6,8 +6,9 @@
 #   ios/sync.sh --no-run             build and install only
 #   KEEPS_SELFTEST=1 ios/sync.sh     run the app's self-test (KEEPS_SELFTEST_GAMES='hard:1,easy:1': level:marks, ...)
 #   TARGET=KeepsSpike ios/sync.sh    the spike (SPIKE_QUERY='positions=4&worlds=256': its plan, see ios/web/main.ts)
+#   SIM='iPhone 17' ios/sync.sh      on the Mac's iOS simulator instead of the phone (no signing needed)
 set -euo pipefail
-MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale
+MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale (MAC=edwardli@10.16.19.95 on the local network)
 TARGET=${TARGET:-Keeps}
 # The bundle id to build it as (APP_ID: another one, as long as there's no profile for its own; see ios/README.md).
 APP_ID=${APP_ID:-online.playkeeps.$TARGET}
@@ -40,9 +41,10 @@ rsync -a --delete "ios/build/$BUNDLE" "$MAC:src/keeps/ios/build/"
 rsync -a --delete --exclude=__pycache__ bot/keeps_bot bot/marvel "$MAC:src/keeps/bot/"
 rsync -a "$WEIGHTS" "$MAC:src/keeps/$WEIGHTS"
 
-ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$TARGET" "$APP_ID" <<'EOF'
+SIM=${SIM:-}
+ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$TARGET" "$APP_ID" "$(printf %q "$SIM")" <<'EOF'
 set -euo pipefail
-DEVICE=$1 WEIGHTS=$2 TARGET=$3 APP_ID=$4
+DEVICE=$1 WEIGHTS=$2 TARGET=$3 APP_ID=$4 SIM=$5
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps
 if [ ! -d ios/build/KeepsPolicy.mlpackage ] || [ "$WEIGHTS" -nt ios/build/KeepsPolicy.mlpackage ]; then
@@ -60,12 +62,27 @@ else
   SIGN=()
 fi
 xcodegen generate --quiet
-xcodebuild -project Keeps.xcodeproj -scheme "$TARGET" -configuration Release -destination "id=$DEVICE" \
-  -derivedDataPath build/derived -allowProvisioningUpdates -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" ${SIGN[@]+"${SIGN[@]}"} build
-xcrun devicectl device install app --device "$DEVICE" "build/derived/Build/Products/Release-iphoneos/$TARGET.app" | tail -2
+if [ -n "$SIM" ]; then
+  xcodebuild -project Keeps.xcodeproj -scheme "$TARGET" -configuration Release -destination "platform=iOS Simulator,name=$SIM" \
+    -derivedDataPath build/derived-sim -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" build
+  xcrun simctl boot "$SIM" 2>/dev/null || true
+  xcrun simctl install "$SIM" "build/derived-sim/Build/Products/Release-iphonesimulator/$TARGET.app"
+else
+  xcodebuild -project Keeps.xcodeproj -scheme "$TARGET" -configuration Release -destination "id=$DEVICE" \
+    -derivedDataPath build/derived -allowProvisioningUpdates -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" ${SIGN[@]+"${SIGN[@]}"} build
+  xcrun devicectl device install app --device "$DEVICE" "build/derived/Build/Products/Release-iphoneos/$TARGET.app" | tail -2
+fi
 EOF
 
 [ "${1:-}" = "--no-run" ] && exit 0
+if [ -n "$SIM" ]; then
+  # The simulator passes SIMCTL_CHILD_* variables to the app, without the prefix.
+  RUN_ENV=""
+  [ "$TARGET" = KeepsSpike ] && RUN_ENV="SIMCTL_CHILD_SPIKE_QUERY=$(printf %q "${SPIKE_QUERY:-}")"
+  [ -n "${KEEPS_SELFTEST:-}" ] && RUN_ENV="SIMCTL_CHILD_KEEPS_SELFTEST=1 SIMCTL_CHILD_KEEPS_SELFTEST_GAMES=${KEEPS_SELFTEST_GAMES:-hard:1,easy:1}"
+  ssh "$MAC" "$RUN_ENV xcrun simctl launch --console-pty --terminate-running-process $(printf %q "$SIM") $APP_ID" 2>&1 | sed -u 's/\r$//; /^DONE$/q'
+  exit 0
+fi
 if [ "$TARGET" = KeepsSpike ]; then
   ENV="{\"SPIKE_QUERY\": \"${SPIKE_QUERY:-}\"}"
 elif [ -n "${KEEPS_SELFTEST:-}" ]; then

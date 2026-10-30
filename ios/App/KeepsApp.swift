@@ -27,14 +27,14 @@ struct KeepsApp: App {
       let core = try Core()
       self.core = core
       let ready = try await core.start()
-      status = "Core ready: \(ready["network"] ?? "?"), \(ready["workers"] ?? "?") search workers"
+      status = "Core ready: \(ready.network), \(Int(ready.workers)) search workers"
       print(status)
       fflush(stdout)
       if ProcessInfo.processInfo.environment["KEEPS_SELFTEST"] != nil {
         UIApplication.shared.isIdleTimerDisabled = true
         let games = (ProcessInfo.processInfo.environment["KEEPS_SELFTEST_GAMES"] ?? "hard:1,easy:1").split(separator: ",").map { spec in
           let parts = spec.split(separator: ":")
-          return (level: String(parts[0]), marks: Int(parts.count > 1 ? parts[1] : "1") ?? 1)
+          return (level: BotLevel(rawValue: String(parts[0])) ?? .hard, marks: Int(parts.count > 1 ? parts[1] : "1") ?? 1)
         }
         core.configure(botDelayMs: 0)
         status = "Self-test running…"

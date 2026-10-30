@@ -3,7 +3,10 @@
 // each into the generated types (ios/Shared/Protocol.swift) and encodes it back, which must give the same JSON.
 //   node ios/tools/swift-types/goldens.ts <out dir>     writes from-app.jsonl and to-app.jsonl
 // Midstrike searches a few worlds here (the messages are the same at any size); its reviews run in this process, small.
-// Every client and server message type is sent at least once, rejected ones included; it fails if one isn't.
+// Every client and server message type is sent at least once, rejected ones included. Then quick games (easy, no
+// hints) go on until every kind of event, prompt, command, answer, action and ability (the generator's list:
+// ios/build/protocol-tags.json) has come up, keeping only the messages that show something new; it fails if one
+// never does, but for events the engine never shows a client (server-only in every game played).
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -21,10 +24,17 @@ const { reviewRunner } = await import('../../../packages/learn/demo/review-jobs.
 const { LocalServer } = await import('../../core/local-server.ts');
 const { coreBridge } = await import('../../core/bridge.ts');
 const { capped } = await import('../../core/search-pool.ts');
+const { composeHooks } = await import('../../../packages/learn/demo/host.ts');
+const { seeded } = await import('../../../packages/learn/demo/random.ts');
+// Seeded throughout (deals, the room's choices, Midstrike's at easy, the moves played here), so the coverage games are
+// the same games every run: the check passes or fails the same way until the engine or the bot changes.
+const chance = seeded(2026, 1);
+let deals = 0;
 type FromApp = import('../../core/bridge.ts').FromApp;
 type ToApp = import('../../core/bridge.ts').ToApp;
 type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
+const { apply } = await import('../../../packages/engine/src/index.ts');
 
 const policy = Policy.load(readFileSync(WEIGHTS));
 const pool = new RolloutPool(4, WEIGHTS, true);
@@ -39,6 +49,8 @@ type Task = { group: string; tag: number; key: string | null; job: Parameters<ty
 let queue: Task[] = [];
 const reviews: ReviewJobs = {
   submit(group, tag, job, done, key = null) {
+    // The coverage games skip their reviews (the scripted games' are recorded): the job's done, with nothing.
+    if (!recordAll) return void setImmediate(() => done(null));
     queue.push({ group, tag, key, job, done });
     setImmediate(pump);
   },
@@ -61,16 +73,80 @@ const reviews: ReviewJobs = {
 function pump(): void {
   const task = queue.shift();
   if (!task) return;
-  task.done(run(task.job));
+  // A job that fails counts as done with nothing, as review-pool.ts has it (the sampler can give up on a world).
+  let result: ReturnType<typeof run> | null = null;
+  try {
+    result = run(task.job);
+  } catch (error) {
+    console.error(`review: a job failed: ${error instanceof Error ? error.message : error}`);
+  }
+  task.done(result);
   if (queue.length) setImmediate(pump);
 }
 
 const host = midstrikeHost({ name: 'Midstrike', search: { hard: capped(pool, 8), medium: capped(pool, 4) }, reviews });
+
+// What must come up: every value of these tagged unions (the generator's list), where the messages hold them.
+const TAGS = JSON.parse(readFileSync(join(ROOT, 'ios/build/protocol-tags.json'), 'utf8')) as Record<string, { values: (string | boolean)[] }>;
+const KINDS = { event: 'TracePayload', prompt: 'PromptViewMine', command: 'Command', answer: 'Answer', action: 'ActionChoice', ability: 'ActionChoiceAbility' } as const;
+type Kind = keyof typeof KINDS;
+const want = Object.fromEntries(Object.entries(KINDS).map(([k, e]) => [k, new Set(TAGS[e]!.values.map(String))])) as Record<Kind, Set<string>>;
+const seen = Object.fromEntries(Object.keys(KINDS).map((k) => [k, new Set<string>()])) as Record<Kind, Set<string>>;
+/** Notes what `m` shows (from the core, or from the app); true if it's something not seen before. */
+function observe(m: ToApp | FromApp): boolean {
+  let fresh = false;
+  const note = (kind: Kind, value: unknown) => {
+    if (typeof value !== 'string' || seen[kind].has(value)) return;
+    seen[kind].add(value);
+    fresh = true;
+  };
+  const command = (c: Command) => {
+    note('command', c.type);
+    if (c.type !== 'answer') return;
+    note('answer', c.answer.kind);
+    if (c.answer.kind !== 'action') return;
+    note('action', c.answer.choice.action);
+    if (c.answer.choice.action === 'ability') note('ability', c.answer.choice.card);
+  };
+  const events = (log: readonly { payload: { type: string } }[]) => log.forEach((e) => note('event', e.payload.type));
+  if (m.t === 'client' && m.message.t === 'command') command(m.message.command);
+  if (m.t !== 'server') return fresh;
+  const message = m.message;
+  if (message.t === 'game') {
+    events(message.log);
+    for (const p of message.view.prompts) if (p.mine) note('prompt', p.kind);
+    message.view.legal.forEach(command);
+    m.options?.forEach((o) => command(o.command));
+  }
+  if (message.t === 'review') for (const move of message.review.moves) events(move.events);
+  return fresh;
+}
+// The events the engine makes, as the server has them, and the payload types a client can be given: an event's own if
+// some seat may see it, its redacted copy's otherwise (pile-dealt, the dealt pile's cards, reaches clients only as
+// pile-placed). A kind made but never given to a client is excused.
+const madeEvents = new Map<string, boolean>(); // type → ever given to a client
+/** The rooms, by code: the coverage games look one move ahead in the real game (see `curious`). */
+const rooms = new Map<string, { runningGame: { state: import('../../../packages/engine/src/index.ts').GameState } | null }>();
+const serverSide = {
+  sent(room: { code: string; runningGame: { state: import('../../../packages/engine/src/index.ts').GameState } | null }) {
+    rooms.set(room.code, room);
+  },
+  // The game's whole log, as it stands (the deal's events come before any command).
+  commanded(_room: unknown, move: { events: readonly { payload: { type: string }; visibility: unknown; redacted?: { type: string } }[] }) {
+    for (const e of move.events) {
+      const visible = e.visibility === 'all' || (Array.isArray(e.visibility) && e.visibility.length > 0);
+      madeEvents.set(e.payload.type, (madeEvents.get(e.payload.type) ?? false) || visible);
+      if (e.redacted) madeEvents.set(e.redacted.type, true);
+    }
+  },
+};
+/** Record every message (the scripted games), or only those showing something new (the coverage games). */
+let recordAll = true;
 const server = new LocalServer({
-  token: () => Math.random().toString(36).slice(2),
-  id: () => Math.random().toString(36).slice(2, 10),
-  seed: () => Math.random().toString(16).slice(2),
-  random: Math.random,
+  token: () => chance().toString(36).slice(2),
+  id: () => chance().toString(36).slice(2, 10),
+  seed: () => `golden-${deals++}`,
+  random: chance,
   now: Date.now,
   bot: {
     policy,
@@ -82,26 +158,54 @@ const server = new LocalServer({
     name: 'Midstrike',
     ...host.bot,
   },
-  hooks: host.hooks,
+  hooks: composeHooks(host.hooks, serverSide as never),
 });
 
 const fromApp: string[] = [];
 const toApp: string[] = [];
 const listeners = new Set<(m: ToApp) => void>();
 const receive = coreBridge(server, (m) => {
-  toApp.push(JSON.stringify(m));
+  if (observe(m) || recordAll) toApp.push(JSON.stringify(m));
   for (const l of listeners) l(m);
 }, () => {});
 const send = (m: FromApp) => {
   const json = JSON.stringify(m);
-  fromApp.push(json);
+  if (observe(m) || recordAll) fromApp.push(json);
   receive(json);
 };
 let nextId = 1;
 const settle = () => new Promise((r) => setTimeout(r, 20));
 
-/** A game at `level`, to `marks`, played by random legal moves with training mode on; `extras` sends the rarer messages. */
-async function game(level: string, marks: number, extras: boolean): Promise<void> {
+/**
+ * For the coverage games: of `commands`, one that brings an event or prompt kind not seen yet, looking one move ahead
+ * in the real game (the room's chance is seeded, so what it shows is what happens); null if none does. Unlike the
+ * random moves, it may reveal Duplicity's card (only a reveal ever shackles a turn).
+ */
+function curious(code: string, seat: number, commands: readonly Command[]): Command | null {
+  const state = rooms.get(code)?.runningGame?.state;
+  if (!state) return null;
+  for (const command of commands) {
+    const r = apply(state, seat as 0, command);
+    if (!r.ok) continue;
+    const events = r.events.flatMap((e) => [e.payload.type, ...(e.redacted ? [e.redacted.type] : [])]);
+    const prompts = r.state.prompts.filter((p) => p.seat === seat).map((p) => p.kind);
+    if (events.some((t) => want.event.has(t) && !seen.event.has(t)) || prompts.some((k) => !seen.prompt.has(k))) return command;
+  }
+  return null;
+}
+
+/** `cards` in a seeded random order. */
+function shuffled<T>(cards: readonly T[]): T[] {
+  const out = [...cards];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(chance() * (i + 1));
+    [out[i], out[j]] = [out[j]!, out[i]!];
+  }
+  return out;
+}
+
+/** A game at `level`, to `marks`, played by random legal moves (training mode on: hints); `extras` sends the rarer messages. */
+async function game(level: string, marks: number, extras: boolean, training = true): Promise<void> {
   let id = nextId++;
   let token = '';
   let code = '';
@@ -122,7 +226,7 @@ async function game(level: string, marks: number, extras: boolean): Promise<void
       started = true;
       setImmediate(() => {
         send({ t: 'client', id, message: { t: 'start' } });
-        send({ t: 'client', id, message: { t: 'training', on: true } });
+        if (training) send({ t: 'client', id, message: { t: 'training', on: true } });
       });
     }
     if (message.t !== 'game') return;
@@ -140,8 +244,9 @@ async function game(level: string, marks: number, extras: boolean): Promise<void
     const order = prompts.find((p) => p.kind === 'order-pile') as { id: string; cards: string[] } | undefined;
     const choices = view.legal.filter((c) => c.type !== 'reveal-duplicity');
     const command: Command | undefined = order
-      ? ({ type: 'answer', promptId: order.id, answer: { kind: 'order-pile', order: [...order.cards].sort(() => Math.random() - 0.5) } } as Command)
-      : (choices.length ? choices : view.legal)[Math.floor(Math.random() * (choices.length || view.legal.length))];
+      ? ({ type: 'answer', promptId: order.id, answer: { kind: 'order-pile', order: shuffled(order.cards) } } as Command)
+      : (!recordAll && view.viewer !== 'spectator' ? curious(code, view.viewer, view.legal) : null) ??
+        (choices.length ? choices : view.legal)[Math.floor(chance() * (choices.length || view.legal.length))];
     if (!command) return;
     moves++;
     setImmediate(() => send({ t: 'client', id, message: { t: 'command', command } }));
@@ -203,6 +308,15 @@ async function game(level: string, marks: number, extras: boolean): Promise<void
 await game('hard', 2, true);
 await game('medium', 1, false);
 await game('easy', 1, false);
+// Then quick games until every kind has come up (an event the engine never shows a client excused).
+const missing = () =>
+  (Object.keys(KINDS) as Kind[]).flatMap((k) => [...want[k]].filter((v) => !seen[k].has(v) && !(k === 'event' && madeEvents.get(v) === false)).map((v) => `${k} ${v}`));
+recordAll = false;
+let coverageGames = 0;
+for (; missing().length && coverageGames < 600; coverageGames++) {
+  await game('easy', 1, false, false);
+  if ((coverageGames + 1) % 25 === 0) console.log(`${coverageGames + 1} coverage games: still to come up: ${missing().join(', ')}`);
+}
 await pool.close?.();
 
 mkdirSync(out, { recursive: true });
@@ -210,17 +324,16 @@ writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
 writeFileSync(join(out, 'to-app.jsonl'), toApp.join('\n') + '\n');
 
 // Every kind of message, both ways, must be there.
-const seen = (lines: string[], pick: (m: Record<string, unknown>) => unknown) => new Set(lines.map((l) => pick(JSON.parse(l))).filter(Boolean) as string[]);
-const client = seen(fromApp, (m) => (m.t === 'client' ? (m.message as { t: string }).t : null));
-const serverTypes = seen(toApp, (m) => (m.t === 'server' ? (m.message as { t: string }).t : null));
+const typesIn = (lines: string[], pick: (m: Record<string, unknown>) => unknown) => new Set(lines.map((l) => pick(JSON.parse(l))).filter(Boolean) as string[]);
+const client = typesIn(fromApp, (m) => (m.t === 'client' ? (m.message as { t: string }).t : null));
+const serverTypes = typesIn(toApp, (m) => (m.t === 'server' ? (m.message as { t: string }).t : null));
 const wantClient = ['add-bot', 'back-to-lobby', 'command', 'create', 'join', 'leave', 'propose-undo', 'remove-bot', 'resume', 'settings', 'start', 'training', 'vote-undo'];
 const wantServer = ['error', 'game', 'gone', 'replaced', 'review', 'room', 'welcome'];
-const missing = [...wantClient.filter((t) => !client.has(t)).map((t) => `client ${t}`), ...wantServer.filter((t) => !serverTypes.has(t)).map((t) => `server ${t}`)];
-const payloads = new Set<string>();
-for (const l of toApp) for (const e of (JSON.parse(l).message?.log ?? []) as { payload: { type: string } }[]) payloads.add(e.payload.type);
-console.log(`${fromApp.length} messages to the core, ${toApp.length} from it; ${payloads.size} kinds of event; client ${[...client].sort().join(' ')}; server ${[...serverTypes].sort().join(' ')}`);
-if (missing.length) {
-  console.error(`missing: ${missing.join(', ')}`);
+const unseen = [...wantClient.filter((t) => !client.has(t)).map((t) => `client ${t}`), ...wantServer.filter((t) => !serverTypes.has(t)).map((t) => `server ${t}`), ...missing()];
+const excused = [...madeEvents].filter(([, shown]) => !shown).map(([t]) => t);
+console.log(`${fromApp.length} messages to the core, ${toApp.length} from it, from 3 games and ${coverageGames} more for coverage; ${(Object.keys(KINDS) as Kind[]).map((k) => `${k}s ${seen[k].size}/${want[k].size}`).join(', ')}${excused.length ? ` (never shown to a client: ${excused.join(', ')})` : ''}`);
+if (unseen.length) {
+  console.error(`never came up: ${unseen.join(', ')}`);
   process.exit(1);
 }
 process.exit(0);
