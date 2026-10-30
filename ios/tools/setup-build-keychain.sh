@@ -5,10 +5,10 @@
 # (readable by you only); ios/sync.sh unlocks it before each build.
 #
 # Run it yourself, in a terminal (it asks for your login password, to export the identity):
-#   ssh -t edwardli@10.0.0.25 bash src/keeps/ios/tools/setup-build-keychain.sh
+#   ssh -t edwardli@100.90.147.75 bash src/keeps/ios/tools/setup-build-keychain.sh
 # If macOS won't export the identity over ssh, export it from Keychain Access instead (My Certificates, the
 # "Apple Development" certificate, File > Export Items, as .p12) and give the file:
-#   ssh -t edwardli@10.0.0.25 bash src/keeps/ios/tools/setup-build-keychain.sh ~/Desktop/Certificates.p12
+#   ssh -t edwardli@100.90.147.75 bash src/keeps/ios/tools/setup-build-keychain.sh ~/Desktop/Certificates.p12
 set -euo pipefail
 umask 077
 NAME=keeps-build.keychain

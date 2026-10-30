@@ -9,29 +9,12 @@
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { midstrikeHost } from '../../packages/learn/demo/host.ts';
 import { setSearchMode, setWorlds } from '../../packages/learn/demo/search-bot.ts';
-import type { ClientMessage, ServerMessage } from '../../packages/protocol/src/index.ts';
-import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
-import { describeOptions, makeNames, type Option } from '../../packages/web/src/game/options.ts';
-import type { Seat, TraceEvent } from '../../packages/engine/src/index.ts';
+import { coreBridge, type ToApp } from './bridge.ts';
 import { LocalServer } from './local-server.ts';
 import { capped, WorkerSearch } from './search-pool.ts';
 
 /** Worlds per search at each level that searches (Hard: 512 on a phone, as decided; Medium as on the website). */
 const WORLDS = { hard: 512, medium: 64 };
-
-export type FromApp =
-  | { t: 'connect'; id: number }
-  | { t: 'client'; id: number; message: ClientMessage }
-  | { t: 'close'; id: number }
-  /** How long Midstrike waits before each move, so a person can follow it (0 for tests). */
-  | { t: 'config'; botDelayMs: number };
-
-export type ToApp =
-  | { t: 'ready'; workers: number; network: string }
-  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[] }
-  /** Each of Midstrike's searches, as it finishes. */
-  | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
-  | { t: 'failed'; message: string };
 
 const handler = (window as unknown as { webkit?: { messageHandlers?: { core?: { postMessage(s: string): void } } } }).webkit?.messageHandlers?.core;
 function post(m: ToApp): void {
@@ -42,9 +25,6 @@ const randomString = (bytes: number) => {
   const b = crypto.getRandomValues(new Uint8Array(bytes));
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 };
-
-/** Each connection's game log so far, for the log's lines (they're worked out from the whole log, as the web client does). */
-type Connection = { receive(m: ClientMessage): void; close(): void; events: TraceEvent[] };
 
 async function boot(): Promise<void> {
   const weights = await (await fetch('midstrike.bin')).arrayBuffer();
@@ -82,32 +62,8 @@ async function boot(): Promise<void> {
     hooks: host.hooks,
   });
 
-  const connections = new Map<number, Connection>();
-  const deliver = (id: number, message: ServerMessage) => {
-    const connection = connections.get(id);
-    if (message.t !== 'game' || !connection) return post({ t: 'server', id, message });
-    connection.events = message.reset ? [...message.log] : [...connection.events, ...message.log];
-    const viewer = message.view.viewer;
-    const anchor = (viewer === 'spectator' ? 0 : viewer) as Seat;
-    const options = viewer === 'spectator' ? [] : describeOptions(message.view, makeNames(message.names, viewer, anchor));
-    const lines = logLines(connection.events, makeNames(message.names, 'spectator', anchor));
-    post({ t: 'server', id, message, options, lines });
-  };
   (window as unknown as { keepsCore: { receive(json: string): void } }).keepsCore = {
-    receive(json: string) {
-      try {
-        const m = JSON.parse(json) as FromApp;
-        if (m.t === 'config') botDelayMs = m.botDelayMs;
-        else if (m.t === 'connect') connections.set(m.id, { ...server.connect((message) => deliver(m.id, message)), events: [] });
-        else if (m.t === 'client') connections.get(m.id)?.receive(m.message);
-        else if (m.t === 'close') {
-          connections.get(m.id)?.close();
-          connections.delete(m.id);
-        }
-      } catch (error) {
-        post({ t: 'failed', message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) });
-      }
-    },
+    receive: coreBridge(server, post, (ms) => (botDelayMs = ms)),
   };
   post({ t: 'ready', workers: search.size, network: `${policy.info.run} ${policy.info.step} (${policy.info.fingerprint})` });
 }

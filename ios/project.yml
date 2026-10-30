@@ -1,4 +1,4 @@
-# The iOS app (Keeps) and the spike that measured it (KeepsSpike). XcodeGen makes the Xcode project from this file;
+# The iOS app (Keeps), its tests (KeepsTests: ios/test.sh) and the spike that measured it (KeepsSpike). XcodeGen makes the Xcode project from this file;
 # the project itself isn't kept (ios/sync.sh generates it on the Mac).
 name: Keeps
 options:
@@ -50,3 +50,24 @@ targets:
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         TARGETED_DEVICE_FAMILY: "1,2"
+  KeepsTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+      - path: Shared/Protocol.swift
+      # Messages of whole games, both ways, recorded by ios/tools/swift-types/goldens.ts (ios/test.sh).
+      - path: build/goldens
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.KeepsTests
+        GENERATE_INFOPLIST_FILE: YES
+schemes:
+  KeepsTests:
+    build:
+      targets:
+        KeepsTests: [test]
+    test:
+      targets: [KeepsTests]

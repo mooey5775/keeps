@@ -1,0 +1,9 @@
+{
+  "name": "keeps-swift-types",
+  "private": true,
+  "description": "Generates the app's Swift protocol types from the TypeScript ones (ios/tools/swift-types/generate.ts). TypeScript 5's compiler API, as TypeScript 7's is not stable yet.",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

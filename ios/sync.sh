@@ -7,7 +7,7 @@
 #   KEEPS_SELFTEST=1 ios/sync.sh     run the app's self-test (KEEPS_SELFTEST_GAMES='hard:1,easy:1': level:marks, ...)
 #   TARGET=KeepsSpike ios/sync.sh    the spike (SPIKE_QUERY='positions=4&worlds=256': its plan, see ios/web/main.ts)
 set -euo pipefail
-MAC=${MAC:-edwardli@10.0.0.25}
+MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale
 TARGET=${TARGET:-Keeps}
 # The bundle id to build it as (APP_ID: another one, as long as there's no profile for its own; see ios/README.md).
 APP_ID=${APP_ID:-online.playkeeps.$TARGET}
