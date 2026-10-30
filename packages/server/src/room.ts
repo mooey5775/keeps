@@ -53,6 +53,69 @@ export interface RoomDeps {
   build?: string;
   /** The bot, if this server has one. */
   bot?: BotDeps;
+  /** What the server adds to its rooms (a bot's host: session notes, round reviews), told what happens in them. */
+  hooks?: RoomHooks;
+}
+
+/**
+ * Told what happens in a room, each after the room has done its part (so a hook sees the room as it now is). A
+ * server that adds to the game (Midstrike's host: its session notes, its round reviews) does it here.
+ */
+export interface RoomHooks {
+  /** `player` was sent the game (whether or not they're connected, or a game is running): `reset`, their whole log. */
+  sent?(room: Room, player: RoomMember, reset: boolean): void;
+  /** A command was applied (rejected ones never get here). */
+  commanded?(room: Room, move: PlayedMove): void;
+  /** `player` switched training mode on or off. */
+  trainingChanged?(room: Room, player: RoomMember): void;
+  /** `player` left the room (their seat, if a game is running, stays theirs to resume). */
+  left?(room: Room, player: RoomMember): void;
+  /** `player`'s connection went away. */
+  disconnected?(room: Room, player: RoomMember): void;
+  /** The room is about to close. */
+  closing?(room: Room): void;
+}
+
+/** A player, as hooks see them. */
+export interface RoomMember {
+  readonly id: string;
+  readonly name: string;
+  readonly seat: Seat | null;
+  readonly host: boolean;
+  /** A computer player (never connected). */
+  readonly bot: boolean;
+  readonly training: boolean;
+  readonly connected: boolean;
+  /** Sends them a message, if they're connected. */
+  send(message: ServerMessage): void;
+}
+
+/** A command as played: the game before and after it, its events, and the game's whole log through it. */
+export interface PlayedMove {
+  seat: Seat;
+  command: Command;
+  before: GameState;
+  after: GameState;
+  newEvents: readonly TraceEvent[];
+  events: readonly TraceEvent[];
+}
+
+/** The running game, as hooks see it: the same object for the game's whole life. */
+export interface RunningGame {
+  readonly state: GameState;
+  readonly events: readonly TraceEvent[];
+  readonly startedAt: number;
+}
+
+/** A bot's decision, or training mode's at a person's seat, as a server's own bot works it out. */
+export interface BotTurn {
+  room: Room;
+  /** The bot (or the person's shadow bot, for advice): its view, log and belief, up to date with `state`. */
+  bot: BotPlayer;
+  state: GameState;
+  events: readonly TraceEvent[];
+  /** The difficulty the host chose (hard if the server offers no choice). */
+  level: BotLevel;
 }
 
 export interface BotDeps {
@@ -65,6 +128,14 @@ export interface BotDeps {
   name?: string;
   /** Whether it plays at a chosen difficulty (Settings.botLevel; the server's own bot decides what each means). */
   levels?: boolean;
+  /**
+   * The bot's move, when it takes time to work out (a search): the command, or a wait (try again after `retryAfter`
+   * ms; the bot tells the table why, with Room.notify). If it fails, the network's own move is played. Without it,
+   * the bot plays its network's move at once. A move that's no longer wanted (the game moved on) is dropped.
+   */
+  choose?(turn: BotTurn): Promise<{ command: Command } | { retryAfter: number }>;
+  /** Training mode's advice, when it takes time (a search). Without it, the network's suggestion at once. */
+  advise?(turn: BotTurn): Promise<Hint[]>;
 }
 
 /** Analytics id for the bot's own events (one person for every bot game). */
@@ -141,6 +212,8 @@ export class Room {
   private game: Game | null = null;
   /** Cancels the bot's pending move, if one is scheduled. */
   private botTimer: (() => void) | null = null;
+  /** Closed: nothing more is scheduled (a move worked out meanwhile is dropped). */
+  private closed = false;
   readonly createdAt: number;
   lastActivity: number;
 
@@ -162,6 +235,38 @@ export class Room {
   /** When the running game started (it names the game's replay file), or null. */
   get gameStartedAt(): number | null {
     return this.game?.startedAt ?? null;
+  }
+
+  /** The running game, or null (for hooks: the same object as long as the game lasts). */
+  get runningGame(): RunningGame | null {
+    return this.game;
+  }
+
+  /** Everyone in the room, as hooks see them. */
+  get members(): RoomMember[] {
+    return this.players.map((p) => this.member(p));
+  }
+
+  get roomSettings(): Readonly<Settings> {
+    return this.settings;
+  }
+
+  /** Tells the people at the table something (only the one at `seat`, if given), as an error message. */
+  notify(message: string, seat?: Seat): void {
+    for (const p of this.players) if (!p.bot && (seat === undefined || p.seat === seat)) p.send?.({ t: 'error', message });
+  }
+
+  private member(p: Player): RoomMember {
+    return {
+      id: p.id,
+      name: p.name,
+      seat: p.seat,
+      host: p.host,
+      bot: p.bot,
+      training: p.training,
+      connected: p.send !== null,
+      send: (message) => p.send?.(message),
+    };
   }
 
   /** Adds a player (a spectator, if a game is running) and connects them. */
@@ -213,6 +318,8 @@ export class Room {
 
   /** Ends the room: tells everyone still connected it's gone. */
   close(): void {
+    this.deps.hooks?.closing?.(this);
+    this.closed = true;
     this.cancelBot();
     for (const p of this.players) {
       p.send?.({ t: 'gone' });
@@ -227,6 +334,7 @@ export class Room {
     player.send = null;
     this.broadcastRoom();
     if (this.game?.undo) this.settleUndo();
+    this.deps.hooks?.disconnected?.(this, this.member(player));
   }
 
   handle(playerId: string, message: ClientMessage): void {
@@ -269,12 +377,15 @@ export class Room {
         return this.proposeUndo(player);
       case 'vote-undo':
         return this.voteUndo(player, message.accept);
-      case 'training':
+      case 'training': {
         if (!this.deps.bot) return "Training mode needs the bot, and this server doesn't have it.";
+        const was = player.training;
         player.training = message.on === true;
         player.send?.({ t: 'room', room: this.summary(player) });
         if (this.game) this.sendGame(player, false);
+        if (player.training !== was) this.deps.hooks?.trainingChanged?.(this, this.member(player));
         return null;
+      }
       case 'back-to-lobby':
         if (!player.host) return 'Only the host can do that.';
         if (!this.game) return null;
@@ -286,6 +397,7 @@ export class Room {
         return null;
       case 'leave':
         this.leave(player);
+        this.deps.hooks?.left?.(this, this.member(player));
         return null;
       case 'add-bot':
         return this.addBot(player);
@@ -376,6 +488,7 @@ export class Room {
     this.followHumans();
     for (const p of this.players) this.sendGame(p, false, result.events);
     this.scheduleBot();
+    this.deps.hooks?.commanded?.(this, { seat: player.seat, command, before, after: result.state, newEvents: result.events, events: game.events });
     return null;
   }
 
@@ -409,7 +522,7 @@ export class Room {
   private scheduleBot(): void {
     const game = this.game;
     const deps = this.deps.bot;
-    if (!game || !deps || this.botTimer) return;
+    if (!game || !deps || this.botTimer || this.closed) return;
     const bot = game.bots.find((b) => b.wantsToMove(game.state));
     if (!bot) return;
     const state = game.state;
@@ -424,6 +537,47 @@ export class Room {
   private playBot(game: Game, bot: BotPlayer): void {
     const player = this.playerAt(bot.seat);
     if (!player) return;
+    const choose = this.deps.bot!.choose;
+    if (choose) return this.playBotLater(game, bot, player, choose);
+    this.playNetworkMove(game, bot, player);
+  }
+
+  /** The bot's move worked out by deps.bot.choose (a search): played when it comes, if the game is still there. */
+  private playBotLater(game: Game, bot: BotPlayer, player: Player, choose: NonNullable<BotDeps['choose']>): void {
+    const state = game.state;
+    let cancelled = false;
+    const cancel = () => {
+      cancelled = true;
+    };
+    // Holds the bot's turn while the move is worked out: the room neither schedules it twice nor plays it for a state that's gone.
+    this.botTimer = cancel;
+    const settle = () => {
+      if (this.botTimer === cancel) this.botTimer = null;
+      return !cancelled && this.game === game && game.state === state;
+    };
+    choose({ room: this, bot, state, events: game.events, level: this.settings.botLevel ?? 'hard' }).then(
+      (choice) => {
+        if (!settle()) return this.scheduleBot();
+        if ('retryAfter' in choice) {
+          this.botTimer = this.deps.bot!.schedule(() => {
+            this.botTimer = null;
+            this.scheduleBot();
+          }, choice.retryAfter);
+          return;
+        }
+        const error = this.command(player, choice.command);
+        if (error !== null) this.playNetworkMove(game, bot, player, `its move failed (${error})`);
+      },
+      (error: unknown) => {
+        if (!settle()) return this.scheduleBot();
+        this.playNetworkMove(game, bot, player, `its search failed (${String(error instanceof Error ? error.stack : error)})`);
+      },
+    );
+  }
+
+  /** The bot's network's own move, played now (`why`: logged, if this stands in for a move that failed). */
+  private playNetworkMove(game: Game, bot: BotPlayer, player: Player, why?: string): void {
+    if (why) console.error(`room ${this.code}: the bot ${why}; playing its network's own move instead`);
     let error: string | null;
     try {
       error = this.command(player, bot.choose(game.state, game.events));
@@ -686,8 +840,13 @@ export class Room {
     for (const p of this.players) p.send?.({ t: 'room', room: this.summary(p) });
   }
 
-  /** Sends `player` their view, plus either the new events or (on reset) the whole log. */
+  /** Sends `player` their view, plus either the new events or (on reset) the whole log; then the sent hook. */
   private sendGame(player: Player, reset: boolean, newEvents: TraceEvent[] = []): void {
+    this.deliverGame(player, reset, newEvents);
+    this.deps.hooks?.sent?.(this, this.member(player), reset);
+  }
+
+  private deliverGame(player: Player, reset: boolean, newEvents: TraceEvent[]): void {
     const game = this.game;
     if (!game || !player.send) return;
     const viewer = player.seat ?? 'spectator';
@@ -751,9 +910,10 @@ export class Room {
     return advisor.advice.hints;
   }
 
-  /** The advice itself: the network's suggestion, at once. (A server that searches replaces this with its search.) */
+  /** The advice itself: the server's own (deps.bot.advise: a search), or the network's suggestion at once. */
   private advise(bot: BotPlayer, state: GameState, events: readonly TraceEvent[]): Hint[] | Promise<Hint[]> {
-    return bot.suggest(state, events);
+    const advise = this.deps.bot?.advise;
+    return advise ? advise({ room: this, bot, state, events, level: this.settings.botLevel ?? 'hard' }) : bot.suggest(state, events);
   }
 }
 

@@ -1,14 +1,14 @@
 import { readFileSync } from 'node:fs';
 import { Policy, type BotPlayer } from '@keeps/learn';
-import type { GameState, ReplayLog, TraceEvent } from '@keeps/engine';
+import type { Command, GameState, ReplayLog, TraceEvent } from '@keeps/engine';
 import type { Hint, ServerMessage } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
-import { Room, type RoomDeps, type Send } from '../src/room.ts';
+import { Room, type BotDeps, type BotTurn, type PlayedMove, type RoomDeps, type RoomMember, type Send } from '../src/room.ts';
 
 const policy = Policy.load(readFileSync(new URL('../../learn/weights/bot.bin', import.meta.url)));
 
-/** A room whose bot moves only when the test runs its scheduled move. */
-function botRoom(overrides: Partial<RoomDeps> = {}) {
+/** A room whose bot moves only when the test runs its scheduled move (`bot`: more of the bot's deps). */
+function botRoom(overrides: Partial<RoomDeps> = {}, bot: Partial<BotDeps> = {}) {
   let n = 0;
   const pending: { fn: () => void; cancelled: boolean }[] = [];
   const saved: ReplayLog[] = [];
@@ -28,6 +28,7 @@ function botRoom(overrides: Partial<RoomDeps> = {}) {
         return () => (task.cancelled = true);
       },
       delay: () => 1000,
+      ...bot,
     },
     ...overrides,
   };
@@ -217,11 +218,9 @@ describe('the bot in a room', () => {
   });
 
   it("training mode with advice that takes time (a search): 'thinking' until it's ready, then sent; stale advice dropped", async () => {
-    const { room, runBot } = botRoom();
-    type Advise = (bot: BotPlayer, state: GameState, events: readonly TraceEvent[]) => Promise<Hint[]>;
     const asked: { state: GameState; resolve: (hints: Hint[]) => void; reject: (e: Error) => void; bot: BotPlayer; events: readonly TraceEvent[] }[] = [];
-    (room as unknown as { advise: Advise }).advise = (bot, state, events) =>
-      new Promise((resolve, reject) => asked.push({ state, resolve, reject, bot, events }));
+    const advise = ({ bot, state, events }: BotTurn) => new Promise<Hint[]>((resolve, reject) => asked.push({ state, resolve, reject, bot, events }));
+    const { room, runBot } = botRoom({}, { advise });
     const human = join(room, 'Ana');
     room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: 'random' } });
     room.handle(human.id, { t: 'add-bot' });
@@ -258,6 +257,134 @@ describe('the bot in a room', () => {
       expect(hints.length).toBeGreaterThan(0);
       expect(hints[0]!.win).toBeUndefined();
     }
+  });
+
+  it('plays the move its server works out (a search) when it comes, waits when told to, and otherwise plays its network', async () => {
+    const asked: { turn: BotTurn; resolve: (c: { command: Command } | { retryAfter: number }) => void; reject: (e: Error) => void }[] = [];
+    const choose = (turn: BotTurn) => new Promise<{ command: Command } | { retryAfter: number }>((resolve, reject) => asked.push({ turn, resolve, reject }));
+    const { room, runBot, waiting, saved } = botRoom({}, { choose });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: 'random' } });
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    const botsTurn = async () => {
+      for (let step = 0; human.last('game').view.prompts.some((p) => p.mine) || human.last('game').view.legal.some((c) => c.type === 'next-round'); step++) {
+        expect(step).toBeLessThan(500);
+        const legal = human.last('game').view.legal;
+        room.handle(human.id, { t: 'command', command: legal.find((c) => c.type !== 'reveal-duplicity') ?? legal[0]! });
+      }
+      expect(runBot()).toBe(true);
+      await tick();
+      return asked.at(-1)!;
+    };
+    const commands = () => saved.at(-1)?.commands.length ?? 0;
+
+    // The move it works out: played when it comes (nothing else is scheduled meanwhile).
+    let ask = await botsTurn();
+    expect(ask.turn.level).toBe('hard');
+    expect(waiting()).toBe(0);
+    let before = commands();
+    ask.resolve({ command: ask.turn.bot.choose(ask.turn.state, ask.turn.events) });
+    await tick();
+    expect(commands()).toBe(before + 1);
+    expect(saved.at(-1)!.commands.at(-1)!.seat).toBe(ask.turn.bot.seat);
+
+    // Told to wait: nothing played; asked again when the wait is over.
+    ask = await botsTurn();
+    before = commands();
+    ask.resolve({ retryAfter: 15_000 });
+    await tick();
+    expect(commands()).toBe(before);
+    expect(waiting()).toBe(1);
+    expect(runBot()).toBe(true); // the wait is over: the bot's turn is scheduled again, as usual
+    expect(waiting()).toBe(1);
+    expect(runBot()).toBe(true);
+    await tick();
+    expect(asked.at(-1)).not.toBe(ask);
+    ask = asked.at(-1)!;
+
+    // A failed search, or a move that doesn't play: its network's own move instead.
+    const errors = console.error;
+    console.error = () => {};
+    try {
+      before = commands();
+      ask.reject(new Error('the search broke'));
+      await tick();
+      expect(commands()).toBe(before + 1);
+      if (human.last('game').view.phase === 'playing') {
+        ask = await botsTurn();
+        before = commands();
+        ask.resolve({ command: { type: 'answer', promptId: 'nonsense', answer: { kind: 'action', choice: { action: 'pass' } } } as Command });
+        await tick();
+        expect(commands()).toBe(before + 1);
+      }
+    } finally {
+      console.error = errors;
+    }
+    expect(human.errors()).toEqual([]);
+  });
+
+  it('drops a move worked out after the room closed, and schedules nothing more', async () => {
+    const asked: { resolve: (c: { command: Command }) => void; turn: BotTurn }[] = [];
+    const { room, runBot, waiting, saved } = botRoom({}, { choose: (turn) => new Promise((resolve) => asked.push({ resolve, turn })) });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    while (!asked.length) {
+      const game = human.last('game');
+      if (game.view.prompts.some((p) => p.mine)) room.handle(human.id, { t: 'command', command: game.view.legal.find((c) => c.type !== 'reveal-duplicity')! });
+      else expect(runBot()).toBe(true);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const before = saved.at(-1)?.commands.length ?? 0;
+    room.close();
+    asked[0]!.resolve({ command: asked[0]!.turn.bot.choose(asked[0]!.turn.state, asked[0]!.turn.events) });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(saved.at(-1)?.commands.length ?? 0).toBe(before);
+    expect(waiting()).toBe(0);
+  });
+
+  it('tells its hooks what happens in the room, each move as played', () => {
+    const calls: string[] = [];
+    const moves: PlayedMove[] = [];
+    const who = (p: RoomMember) => `${p.name}${p.connected ? '' : ' (away)'}`;
+    const { room, runBot } = botRoom({
+      hooks: {
+        sent: (_room, p, reset) => calls.push(`sent ${who(p)}${reset ? ' reset' : ''}`),
+        commanded: (r, move) => {
+          moves.push(move);
+          expect(r.runningGame!.state).toBe(move.after);
+        },
+        trainingChanged: (_room, p) => calls.push(`training ${who(p)} ${p.training}`),
+        left: (_room, p) => calls.push(`left ${who(p)}`),
+        disconnected: (_room, p) => calls.push(`disconnected ${who(p)}`),
+        closing: (r) => calls.push(`closing ${r.code}`),
+      },
+    });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    expect(calls).toContain('sent Ana reset');
+    expect(calls).toContain('sent Bot (away) reset');
+    room.handle(human.id, { t: 'training', on: true });
+    room.handle(human.id, { t: 'training', on: true });
+    expect(calls.filter((c) => c.startsWith('training'))).toEqual(['training Ana true']);
+    for (let step = 0; step < 40 && human.last('game').view.phase === 'playing'; step++) {
+      const game = human.last('game');
+      if (game.view.prompts.some((p) => p.mine)) room.handle(human.id, { t: 'command', command: game.view.legal.find((c) => c.type !== 'reveal-duplicity')! });
+      else expect(runBot()).toBe(true);
+    }
+    // Each move: the game it was played on is the one the move before left, and its events are the log's last ones.
+    expect(moves.length).toBeGreaterThan(10);
+    moves.forEach((m, i) => {
+      if (i > 0) expect(m.before).toBe(moves[i - 1]!.after);
+      expect(m.events.slice(m.events.length - m.newEvents.length)).toEqual(m.newEvents);
+    });
+    expect(new Set(moves.map((m) => m.seat)).size).toBe(2);
+    room.disconnect(human.id, human.send);
+    room.close();
+    expect(calls.slice(-2)).toEqual(['disconnected Ana (away)', `closing ${room.code}`]);
   });
 
   it('training mode gives nothing in a game without the bot, and needs a server with the bot', () => {

@@ -7,8 +7,8 @@
 #   SPIKE_QUERY='positions=4&worlds=256' ios/sync.sh   change the page's plan (see ios/web/main.ts)
 set -euo pipefail
 MAC=${MAC:-edwardli@10.0.0.25}
-# Every ssh connection to a Mac is its own security session, and codesign needs the login keychain unlocked in
-# this one: reuse a shared connection in which you unlocked it (ios/README.md), when there is one.
+# Signing uses the build keychain (ios/tools/setup-build-keychain.sh, once). Without it, codesign needs the login
+# keychain unlocked in this very ssh session: a shared connection in which you unlocked it is reused, if there is one.
 SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 export RSYNC_RSH="ssh -o ControlPath=$HOME/.ssh/keeps-mac-%C"
@@ -37,9 +37,16 @@ if [ ! -d ios/build/KeepsPolicy.mlpackage ] || [ "$WEIGHTS" -nt ios/build/KeepsP
   (cd bot && PYTHONPATH=. ~/src/keeps-ios-venv/bin/python -m keeps_bot.coreml "../$WEIGHTS" ../ios/build/KeepsPolicy.mlpackage 2>&1 | grep -v "^\s*$\|Torch version\|it/s\]\|passes/s\]\|ops/s\]")
 fi
 cd ios
+# Signing: the build keychain (ios/tools/setup-build-keychain.sh) if it's set up, else whatever this session has.
+if [ -f ~/.keeps-build-keychain ]; then
+  security unlock-keychain -p "$(cat ~/.keeps-build-keychain)" keeps-build.keychain
+  SIGN=(OTHER_CODE_SIGN_FLAGS=--keychain="$HOME/Library/Keychains/keeps-build.keychain-db")
+else
+  SIGN=()
+fi
 xcodegen generate --quiet
 xcodebuild -project KeepsSpike.xcodeproj -scheme KeepsSpike -configuration Release -destination "id=$DEVICE" \
-  -derivedDataPath build/derived -allowProvisioningUpdates -quiet build
+  -derivedDataPath build/derived -allowProvisioningUpdates -quiet "${SIGN[@]}" build
 xcrun devicectl device install app --device "$DEVICE" build/derived/Build/Products/Release-iphoneos/KeepsSpike.app | tail -2
 EOF
 
