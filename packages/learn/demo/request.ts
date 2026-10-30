@@ -10,7 +10,7 @@ let values = new Float32Array(1 << 16);
 let indices = new Uint16Array(1 << 16);
 
 /** The observations as one request (the protocol in inference.ts). */
-export function encodeRequest(rows: Float32Array[]): Uint8Array {
+export function encodeRequest(rows: Float32Array[]): Uint8Array<ArrayBuffer> {
   const ends = new Uint32Array(rows.length);
   let k = 0;
   rows.forEach((obs, r) => {

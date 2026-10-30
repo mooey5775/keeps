@@ -16,7 +16,7 @@
 import { eventsFor, legalCommands, scores, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import type { RoundReview } from '../../protocol/src/index.ts';
 import { describeOptions, makeNames } from '../../web/src/game/options.ts';
-import type { ReviewJob, ReviewResult } from './review-worker.ts';
+import type { ReviewJob, ReviewResult } from './review-jobs.ts';
 import type { SearchReport } from './search-bot.ts';
 import { noteObservation } from '../src/belief.ts';
 

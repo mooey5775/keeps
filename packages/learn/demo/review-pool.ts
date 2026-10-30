@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
 import type { RemoteQueue } from './remote.ts';
 import type { ReviewJobs } from './review.ts';
-import type { ReviewJob, ReviewResult } from './review-worker.ts';
+import type { ReviewJob, ReviewResult } from './review-jobs.ts';
 
 interface Task {
   id: number;

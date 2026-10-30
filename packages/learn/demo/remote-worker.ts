@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { Policy } from '../src/policy.ts';
 import { ReviewPool } from './review-pool.ts';
-import type { ReviewJob, ReviewResult } from './review-worker.ts';
+import type { ReviewJob, ReviewResult } from './review-jobs.ts';
 import { BatchedPool } from './batch-search.ts';
 import { type EvaluateJob, type Evaluator } from './search-bot.ts';
 import { RolloutPool } from './rollout-pool.ts';
