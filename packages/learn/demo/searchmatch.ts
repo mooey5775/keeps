@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
 import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
-import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
+import { RolloutPool } from './rollout-pool.ts';
 
 const [aPath, bPath, dealsArg, worldsArg, seed, threadsArg] = process.argv.slice(2);
 setSearchMode('best-q');

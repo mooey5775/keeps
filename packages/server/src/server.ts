@@ -9,7 +9,7 @@ import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
 import { buildDispute, RateLimiter } from './dispute.ts';
 import { replayFileName, ReplayStore, type DiskSpace } from './replays.ts';
-import { Room, type BotDeps, type RoomDeps, type Send } from './room.ts';
+import { Room, type BotDeps, type RoomDeps, type RoomHooks, type Send } from './room.ts';
 
 export interface ServerOptions {
   port: number;
@@ -39,6 +39,10 @@ export interface ServerOptions {
   botName?: string;
   /** The host chooses the bot's difficulty (Settings.botLevel); the caller's bot plays it (room.ts BotDeps.levels). */
   botLevels?: boolean;
+  /** The bot's own play, when it takes time (a search): its moves and training mode's advice (room.ts BotDeps). */
+  botPlay?: Pick<BotDeps, 'choose' | 'advise'>;
+  /** What the server adds to its rooms, told what happens in them (room.ts RoomHooks). */
+  roomHooks?: RoomHooks;
   /** Extra pages, tried before the static files: returns true if it served the request. */
   extraRoutes?: (req: IncomingMessage, res: ServerResponse, path: string) => boolean;
 }
@@ -89,7 +93,8 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
   const bot = options.botWeights ? loadBot(options.botWeights, options.botDelay, options.botName, options.botLevels) : { deps: undefined, status: 'off (no weights configured)' };
 
   const deps: RoomDeps = {
-    ...(bot.deps ? { bot: bot.deps } : {}),
+    ...(bot.deps ? { bot: { ...bot.deps, ...options.botPlay } } : {}),
+    ...(options.roomHooks ? { hooks: options.roomHooks } : {}),
     tracker,
     ...(build ? { build } : {}),
     token: () => randomBytes(18).toString('base64url'),

@@ -4,7 +4,6 @@
 // the chance-only posterior given what the bot knows (packages/learn/src/worlds.ts), play every
 // legal command out to the end of the round in each world (the policy on both sides, in worker
 // threads), and take one damped policy-improvement step from the network's policy (see `mode`).
-import { Worker } from 'node:worker_threads';
 import {
   eventsFor,
   legalCommands,
@@ -16,12 +15,14 @@ import {
 } from '../../engine/src/index.ts';
 import { actionName, Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { Belief, noteObservation } from '../src/belief.ts';
-import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import type { BotPlayer } from '../src/bot.ts';
 import type { Policy } from '../src/policy.ts';
 
-export let WORLDS = Number(process.env.SEARCH_WORLDS ?? 256);
+/** A setting from the environment, where there is one (not in a browser). */
+const env = (name: string): string | undefined => (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env[name];
+
+export let WORLDS = Number(env('SEARCH_WORLDS') ?? 256);
 export function setWorlds(n: number): void {
   WORLDS = n;
 }
@@ -36,9 +37,9 @@ export function setWorlds(n: number): void {
  * move is sampled from pi'; training mode's advice shows pi''s most likely move.
  * 'best-q': the move with the best rollout value, the policy breaking near-ties (within tie(worlds)).
  */
-export const ALPHA = Number(process.env.SEARCH_ALPHA ?? 0.002);
-export const BETA = Number(process.env.SEARCH_BETA ?? 0.02);
-let mode: 'damped' | 'best-q' = process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped';
+export const ALPHA = Number(env('SEARCH_ALPHA') ?? 0.002);
+export const BETA = Number(env('SEARCH_BETA') ?? 0.02);
+let mode: 'damped' | 'best-q' = env('SEARCH_MODE') === 'best-q' ? 'best-q' : 'damped';
 export function setSearchMode(m: 'damped' | 'best-q'): void {
   mode = m;
 }
@@ -69,7 +70,8 @@ export interface SearchReport {
 }
 const toWin = (v: number) => Math.min(1, Math.max(0, (v + 1) / 2));
 let x = 7654321;
-const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;
+/** The search's own random stream (its damped choices, and RolloutPool's worlds). */
+export const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;
 /** Where each search's summary goes (its candidates reveal the bot's hand: keep it from a human opponent's screen). */
 let log: (line: string) => void = (line) => console.log(line);
 export function setSearchLog(sink: (line: string) => void): void {
@@ -85,52 +87,9 @@ export interface EvaluateJob {
   n: number;
 }
 
-/** What runs it: here (RolloutPool), or on another machine (remote.ts). One row per world: ±1 per command, `me`'s result. */
+/** What runs it: here (rollout-pool.ts, batch-search.ts), or on another machine (remote.ts). One row per world: ±1 per command, `me`'s result. */
 export interface Evaluator {
   evaluate(job: EvaluateJob): Promise<number[][]>;
-}
-
-/** Worker threads that play out commands in sampled worlds. */
-export class RolloutPool implements Evaluator {
-  private readonly workers: Worker[];
-  private next = 0;
-  private readonly waiting = new Map<number, { resolve: (out: number[]) => void; reject: (e: Error) => void }>();
-  private id = 0;
-
-  /** `sampled`: rollouts sample the policy (as the bot plays it) instead of taking its most likely id. */
-  constructor(size: number, weights: string, sampled = process.env.SEARCH_ROLLOUTS === 'sampled') {
-    this.workers = Array.from({ length: size }, () => {
-      const w = new Worker(new URL('./rollout-worker.ts', import.meta.url), { workerData: { weights, sampled } });
-      w.on('message', (m: { id: number; out?: number[]; error?: string }) => {
-        const job = this.waiting.get(m.id);
-        this.waiting.delete(m.id);
-        if (m.error) job?.reject(new Error(m.error));
-        else job?.resolve(m.out!);
-      });
-      return w;
-    });
-  }
-
-  async evaluate(job: EvaluateJob): Promise<number[][]> {
-    const { state, me, myLog, commands, n } = job;
-    const opponent = ((me + 2) % 4) as Seat;
-    const view = viewFor(state, me);
-    // The log notes what the player saw at their decisions (BotPlayer's does), this one too.
-    const log = noteObservation([...myLog], view, me);
-    const belief = new Belief(me, { sound: true }).update(log);
-    const model = worldModel(state, me, belief, view, log);
-    const worlds = Array.from({ length: n }, () => sampleHistory(model, random));
-    return Promise.all(worlds.map((h) => this.run({ world: h.world, myLog: log, theirLog: h.logs[opponent]!, me, commands })));
-  }
-
-  run(job: { world: GameState; myLog: TraceEvent[]; theirLog: TraceEvent[]; me: Seat; commands: Command[] }): Promise<number[]> {
-    const id = this.id++;
-    const worker = this.workers[this.next++ % this.workers.length]!;
-    return new Promise((resolve, reject) => {
-      this.waiting.set(id, { resolve, reject });
-      worker.postMessage({ id, ...job });
-    });
-  }
 }
 
 /** `prefix` completed with the policy's most likely id at each remaining step. */

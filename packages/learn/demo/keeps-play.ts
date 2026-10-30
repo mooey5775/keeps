@@ -33,7 +33,8 @@ import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
 import { availableParallelism } from 'node:os';
 import { appendFileSync } from 'node:fs';
-import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
+import { RolloutPool } from './rollout-pool.ts';
 setSearchMode(process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped');
 setWorlds(Number(process.env.SEARCH_WORLDS ?? 128));
 // The search's reasoning shows the bot's hand: it goes to a file, not the player's screen.

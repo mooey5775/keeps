@@ -9,7 +9,8 @@ import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../.
 import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
 import { BatchedPool } from './batch-search.ts';
-import { RolloutPool, searchChoose, setSearchLog, setSearchMode, setWorlds, type Evaluator } from './search-bot.ts';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds, type Evaluator } from './search-bot.ts';
+import { RolloutPool } from './rollout-pool.ts';
 
 const [weights, aArg, bArg, dealsArg, seed, threadsArg] = process.argv.slice(2);
 setSearchMode('best-q');

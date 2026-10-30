@@ -4,13 +4,13 @@
 import { describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { isObserved, noteObservation } from '../src/belief.ts';
-import { Reviewer, type ReviewPool } from '../demo/review.ts';
+import { Reviewer, type ReviewJobs } from '../demo/review.ts';
 import type { ReviewJob } from '../demo/review-worker.ts';
 import { seeded } from '../demo/random.ts';
 
 /** A pool that keeps the jobs it's given (and runs none). */
-function recordingPool(jobs: ReviewJob[]): ReviewPool {
-  return { submit: (_group: string, _tag: number, job: ReviewJob) => jobs.push(job), cancel: () => 0, drop: () => 0, kick: () => {} } as unknown as ReviewPool;
+function recordingPool(jobs: ReviewJob[]): ReviewJobs {
+  return { submit: (_group, _tag, job) => void jobs.push(job), cancel: () => 0, drop: () => 0, setAside: () => [] };
 }
 
 describe('the round review', () => {
