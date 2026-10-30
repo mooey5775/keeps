@@ -20,21 +20,26 @@ export function encodeRequest(rows: Float32Array[]): Uint8Array {
       values = copyInto(new Float32Array(grown), values, k);
       indices = copyInto(new Uint16Array(grown), indices, k);
     }
-    // Most entries are zero: read them two at a time as one 64-bit float, which is 0 (or -0) only if both are
-    // zeros (a -0 in the pair's low half makes a nonzero double, and the pair is then checked one by one).
-    const even = obs.byteOffset % 8 === 0 && obs.length % 2 === 0;
-    const pairs = even ? new Float64Array(obs.buffer, obs.byteOffset, obs.length / 2) : null;
-    for (let i = 0; i < obs.length; i += 2) {
-      if (pairs && pairs[i >> 1] === 0) continue;
+    // Most entries are zero: check four at a time as integers, sign bits masked off (-0 counts as zero, as
+    // `=== 0` has it), and only a group with something in it one by one.
+    const bits = new Int32Array(obs.buffer, obs.byteOffset, obs.length);
+    const groups = obs.length & ~3;
+    let i = 0;
+    for (; i < groups; i += 4) {
+      if (((bits[i]! | bits[i + 1]! | bits[i + 2]! | bits[i + 3]!) & 0x7fffffff) === 0) continue;
+      for (let j = i; j < i + 4; j++) {
+        const v = obs[j]!;
+        if (v !== 0) {
+          values[k] = v;
+          indices[k++] = j;
+        }
+      }
+    }
+    for (; i < obs.length; i++) {
       const v = obs[i]!;
       if (v !== 0) {
         values[k] = v;
         indices[k++] = i;
-      }
-      const w = obs[i + 1];
-      if (w !== undefined && w !== 0) {
-        values[k] = w;
-        indices[k++] = i + 1;
       }
     }
     ends[r] = k;
