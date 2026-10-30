@@ -36,6 +36,7 @@ import struct
 import numpy as np
 
 from keeps_bot import game as keeps
+from keeps_bot.kpnn import read  # (also this module's read, as before)
 from keeps_bot import policy as policies
 from keeps_bot import rnad
 from keeps_bot import selfplay
@@ -43,14 +44,6 @@ from keeps_bot import selfplay
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 WEIGHTS = os.path.join(REPO, 'packages', 'learn', 'weights', 'bot.bin')
 FIXTURE = os.path.join(REPO, 'packages', 'learn', 'test', 'fixtures', 'bot-parity.bin')
-
-
-def read(path):
-  with open(path, 'rb') as f:
-    data = f.read()
-  assert data[:4] == b'KPNN', f'{path} is not a KPNN file'
-  (length,) = struct.unpack('<I', data[4:8])
-  return json.loads(data[8:8 + length]), data[8 + length:]
 
 
 def restamp(paths, fingerprint):

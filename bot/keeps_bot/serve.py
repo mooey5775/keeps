@@ -14,13 +14,11 @@ import json
 import os
 import struct
 import time
-from types import SimpleNamespace
 
 import numpy as np
 import torch
 
-from keeps_bot.export import read
-from keeps_bot.vrpo.models import Agent, load_haiku_params
+from keeps_bot import kpnn
 
 MAX_ROWS = 16384  # observations per forward, at most (a batch bigger than this goes through in parts)
 BUCKETS = [2 ** k for k in range(4, 15)]  # batch sizes with a CUDA graph each (16 … 16384), a batch padded up to the next
@@ -44,18 +42,7 @@ def load(path, device, precision='float32'):
   """The policy file's header and its network as the PyTorch agent, on `device`, in `precision`: float32 (the
   network as trained and as the TypeScript bot runs it), float16 (as Apple's Neural Engine runs it) or int8 (int8
   weights, float16 arithmetic: the Neural Engine with quantized weights)."""
-  header, body = read(path)
-  if header.get('network') != 'entity':
-    raise SystemExit(f'{path}: only entity networks are served (this one is {header.get("network", "mlp")})')
-  floats = np.frombuffer(body, dtype='<f4')
-  params = {}
-  for t in header['tensors']:
-    size = int(np.prod(t['shape']))
-    module, name = t['name'].rsplit('/', 1)
-    params.setdefault(module, {})[name] = floats[t['offset']:t['offset'] + size].reshape(t['shape']).copy()
-  game = SimpleNamespace(layout=header['layout'], max_available_actions=header['numActions'])
-  agent = Agent(SimpleNamespace(game=game))
-  load_haiku_params(agent, params)
+  header, agent = kpnn.load_agent(path)
   if precision == 'int8':
     quantize_weights(agent)
   agent = agent.to(device).eval()

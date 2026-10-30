@@ -1,0 +1,3 @@
+# Built by sync.sh (the page, the Core ML model, the positions) and the project XcodeGen makes from project.yml.
+build/
+*.xcodeproj/
