@@ -94,6 +94,50 @@ interface PhysicalPile {
   placed: Set<CardId>;
 }
 
+/**
+ * What a player's view showed at one of their decisions, as an entry in their own log. The engine's events say what
+ * happened; a view also shows what is face up, which no event names: the top of a pile Revelation turned over, the
+ * next card of a face-up pile. Kept in the log at each decision (noteObservation), a belief rebuilt from the log
+ * alone knows all the player saw, exactly as one that observed the views as they came; and whoever is given the log
+ * (the search, its world sampler) is given that too. Not an engine event: only the learning code makes one.
+ */
+export interface Observed {
+  type: 'observed';
+  /** Each pile's face-up top, by position (null: face down or empty). */
+  tops: (CardId | null)[];
+  /** The cards in sight elsewhere: the player's hand, the discard, face-up keep cards. */
+  visible: CardId[];
+}
+
+const isObserved = (e: TraceEvent): boolean => (e.payload as { type: string }).type === 'observed';
+
+/** What `view` shows of the cards, as an observation entry's payload. */
+function observedIn(view: PlayerView, me: Seat): Observed {
+  const visible = [...(view.hands[me]!.cards ?? []), ...view.discard];
+  for (const keep of view.keeps) for (const c of keep.cards) if (c.id) visible.push(c.id);
+  return { type: 'observed', tops: view.piles.map((p) => p.top), visible };
+}
+
+/**
+ * Adds to `me`'s log what their view shows now (an Observed entry), unless the log's last entry already is that
+ * observation: the same view seen again, nothing having happened since, adds nothing. Returns the log.
+ */
+export function noteObservation(log: TraceEvent[], view: PlayerView, me: Seat): TraceEvent[] {
+  const payload = observedIn(view, me);
+  const last = log.at(-1);
+  if (last && isObserved(last) && JSON.stringify(last.payload) === JSON.stringify(payload)) return log;
+  log.push({
+    seq: last?.seq ?? 0,
+    round: last?.round ?? 0,
+    turn: last?.turn ?? 0,
+    depth: 0,
+    cause: null,
+    visibility: [me],
+    payload: payload as unknown as TraceEvent['payload'],
+  });
+  return log;
+}
+
 export class Belief implements PileMap {
   readonly me: Seat;
   /** What has happened, anchored to cards and piles (observation v2). */
@@ -171,7 +215,12 @@ export class Belief implements PileMap {
 
   /** Reads the player's log from where it left off (a new round starts over). */
   update(log: readonly TraceEvent[]): this {
-    for (; this.processed < log.length; this.processed++) this.apply(log[this.processed]!.payload);
+    for (; this.processed < log.length; this.processed++) {
+      const e = log[this.processed]!;
+      // An observation is what the player saw, not something that happened: it ends nothing (a Fiat, "just hidden").
+      if (isObserved(e)) this.see(e.payload as unknown as Observed);
+      else this.apply(e.payload);
+    }
     this.finishFiat();
     return this;
   }
@@ -429,8 +478,12 @@ export class Belief implements PileMap {
    * (Revelation) shows a card in that pile.
    */
   observe(view: PlayerView): this {
-    const elsewhere = new Set<CardId>([...(view.hands[this.me]!.cards ?? []), ...view.discard]);
-    for (const keep of view.keeps) for (const c of keep.cards) if (c.id) elsewhere.add(c.id);
+    return this.see(observedIn(view, this.me));
+  }
+
+  /** Learns from what a view showed (observe(), or an observation entry in the log). */
+  private see(seen: Observed): this {
+    const elsewhere = new Set<CardId>(seen.visible);
     for (const pile of this.piles) {
       for (const card of [...pile.members]) {
         if (!elsewhere.has(card)) continue;
@@ -440,7 +493,7 @@ export class Belief implements PileMap {
       }
     }
     for (let position = 0; position < 4; position++) {
-      const top = view.piles[position]!.top;
+      const top = seen.tops[position];
       if (!top) continue;
       const p = this.pileAt(position as Seat);
       const pile = this.piles[p]!;

@@ -6,15 +6,14 @@
 // in, one player's data cached into the other's) changes a hash. After a change meant to change the observations,
 // record them again: UPDATE_GOLDEN=1 pnpm --filter @keeps/learn exec vitest run test/observation2-golden.test.ts
 //
-// And with no recording: a player's observation must be the same in every world consistent with what they know.
-// (There the belief is built from the player's log in one go, the same way in each world. The bot's belief, updated
-// at each of its decisions, can also remember things from the views it saw on the way, so it can differ from one
-// built from the log; the recorded run holds that path exactly.)
+// And with no recording: a belief rebuilt from a player's log, which notes what their view showed at each of their
+// decisions (noteObservation), is the one they built up as the game went; and a player's observation is the same
+// in every world consistent with what they know.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
+import { Belief, noteObservation } from '../src/belief.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
 import { seeded } from '../demo/random.ts';
@@ -87,6 +86,28 @@ describe('observations, against a recorded run', () => {
 });
 
 describe("a player's observation", () => {
+  it('is the same from a belief rebuilt from their log as from one built up as the game went', () => {
+    let checked = 0;
+    for (let g = 0; g < GAMES; g++) {
+      const logs = new Map<Seat, TraceEvent[]>();
+      let read = 0;
+      play(g, ({ state, events, seat, prefix, ids, obs }) => {
+        // Each player's log as BotPlayer keeps it: their events as they come, and their view at each decision.
+        for (const s of [0, 2] as Seat[]) {
+          const log = logs.get(s) ?? [];
+          logs.set(s, log);
+          log.push(...eventsFor(events.slice(read), s));
+        }
+        read = events.length;
+        const log = noteObservation(logs.get(seat)!, viewFor(state, seat), seat);
+        const rebuilt = new Belief(seat, { sound: true }).update(log);
+        expect(encodeObservation2(viewFor(state, seat), rebuilt, prefix, ids)).toEqual(obs);
+        checked++;
+      });
+    }
+    expect(checked).toBeGreaterThan(6000);
+  });
+
   it('is the same in every world consistent with what they know', () => {
     let checked = 0;
     for (let g = 0; g < 6; g++) {
