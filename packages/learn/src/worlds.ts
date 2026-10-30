@@ -537,7 +537,7 @@ const seeded = (n: number) => ({ a: Math.imul(n + 1, 0x9e3779b1) >>> 0, b: Math.
  * (its Observed entries: what was face up) the world must have shown them too; and the opponent's log in
  * the world notes what they saw at theirs, as BotPlayer's does.
  */
-const strict = Boolean(process.env.WORLDS_STRICT);
+const strict = Boolean((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.WORLDS_STRICT);
 
 function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => number): History | string {
   const { me, opponent, log } = model;
