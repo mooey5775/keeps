@@ -29,6 +29,15 @@ Decisions (2026-10-21):
 - Every other reveal timing the clarifications describe (Interest when a Coin card enters, Retribution when the
   triggering card is played, Last Laugh at round end) happens in a reveal window or on the holder's own decision, so
   it's available.
+- **TODO: the belief forgets a pile it saw when a card leaves it unseen.** After the player sees a pile whole (Tithes)
+  or its top (Epiphany, Prayer), and the opponent then takes from it at a position they can't see (Requisition), the
+  belief drops every card it knew was there (`forgetMembers`): one of them left, it can't say which. Yet the pile is
+  still those cards minus one, and once the taken card shows up (played, say) the player knows the pile exactly. The
+  world sampler no longer suffers from it (2026-10-30: its guided rebuild of the deal follows the places the pile ops
+  remember, so these positions sample at a plan a world instead of failing), but the network's observation still
+  shows those cards as unplaced. The fix: track a pile as its known places less k cards taken from unknown positions,
+  and recover it when a taken card is identified. It changes what the network sees, so it goes in with the next
+  training run (with the encoder fingerprint changed), not into the live bot.
 
 ## Milestones
 

@@ -123,6 +123,13 @@ export interface WorldModel {
   start?: { state: GameState; events: TraceEvent[] };
   /** The command that worked at each step of the replay last time (tried first). */
   tried: Map<number, string>;
+  /** Bounds for the guided rebuild of the deal (see guideBounds), worked out once. */
+  guide?: GuideBounds;
+  /**
+   * Whether the deal is rebuilt guided (the default) or as first written: every unseen choice drawn uniformly and
+   * turned down when it contradicts what the player saw. Both are exact; the unguided one is the tests' reference.
+   */
+  guided: boolean;
   /** Plans drawn and why each was turned down (see sampleHistory). */
   stats: { plans: number; accepted: number; rejected: Map<string, number> };
 }
@@ -191,6 +198,7 @@ export function worldModel(state: GameState, me: Seat, belief: Belief, view: Pla
     state,
     belief,
     tried: new Map(),
+    guided: true,
     stats: { plans: 0, accepted: 0, rejected: new Map() },
   };
 }
@@ -242,7 +250,7 @@ export function sampleHistory(model: WorldModel, random: () => number): History 
 /** A history drawn from the proposal and replayed, or why it was turned down. */
 function tryHistory(model: WorldModel, random: () => number): History | string {
   const plan = samplePlan(model, random);
-  const deal = rebuildDeal(plan, model.belief.pileOps, random);
+  const deal = model.guided ? rebuildDeal(plan, model.belief.pileOps, random, (model.guide ??= guideBounds(model))) : rebuildDeal(plan, model.belief.pileOps, random);
   if (typeof deal === 'string') return deal;
   return replayPlan(model, plan, deal, random);
 }
@@ -389,13 +397,72 @@ interface Deal {
 }
 
 /**
+ * Bounds for the guided rebuild (rebuildDeal), from the pile ops alone: for each take from an unknown position, at
+ * most how many of the pile's places then held a card the player hadn't placed; for each pile, at most how many of
+ * its places now do (and no more than the positions the belief doesn't know: those are what the plan shuffles).
+ * One pass that counts the places whose cards are known, never more than any history has: a card leaving takes a
+ * known one when there is one, a look makes at least its cards known, a reorder the player saw keeps them all
+ * known, one they didn't, none.
+ */
+interface GuideBounds {
+  /** By op index: the bound for a take from an unknown position. */
+  any: Map<number, number>;
+  /** By physical pile: the bound for the places unknown now. */
+  now: number[];
+}
+
+function guideBounds(model: WorldModel): GuideBounds {
+  const length = [0, 0, 0, 0];
+  const known = [0, 0, 0, 0];
+  const any = new Map<number, number>();
+  model.belief.pileOps.forEach((op, k) => {
+    const p = op.p;
+    switch (op.op) {
+      case 'deal':
+        length[p] = op.size;
+        known[p] = 0;
+        break;
+      case 'pop':
+        if (op.from === 'any') any.set(k, length[p]! - known[p]!);
+        length[p]!--;
+        if (known[p]! > 0) known[p]!--;
+        break;
+      case 'push':
+        length[p]!++;
+        known[p]!++;
+        break;
+      case 'look':
+        known[p] = Math.max(known[p]!, op.whole ? length[p]! : op.cards.length);
+        break;
+      case 'reorder':
+        known[p] = op.order ? length[p]! : 0;
+        break;
+      case 'flip':
+        break;
+    }
+  });
+  const now = [0, 1, 2, 3].map((p) => Math.min(length[p]! - known[p]!, model.belief.piles[p]!.slots.filter((c) => c === null).length));
+  return { any, now };
+}
+
+/**
  * Follows the pile places through what happened to them (Belief.pileOps): a card that left a pile was the
  * one the player saw, or the hidden card the plan says; the places still in a pile hold the plan's cards
  * now. The opponent's choices the player couldn't see are drawn uniformly, as the counting makes them: the
  * position Requisition took from, and the order Tithes left (resolved backward from what the places
  * held afterwards, uniformly among the orders that fit). Every place then has its card, the deal included.
+ *
+ * Guided (`guide` given), two of those draws only pick among what fits: a card taken from an unknown position
+ * comes from the place the player saw it in, if they did, else from one of the places they hadn't seen (v of
+ * them); the places now take the plan's cards for their pile, those seen first, the rest (U places) in any
+ * order. Each is the unguided draw when that fits, else drawn again among what fits: uniform among what fits
+ * either way (1/v, 1/U!), and the same draws as unguided wherever those fit. Drawn unguided, every history the
+ * plan allows has the same chance (1/position count for each take, and the plan's shuffle for each pile); guided,
+ * 1/v and 1/U! instead. So each guided history is kept with chance in proportion to v and U!: v / max(1, the bound
+ * for v) and U! / (the bound for U)!, never above 1. Every history is then as likely as unguided (exact), and
+ * when the player saw a pile whole, nearly every one is kept.
  */
-function rebuildDeal(plan: Plan, ops: readonly PileOp[], random: () => number): Deal | string {
+function rebuildDeal(plan: Plan, ops: readonly PileOp[], random: () => number, guide?: GuideBounds): Deal | string {
   let next = 0;
   const dealt: number[][] = [[], [], [], []];
   const piles: number[][] = [[], [], [], []];
@@ -408,7 +475,9 @@ function rebuildDeal(plan: Plan, ops: readonly PileOp[], random: () => number): 
     card.set(place, c);
     return true;
   };
-  for (const op of ops) {
+  // The chance to keep a guided history (see above).
+  let keep = 1;
+  for (const [k, op] of ops.entries()) {
     const pile = piles[op.p]!;
     switch (op.op) {
       case 'deal':
@@ -416,11 +485,19 @@ function rebuildDeal(plan: Plan, ops: readonly PileOp[], random: () => number): 
         dealt[op.p] = [...piles[op.p]!];
         break;
       case 'pop': {
-        const index = op.from === 'top' ? 0 : op.from === 'any' ? Math.floor(random() * pile.length) : op.from;
-        if (index >= pile.length) return 'a card left a pile with no card there';
-        const [place] = pile.splice(index, 1);
         const c = op.card ?? (op.hide !== null ? plan.cards.get(op.hide) : undefined);
         if (!c) throw new Error('a card left a pile unseen and unaccounted for');
+        let index = op.from === 'top' ? 0 : op.from === 'any' ? Math.floor(random() * pile.length) : op.from;
+        if (op.from === 'any' && guide) {
+          // Where the card was seen, or one of the places not seen: the unguided draw if it is one, else drawn again among them.
+          const seenAt = pile.findIndex((place) => card.get(place) === c);
+          const unseen = seenAt >= 0 ? [seenAt] : pile.flatMap((place, i) => (card.has(place) ? [] : [i]));
+          if (!unseen.length) return 'a card left a pile with no place for it';
+          if (!unseen.includes(index)) index = unseen[Math.floor(random() * unseen.length)]!;
+          keep *= unseen.length / Math.max(1, guide.any.get(k)!);
+        }
+        if (index >= pile.length) return 'a card left a pile with no card there';
+        const [place] = pile.splice(index, 1);
         if (!bind(place!, c)) return 'pile place: two cards';
         break;
       }
@@ -456,7 +533,28 @@ function rebuildDeal(plan: Plan, ops: readonly PileOp[], random: () => number): 
   // The places in the piles now hold the plan's cards.
   for (let p = 0; p < 4; p++) {
     if (piles[p]!.length !== plan.piles[p]!.length) throw new Error(`pile ${p}: ${piles[p]!.length} places, ${plan.piles[p]!.length} cards`);
-    for (let i = 0; i < piles[p]!.length; i++) if (!bind(piles[p]![i]!, plan.piles[p]![i]!)) return 'pile place now: another card';
+    if (!guide) {
+      for (let i = 0; i < piles[p]!.length; i++) if (!bind(piles[p]![i]!, plan.piles[p]![i]!)) return 'pile place now: another card';
+      continue;
+    }
+    // Guided: the places seen hold their cards, which must be the plan's for this pile; the others take the rest, in the
+    // plan's order if it fits what was seen (the unguided draw), else in an order drawn again.
+    const rest = new Set(plan.piles[p]!);
+    const unseen: number[] = [];
+    for (const place of piles[p]!) {
+      const c = card.get(place);
+      if (c === undefined) unseen.push(place);
+      else if (!rest.delete(c)) return 'pile place now: another card';
+    }
+    const fits = piles[p]!.every((place, i) => !card.has(place) || card.get(place) === plan.piles[p]![i]);
+    const order = fits ? plan.piles[p]!.filter((_, i) => !card.has(piles[p]![i]!)) : shuffled([...rest], random);
+    order.forEach((c, i) => card.set(unseen[i]!, c));
+    for (let n = unseen.length + 1; n <= guide.now[p]!; n++) keep /= n;
+    if (unseen.length > guide.now[p]!) keep = Infinity;
+  }
+  if (guide) {
+    if (!(keep <= 1)) throw new Error(`the guided rebuild would keep a history with chance ${keep}: a bound in guideBounds is wrong`);
+    if (keep < 1 && random() >= keep) return 'guided: not kept';
   }
   // Hidden reorders, latest first: a place the player had seen goes where its card went; the others, uniformly.
   for (const { before, after } of links.reverse()) {
