@@ -168,6 +168,41 @@ describe('the inference socket', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
+  it('encodes requests as a one-by-one scan would, -0s and odd lengths included', () => {
+    const one = (rows: Float32Array[]) => {
+      const nonzero = rows.flatMap((obs) => [...obs.keys()].filter((i) => obs[i] !== 0).map((i) => [i, obs[i]!] as const));
+      const bytes = new Uint8Array(8 + 4 * rows.length + 6 * nonzero.length);
+      const view = new DataView(bytes.buffer);
+      view.setUint32(0, rows.length, true);
+      view.setUint32(4, nonzero.length, true);
+      let k = 0;
+      rows.forEach((obs, r) => {
+        for (let i = 0; i < obs.length; i++) {
+          if (obs[i] === 0) continue;
+          view.setFloat32(8 + 4 * rows.length + 4 * k, obs[i]!, true);
+          view.setUint16(8 + 4 * rows.length + 4 * nonzero.length + 2 * k, i, true);
+          k++;
+        }
+        view.setUint32(8 + 4 * r, k, true);
+      });
+      return bytes;
+    };
+    const random = seeded(5, 5);
+    for (let t = 0; t < 300; t++) {
+      const rows = Array.from({ length: 1 + Math.floor(random() * 5) }, () => {
+        const n = Math.floor(random() * 40);
+        const offset = Math.floor(random() * 3);
+        const obs = new Float32Array(new ArrayBuffer(4 * (n + offset)), 4 * offset, n);
+        for (let i = 0; i < n; i++) {
+          const u = random();
+          obs[i] = u < 0.6 ? 0 : u < 0.7 ? -0 : u < 0.8 ? 1e-40 : random() - 0.5;
+        }
+        return obs;
+      });
+      expect(encodeRequest(rows)).toEqual(one(rows));
+    }
+  });
+
   it('carries the observations exactly (sparse, float32)', async () => {
     const games = worldGames({ ...position('socket-1'), n: 2, seed: 3 }, policy, true);
     const rows = games.map((g) => g.next().value as { obs: Float32Array }).map((a) => a.obs);

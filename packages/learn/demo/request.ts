@@ -20,11 +20,22 @@ export function encodeRequest(rows: Float32Array[]): Uint8Array {
       values = copyInto(new Float32Array(grown), values, k);
       indices = copyInto(new Uint16Array(grown), indices, k);
     }
-    for (let i = 0; i < obs.length; i++) {
+    // Most entries are zero: read them two at a time as one 64-bit float, which is 0 (or -0) only if both are
+    // zeros (a -0 in the pair's low half makes a nonzero double, and the pair is then checked one by one).
+    const even = obs.byteOffset % 8 === 0 && obs.length % 2 === 0;
+    const pairs = even ? new Float64Array(obs.buffer, obs.byteOffset, obs.length / 2) : null;
+    for (let i = 0; i < obs.length; i += 2) {
+      if (pairs && pairs[i >> 1] === 0) continue;
       const v = obs[i]!;
-      if (v === 0) continue;
-      values[k] = v;
-      indices[k++] = i;
+      if (v !== 0) {
+        values[k] = v;
+        indices[k++] = i;
+      }
+      const w = obs[i + 1];
+      if (w !== undefined && w !== 0) {
+        values[k] = w;
+        indices[k++] = i + 1;
+      }
     }
     ends[r] = k;
   });

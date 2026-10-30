@@ -138,6 +138,27 @@ const PROMPT_INDEX = Object.fromEntries(PROMPT_KINDS.map((k, i) => [k, i])) as R
 // Scratch flags for the ids in play (the encoder isn't reentrant; Node runs it on one thread).
 const LEGAL = new Uint8Array(NUM_ACTIONS);
 const CHOSEN = new Uint8Array(NUM_ACTIONS);
+// Scratch by card (CARD_IDS order): which pile's top it is (-1: none) and its depth in a pile (-1: none known).
+const TOP_OF = new Int8Array(CARD_IDS.length);
+const DEPTH = new Int8Array(CARD_IDS.length);
+const CARD_NUMBER = Object.fromEntries(CARD_IDS.map((card, c) => [card, c])) as Record<CardId, number>;
+
+/** The card rows' printed columns (they never change), copied in at once: the rest of every row starts at zero. */
+const PRINTED_CARDS = (() => {
+  const C = CARD_COLUMNS;
+  const rows = new Float32Array(CARD_IDS.length * CARDS_WIDTH);
+  CARD_IDS.forEach((card, c) => {
+    const base = c * CARDS_WIDTH;
+    const printed = CARDS[card];
+    if (typeof printed.coins === 'number') rows[base + C.coins!] = printed.coins / 20;
+    else if (printed.coins === 'tithes') rows[base + C.tithes!] = 1;
+    if (printed.hot) rows[base + C.hot!] = 1;
+    rows[base + (printed.keep ? C.keep! : C.action!)] = 1;
+    rows[base + C.character! + CHARACTER_INDEX[printed.character]!] = 1;
+    if (TOKEN_CARDS.has(card)) rows[base + C.token!] = 1;
+  });
+  return rows;
+})();
 
 /**
  * Encodes into `out` at `start` (a fresh array by default), so a worker can
@@ -152,6 +173,7 @@ export function encodeObservation2(
   start = 0,
 ): Float32Array {
   out.fill(0, start, start + OBSERVATION2_SIZE);
+  out.set(PRINTED_CARDS, start + CARDS_OFFSET);
   const me = belief.me;
   const opp = belief.opponent;
   const rel = (seat: Seat) => (seat - me + 4) % 4;
@@ -168,32 +190,29 @@ export function encodeObservation2(
   const location = C.location!;
   const locations = belief.locationTable(view);
   const subject: CardId | null = prompt?.mine && (prompt.kind === 'hot-target' || prompt.kind === 'take-or-discard') ? prompt.card : null;
-  const topOf = new Map<CardId, number>();
-  const depth = new Map<CardId, number>();
+  TOP_OF.fill(-1);
+  DEPTH.fill(-1);
   for (let r = 0; r < 4; r++) {
     const pile = belief.piles[belief.at[at(r)]!]!;
     const top = view.piles[at(r)]!.top ?? pile.slots[0] ?? null;
-    if (top) topOf.set(top, r);
-    pile.slots.forEach((card, i) => {
-      if (card && !depth.has(card)) depth.set(card, i);
-    });
+    // A later pile's top wins, as a later set() would.
+    if (top) TOP_OF[CARD_NUMBER[top]] = r;
+    const slots = pile.slots;
+    for (let i = 0; i < slots.length; i++) {
+      const card = slots[i];
+      if (card && DEPTH[CARD_NUMBER[card]] < 0) DEPTH[CARD_NUMBER[card]] = i;
+    }
   }
+  const PL = PLACES.length;
   for (let c = 0; c < CARD_IDS.length; c++) {
-    // CARD(card) === c: rows are in CARD_IDS order.
+    // CARD(card) === c: rows are in CARD_IDS order. (Printed columns: PRINTED_CARDS, above.)
     const card = CARD_IDS[c]!;
     const base = start + CARDS_OFFSET + c * CARDS_WIDTH;
-    const printed = CARDS[card];
-    if (typeof printed.coins === 'number') out[base + C.coins!] = printed.coins / 20;
-    else if (printed.coins === 'tithes') out[base + C.tithes!] = 1;
-    if (printed.hot) out[base + C.hot!] = 1;
-    out[base + (printed.keep ? C.keep! : C.action!)] = 1;
-    out[base + C.character! + CHARACTER_INDEX[printed.character]!] = 1;
-    if (TOKEN_CARDS.has(card)) out[base + C.token!] = 1;
-    out.set(locations.subarray(c * PLACES.length, (c + 1) * PLACES.length), base + location);
-    const top = topOf.get(card);
-    if (top !== undefined) out[base + C.top_of! + top] = 1;
-    const d = depth.get(card);
-    if (d !== undefined) out[base + C.depth!] = (d + 1) / 10;
+    for (let i = 0; i < PL; i++) out[base + location + i] = locations[c * PL + i]!;
+    const top = TOP_OF[c]!;
+    if (top >= 0) out[base + C.top_of! + top] = 1;
+    const d = DEPTH[c]!;
+    if (d >= 0) out[base + C.depth!] = (d + 1) / 10;
     if (LEGAL[c]) out[base + C.legal!] = 1;
     if (CHOSEN[c]) out[base + C.chosen!] = 1;
     if (subject === card) out[base + C.subject!] = 1;
