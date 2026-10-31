@@ -9,7 +9,7 @@
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { midstrikeHost } from '../../packages/learn/demo/host.ts';
 import { setSearchMode, setWorlds } from '../../packages/learn/demo/search-bot.ts';
-import { coreBridge, type ToApp } from './bridge.ts';
+import { cardCatalog, coreBridge, type ToApp } from './bridge.ts';
 import { LocalServer } from './local-server.ts';
 import { capped, WorkerSearch } from './search-pool.ts';
 
@@ -24,6 +24,14 @@ function post(m: ToApp): void {
 const randomString = (bytes: number) => {
   const b = crypto.getRandomValues(new Uint8Array(bytes));
   return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+};
+
+// Whatever the server or Midstrike's host reports as gone wrong (a search that failed and fell back to the network's
+// move, a review job) goes to the app too, not only to this hidden page's console, where no one would see it.
+const logError = console.error.bind(console);
+console.error = (...args: unknown[]) => {
+  logError(...args);
+  post({ t: 'failed', message: args.map((a) => (a instanceof Error ? `${a.message}\n${a.stack}` : String(a))).join(' ').slice(0, 2000) });
 };
 
 async function boot(): Promise<void> {
@@ -65,7 +73,7 @@ async function boot(): Promise<void> {
   (window as unknown as { keepsCore: { receive(json: string): void } }).keepsCore = {
     receive: coreBridge(server, post, (ms) => (botDelayMs = ms)),
   };
-  post({ t: 'ready', workers: search.size, network: `${policy.info.run} ${policy.info.step} (${policy.info.fingerprint})` });
+  post({ t: 'ready', workers: search.size, network: `${policy.info.run} ${policy.info.step} (${policy.info.fingerprint})`, cards: cardCatalog() });
 }
 
 boot().catch((error: unknown) => post({ t: 'failed', message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) }));

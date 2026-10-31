@@ -21,6 +21,13 @@ targets:
       - path: build/core
         type: folder
         buildPhase: resources
+      # The card pictures and the fonts (sync.sh copies them from the website, and ios/Fonts).
+      - path: build/cards
+        type: folder
+        buildPhase: resources
+      - path: build/fonts
+        type: folder
+        buildPhase: resources
       # Made on the Mac by bot/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
       - path: build/KeepsPolicy.mlpackage
     settings:
@@ -56,6 +63,7 @@ targets:
     sources:
       - path: Tests
       - path: Shared/Protocol.swift
+      - path: Shared/Choosing.swift
       # Messages of whole games, both ways, recorded by ios/tools/swift-types/goldens.ts (ios/test.sh).
       - path: build/goldens
         type: folder

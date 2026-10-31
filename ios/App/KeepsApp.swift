@@ -1,19 +1,27 @@
 import SwiftUI
 import WebKit
 
-/// Keeps: the card game, offline against Midstrike. (Milestone 2: the core runs and plays; the table comes next.)
+/// Keeps: the card game, offline against Midstrike.
 @main
 struct KeepsApp: App {
   @State private var core: Core?
+  @State private var game: Game?
   @State private var status = "Starting…"
+
+  init() {
+    Theme.registerFonts()
+  }
 
   var body: some Scene {
     WindowGroup {
-      VStack(spacing: 12) {
-        Text("Keeps").font(.largeTitle)
-        Text(status).font(.callout).foregroundStyle(.secondary).multilineTextAlignment(.center)
+      Group {
+        if let game {
+          RootView(game: game)
+        } else {
+          Splash(status: status)
+        }
       }
-      .padding()
+      .preferredColorScheme(.dark)
       // The core's web view, in the window but unseen: a page that isn't in one runs slowly, or not at all.
       .background {
         if let core { CoreView(core: core).frame(width: 1, height: 1).opacity(0.01) }
@@ -27,12 +35,12 @@ struct KeepsApp: App {
       let core = try Core()
       self.core = core
       let ready = try await core.start()
-      status = "Core ready: \(ready.network), \(Int(ready.workers)) search workers"
-      print(status)
+      print("Core ready: \(ready.network), \(Int(ready.workers)) search workers")
       fflush(stdout)
-      if ProcessInfo.processInfo.environment["KEEPS_SELFTEST"] != nil {
+      let environment = ProcessInfo.processInfo.environment
+      if environment["KEEPS_SELFTEST"] != nil {
         UIApplication.shared.isIdleTimerDisabled = true
-        let games = (ProcessInfo.processInfo.environment["KEEPS_SELFTEST_GAMES"] ?? "hard:1,easy:1").split(separator: ",").map { spec in
+        let games = (environment["KEEPS_SELFTEST_GAMES"] ?? "hard:1,easy:1").split(separator: ",").map { spec in
           let parts = spec.split(separator: ":")
           return (level: BotLevel(rawValue: String(parts[0])) ?? .hard, marks: Int(parts.count > 1 ? parts[1] : "1") ?? 1)
         }
@@ -40,11 +48,56 @@ struct KeepsApp: App {
         status = "Self-test running…"
         await SelfTest(core: core).run(games)
         status = "Self-test done"
+        return
+      }
+      let game = Game(core: core, book: CardBook(ready.cards))
+      self.game = game
+      // KEEPS_PLAY=easy:3[:12]: straight into a game (for screenshots and trying the table), your first 12 moves at random.
+      if let play = environment["KEEPS_PLAY"] {
+        let parts = play.split(separator: ":").map(String.init)
+        game.play(
+          Game.Setup(level: BotLevel(rawValue: parts[0]) ?? .easy, marks: parts.count > 1 ? Int(parts[1]) ?? 3 : 3, first: .you),
+          autoplay: parts.count > 2 ? Int(parts[2]) ?? 0 : 0)
       }
     } catch {
       status = "The core failed: \(error)"
       print("FAILED: \(error)\nDONE")
       fflush(stdout)
+    }
+  }
+}
+
+/// The lobby, the wait while a game is set up, or the table.
+struct RootView: View {
+  @Bindable var game: Game
+
+  var body: some View {
+    Group {
+      switch game.screen {
+      case .lobby: LobbyView(game: game)
+      case .starting: Splash(status: "Dealing…")
+      case .table: TableView(game: game)
+      }
+    }
+    .alert("Something went wrong", isPresented: Binding(get: { game.problem != nil }, set: { if !$0 { game.problem = nil } })) {
+      Button("OK") { game.problem = nil }
+    } message: {
+      Text(game.problem ?? "")
+    }
+  }
+}
+
+struct Splash: View {
+  let status: String
+
+  var body: some View {
+    ZStack {
+      Theme.background.ignoresSafeArea()
+      VStack(spacing: 12) {
+        Text("Keeps").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
+        Text(status).font(Theme.text(.callout)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
+      }
+      .padding()
     }
   }
 }

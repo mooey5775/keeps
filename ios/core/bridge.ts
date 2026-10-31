@@ -2,10 +2,12 @@
 // message sent with what the web client works out for itself (web/src/game/options.ts, log.ts). The app's core
 // (main.ts) wires it to the web view's message handler; tools/swift-types/goldens.ts drives it from Node, recording
 // what the app would get.
-import type { Seat, TraceEvent } from '../../packages/engine/src/index.ts';
+import { CARD_IDS, CARDS, coinsLabel, type CardId, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
 import type { ClientMessage, ServerMessage } from '../../packages/protocol/src/index.ts';
+import { hintChance, hintLabel } from '../../packages/web/src/game/hints.ts';
 import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
-import { describeOptions, makeNames, type Option } from '../../packages/web/src/game/options.ts';
+import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/web/src/game/options.ts';
+import { capital, headline, promptText } from '../../packages/web/src/game/status.ts';
 import type { LocalServer } from './local-server.ts';
 
 export type FromApp =
@@ -15,9 +17,38 @@ export type FromApp =
   /** How long Midstrike waits before each move, so a person can follow it (0 for tests). */
   | { t: 'config'; botDelayMs: number };
 
+/** A card as the app shows it: its name, its text, and its picture (a file in the app's cards folder). */
+export interface CardInfo {
+  id: CardId;
+  name: string;
+  text: string;
+  image: string;
+}
+
+/** The cards, in the game's order. */
+export const cardCatalog = (): CardInfo[] =>
+  CARD_IDS.map((id) => ({ id, name: CARDS[id].name, text: CARDS[id].text, image: CARDS[id].image.replace(/\.png$/, '.webp') }));
+
+/** What the web client's table says about a game message, worked out as it does (web/src/game/status.ts, options.ts, hints.ts). */
+export interface TableText {
+  /** Each seat's name as the table shows it ("You", "Midstrike", "Left ghost"), and its possessive ("Your", "Midstrike's"). */
+  names: string[];
+  possessive: string[];
+  /** Each seat's coins in its keep ("3½"). */
+  coins: string[];
+  /** The game's or the round's end, or the last chances before scoring; null while playing. */
+  headline: string | null;
+  /** One line per open prompt: what you decide, or whom everyone is waiting on. */
+  prompts: { seat: Seat; mine: boolean; text: string }[];
+  /** The cards on display for your decision (the pile you're looking through, the discard, revealed hands). */
+  shown: { title: string; cards: ShownCard[] } | null;
+  /** Training mode's hints, labelled as the options are (the first is the move the bot would play). */
+  hints: { label: string; chance: string }[] | null;
+}
+
 export type ToApp =
-  | { t: 'ready'; workers: number; network: string }
-  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[] }
+  | { t: 'ready'; workers: number; network: string; cards: CardInfo[] }
+  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText }
   /** Each of Midstrike's searches, as it finishes. */
   | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
   | { t: 'failed'; message: string };
@@ -37,9 +68,10 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
     connection.events = message.reset ? [...message.log] : [...connection.events, ...message.log];
     const viewer = message.view.viewer;
     const anchor = (viewer === 'spectator' ? 0 : viewer) as Seat;
-    const options = viewer === 'spectator' ? [] : describeOptions(message.view, makeNames(message.names, viewer, anchor));
+    const names = makeNames(message.names, viewer, anchor);
+    const options = viewer === 'spectator' ? [] : describeOptions(message.view, names);
     const lines = logLines(connection.events, makeNames(message.names, 'spectator', anchor));
-    post({ t: 'server', id, message, options, lines });
+    post({ t: 'server', id, message, options, lines, table: tableText(message, names, options) });
   };
   return (json: string) => {
     try {
@@ -54,5 +86,19 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
     } catch (error) {
       post({ t: 'failed', message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) });
     }
+  };
+}
+
+function tableText(message: Extract<ServerMessage, { t: 'game' }>, names: Names, options: Option[]): TableText {
+  const { view } = message;
+  const seats = [0, 1, 2, 3] as Seat[];
+  return {
+    names: seats.map((s) => capital(names.seat(s))),
+    possessive: seats.map((s) => capital(names.possessive(s))),
+    coins: seats.map((s) => coinsLabel(view.scores[s] ?? 0)),
+    headline: headline(view, names),
+    prompts: view.prompts.map((p) => ({ seat: p.seat, mine: p.mine, text: promptText(p, view, names) })),
+    shown: shownCards(view, names),
+    hints: message.hints ? message.hints.map((h) => ({ label: hintLabel(h, options), chance: hintChance(h) })) : null,
   };
 }

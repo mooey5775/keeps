@@ -35,6 +35,9 @@ type ToApp = import('../../core/bridge.ts').ToApp;
 type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
 const { apply } = await import('../../../packages/engine/src/index.ts');
+const { click, clickable, panelItems } = await import('../../../packages/web/src/game/options.ts');
+type Option = import('../../../packages/web/src/game/options.ts').Option;
+type Ref = import('../../../packages/web/src/game/options.ts').Ref;
 
 // Anything the server or the bot reports as gone wrong (a search or training mode's advice that failed and fell back to
 // the network, a review job the sampler gave up on) is logged and play goes on, as on the site; here it fails the run.
@@ -257,6 +260,8 @@ async function game(level: string, marks: number, extras: boolean, training = tr
       : (!recordAll && view.viewer !== 'spectator' ? curious(code, view.viewer, view.legal) : null) ??
         (choices.length ? choices : view.legal)[Math.floor(chance() * (choices.length || view.legal.length))];
     if (!command) return;
+    // Duplicity's free reveal answers no prompt: the decision is still to make when the game comes back.
+    if (command.type === 'reveal-duplicity') answered.delete(decision);
     moves++;
     setImmediate(() => send({ t: 'client', id, message: { t: 'command', command } }));
   };
@@ -322,7 +327,7 @@ const missing = () =>
   (Object.keys(KINDS) as Kind[]).flatMap((k) => [...want[k]].filter((v) => !seen[k].has(v) && !(k === 'event' && madeEvents.get(v) === false)).map((v) => `${k} ${v}`));
 recordAll = false;
 let coverageGames = 0;
-for (; missing().length && coverageGames < 600; coverageGames++) {
+for (; missing().length && coverageGames < 3000; coverageGames++) {
   await game('easy', 1, false, false);
   if ((coverageGames + 1) % 25 === 0) console.log(`${coverageGames + 1} coverage games: still to come up: ${missing().join(', ')}`);
 }
@@ -331,6 +336,32 @@ await pool.close?.();
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
 writeFileSync(join(out, 'to-app.jsonl'), toApp.join('\n') + '\n');
+
+// Choosing a move by touching the table (web/src/game/options.ts), as the TypeScript answers it, for the app's port
+// (ios/Shared/Choosing.swift; ChoosingTests): on the recorded options, touches drawn mostly among the elements worth
+// touching (sometimes any element at all), each with what it does, what lights up before it, and the panel's buttons.
+const choosing: string[] = [];
+const decisions = toApp
+  .map((line) => JSON.parse(line) as { t: string; options?: Option[] })
+  .filter((m) => m.t === 'server' && (m.options?.length ?? 0) > 1)
+  .map((m) => m.options!);
+for (const options of decisions) {
+  const all = [...new Set(options.flatMap((o) => o.refs))];
+  let picked: Ref[] = [];
+  for (let step = 0; step < 4 && all.length; step++) {
+    const lit = [...clickable(options, picked)].sort();
+    const from = lit.length && chance() < 0.85 ? lit : all;
+    const ref = from[Math.floor(chance() * from.length)]!;
+    const panel = panelItems(options, picked).map((item) =>
+      item.kind === 'group' ? { kind: 'group', ref: item.ref, label: item.label, count: item.count } : { kind: 'option', label: item.option.label },
+    );
+    const result = click(options, picked, ref);
+    choosing.push(JSON.stringify({ options, picked, ref, clickable: lit, panel, result }));
+    if (result.kind !== 'pick') break;
+    picked = result.picked;
+  }
+}
+writeFileSync(join(out, 'choosing.jsonl'), choosing.join('\n') + '\n');
 
 // Every kind of message, both ways, must be there.
 const typesIn = (lines: string[], pick: (m: Record<string, unknown>) => unknown) => new Set(lines.map((l) => pick(JSON.parse(l))).filter(Boolean) as string[]);

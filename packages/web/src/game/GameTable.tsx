@@ -2,6 +2,7 @@ import { CARDS, coinsLabel, type CardId, type Command, type PlayerView, type Pro
 import type { Hint } from '@keeps/protocol';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from './Card.tsx';
+import { hintChance, hintLabel } from './hints.ts';
 import { logLines } from './log.ts';
 import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from './options.ts';
 import { capital, headline, promptText } from './status.ts';
@@ -398,15 +399,8 @@ function Log({ events, names }: { events: readonly TraceEvent[]; names: ReturnTy
  * with their chance of winning the round when it searched them, otherwise how likely its network is to play them.
  */
 function TrainingHints({ hints, options, bot }: { hints: Hint[]; options: Option[]; bot: string }) {
-  const labels = new Map(options.map((o) => [JSON.stringify(o.command), o.label]));
-  const label = (hint: Hint): string => {
-    const known = labels.get(JSON.stringify(hint.command));
-    if (known) return known;
-    // A pile reorder lists no options: name the order.
-    const order = hint.command.type === 'answer' && hint.command.answer.kind === 'order-pile' ? hint.command.answer.order : null;
-    return order ? `Put the pile in this order: ${order.map((c) => CARDS[c].name).join(', ')}` : 'A move';
-  };
-  const pct = (h: Hint) => (h.win === undefined ? `${Math.round(100 * h.probability)}%` : `${Math.round(100 * h.win)}% to win the round`);
+  const label = (hint: Hint) => hintLabel(hint, options);
+  const pct = hintChance;
   if (hints.length === 0)
     return (
       <div className="training">

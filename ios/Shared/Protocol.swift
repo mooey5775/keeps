@@ -800,6 +800,43 @@ public enum CardId: String, Codable, Equatable, Sendable, CaseIterable {
   case tithes = "tithes"
 }
 
+public struct CardInfo: Codable, Equatable, Sendable {
+  public var id: CardId
+  public var name: String
+  public var text: String
+  public var image: String
+
+  public init(id: CardId, name: String, text: String, image: String) {
+    self.id = id
+    self.name = name
+    self.text = text
+    self.image = image
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case name
+    case text
+    case image
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(CardId.self, forKey: .id)
+    name = try container.decode(String.self, forKey: .name)
+    text = try container.decode(String.self, forKey: .text)
+    image = try container.decode(String.self, forKey: .image)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(name, forKey: .name)
+    try container.encode(text, forKey: .text)
+    try container.encode(image, forKey: .image)
+  }
+}
+
 public enum ClientMessage: Codable, Equatable, Sendable {
   case addBot
   case backToLobby
@@ -3428,6 +3465,176 @@ public struct SettingsFirstPlayerObject: Codable, Equatable, Sendable {
   }
 }
 
+public struct ShownCard: Codable, Equatable, Sendable {
+  public var card: CardId
+  public var ref: String?
+  public var caption: String?
+
+  public init(card: CardId, ref: String? = nil, caption: String? = nil) {
+    self.card = card
+    self.ref = ref
+    self.caption = caption
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case card
+    case ref
+    case caption
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    card = try container.decode(CardId.self, forKey: .card)
+    ref = try container.decode(String?.self, forKey: .ref)
+    caption = try container.decodeIfPresent(String.self, forKey: .caption)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(card, forKey: .card)
+    if let value = ref { try container.encode(value, forKey: .ref) } else { try container.encodeNil(forKey: .ref) }
+    try container.encodeIfPresent(caption, forKey: .caption)
+  }
+}
+
+public struct TableText: Codable, Equatable, Sendable {
+  public var names: [String]
+  public var possessive: [String]
+  public var coins: [String]
+  public var headline: String?
+  public var prompts: [TableTextPromptsElement]
+  public var shown: TableTextShown?
+  public var hints: [TableTextHintsElement]?
+
+  public init(names: [String], possessive: [String], coins: [String], headline: String? = nil, prompts: [TableTextPromptsElement], shown: TableTextShown? = nil, hints: [TableTextHintsElement]? = nil) {
+    self.names = names
+    self.possessive = possessive
+    self.coins = coins
+    self.headline = headline
+    self.prompts = prompts
+    self.shown = shown
+    self.hints = hints
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case names
+    case possessive
+    case coins
+    case headline
+    case prompts
+    case shown
+    case hints
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    names = try container.decode([String].self, forKey: .names)
+    possessive = try container.decode([String].self, forKey: .possessive)
+    coins = try container.decode([String].self, forKey: .coins)
+    headline = try container.decode(String?.self, forKey: .headline)
+    prompts = try container.decode([TableTextPromptsElement].self, forKey: .prompts)
+    shown = try container.decode(TableTextShown?.self, forKey: .shown)
+    hints = try container.decode([TableTextHintsElement]?.self, forKey: .hints)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(names, forKey: .names)
+    try container.encode(possessive, forKey: .possessive)
+    try container.encode(coins, forKey: .coins)
+    if let value = headline { try container.encode(value, forKey: .headline) } else { try container.encodeNil(forKey: .headline) }
+    try container.encode(prompts, forKey: .prompts)
+    if let value = shown { try container.encode(value, forKey: .shown) } else { try container.encodeNil(forKey: .shown) }
+    if let value = hints { try container.encode(value, forKey: .hints) } else { try container.encodeNil(forKey: .hints) }
+  }
+}
+
+public struct TableTextHintsElement: Codable, Equatable, Sendable {
+  public var label: String
+  public var chance: String
+
+  public init(label: String, chance: String) {
+    self.label = label
+    self.chance = chance
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case label
+    case chance
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    label = try container.decode(String.self, forKey: .label)
+    chance = try container.decode(String.self, forKey: .chance)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(label, forKey: .label)
+    try container.encode(chance, forKey: .chance)
+  }
+}
+
+public struct TableTextPromptsElement: Codable, Equatable, Sendable {
+  public var seat: Int
+  public var mine: Bool
+  public var text: String
+
+  public init(seat: Int, mine: Bool, text: String) {
+    self.seat = seat
+    self.mine = mine
+    self.text = text
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case seat
+    case mine
+    case text
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    seat = try container.decode(Int.self, forKey: .seat)
+    mine = try container.decode(Bool.self, forKey: .mine)
+    text = try container.decode(String.self, forKey: .text)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(seat, forKey: .seat)
+    try container.encode(mine, forKey: .mine)
+    try container.encode(text, forKey: .text)
+  }
+}
+
+public struct TableTextShown: Codable, Equatable, Sendable {
+  public var title: String
+  public var cards: [ShownCard]
+
+  public init(title: String, cards: [ShownCard]) {
+    self.title = title
+    self.cards = cards
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case title
+    case cards
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    title = try container.decode(String.self, forKey: .title)
+    cards = try container.decode([ShownCard].self, forKey: .cards)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(title, forKey: .title)
+    try container.encode(cards, forKey: .cards)
+  }
+}
+
 public enum ToApp: Codable, Equatable, Sendable {
   case failed(ToAppFailed)
   case ready(ToAppReady)
@@ -3501,27 +3708,32 @@ public struct ToAppFailed: Codable, Equatable, Sendable {
 public struct ToAppReady: Codable, Equatable, Sendable {
   public var workers: Double
   public var network: String
+  public var cards: [CardInfo]
 
-  public init(workers: Double, network: String) {
+  public init(workers: Double, network: String, cards: [CardInfo]) {
     self.workers = workers
     self.network = network
+    self.cards = cards
   }
 
   private enum CodingKeys: String, CodingKey {
     case workers
     case network
+    case cards
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     workers = try container.decode(Double.self, forKey: .workers)
     network = try container.decode(String.self, forKey: .network)
+    cards = try container.decode([CardInfo].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(workers, forKey: .workers)
     try container.encode(network, forKey: .network)
+    try container.encode(cards, forKey: .cards)
   }
 }
 
@@ -3577,12 +3789,14 @@ public struct ToAppServer: Codable, Equatable, Sendable {
   public var message: ServerMessage
   public var options: [Option]?
   public var lines: [LogLine]?
+  public var table: TableText?
 
-  public init(id: Double, message: ServerMessage, options: [Option]? = nil, lines: [LogLine]? = nil) {
+  public init(id: Double, message: ServerMessage, options: [Option]? = nil, lines: [LogLine]? = nil, table: TableText? = nil) {
     self.id = id
     self.message = message
     self.options = options
     self.lines = lines
+    self.table = table
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -3590,6 +3804,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     case message
     case options
     case lines
+    case table
   }
 
   public init(from decoder: Decoder) throws {
@@ -3598,6 +3813,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     message = try container.decode(ServerMessage.self, forKey: .message)
     options = try container.decodeIfPresent([Option].self, forKey: .options)
     lines = try container.decodeIfPresent([LogLine].self, forKey: .lines)
+    table = try container.decodeIfPresent(TableText.self, forKey: .table)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -3606,6 +3822,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     try container.encode(message, forKey: .message)
     try container.encodeIfPresent(options, forKey: .options)
     try container.encodeIfPresent(lines, forKey: .lines)
+    try container.encodeIfPresent(table, forKey: .table)
   }
 }
 

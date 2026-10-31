@@ -7,6 +7,7 @@
 #   KEEPS_SELFTEST=1 ios/sync.sh     run the app's self-test (KEEPS_SELFTEST_GAMES='hard:1,easy:1': level:marks, ...)
 #   TARGET=KeepsSpike ios/sync.sh    the spike (SPIKE_QUERY='positions=4&worlds=256': its plan, see ios/web/main.ts)
 #   SIM='iPhone 17' ios/sync.sh      on the Mac's iOS simulator instead of the phone (no signing needed)
+#   KEEPS_PLAY=easy:3 ios/sync.sh    straight into a game against Midstrike at that level, to that many marks
 set -euo pipefail
 MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale (MAC=edwardli@10.16.19.95 on the local network)
 TARGET=${TARGET:-Keeps}
@@ -33,11 +34,17 @@ else
   $VITE build --config ios/core/vite.config.mjs
   cp "$WEIGHTS" ios/build/core/
   BUNDLE=core
+  # The website's card pictures and heading font, and the text font (ios/Fonts): the app's own copies, made here.
+  rm -rf ios/build/cards ios/build/fonts
+  mkdir -p ios/build/fonts
+  cp -r packages/web/public/cards ios/build/cards
+  cp packages/web/src/assets/fonts/HamletOrNot.ttf ios/Fonts/*.ttf ios/build/fonts/
 fi
 
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/bot ~/src/keeps/packages/learn/demo/weights'
 rsync -a --delete ios/App ios/Shared ios/Spike ios/project.yml "$MAC:src/keeps/ios/"
 rsync -a --delete "ios/build/$BUNDLE" "$MAC:src/keeps/ios/build/"
+[ "$BUNDLE" = core ] && rsync -a --delete ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
 rsync -a --delete --exclude=__pycache__ bot/keeps_bot bot/marvel "$MAC:src/keeps/bot/"
 rsync -a "$WEIGHTS" "$MAC:src/keeps/$WEIGHTS"
 
@@ -53,7 +60,7 @@ if [ ! -d ios/build/KeepsPolicy.mlpackage ] || [ "$WEIGHTS" -nt ios/build/KeepsP
 fi
 cd ios
 # Each target's resources must exist for the project to generate (the other target's may not be built).
-mkdir -p build/web build/core
+mkdir -p build/web build/core build/cards build/fonts
 # Signing: the build keychain (ios/tools/setup-build-keychain.sh) if it's set up, else whatever this session has.
 if [ -f ~/.keeps-build-keychain ]; then
   security unlock-keychain -p "$(cat ~/.keeps-build-keychain)" keeps-build.keychain
@@ -80,6 +87,7 @@ if [ -n "$SIM" ]; then
   RUN_ENV=""
   [ "$TARGET" = KeepsSpike ] && RUN_ENV="SIMCTL_CHILD_SPIKE_QUERY=$(printf %q "${SPIKE_QUERY:-}")"
   [ -n "${KEEPS_SELFTEST:-}" ] && RUN_ENV="SIMCTL_CHILD_KEEPS_SELFTEST=1 SIMCTL_CHILD_KEEPS_SELFTEST_GAMES=${KEEPS_SELFTEST_GAMES:-hard:1,easy:1}"
+  [ -n "${KEEPS_PLAY:-}" ] && RUN_ENV="SIMCTL_CHILD_KEEPS_PLAY=$KEEPS_PLAY"
   ssh "$MAC" "$RUN_ENV xcrun simctl launch --console-pty --terminate-running-process $(printf %q "$SIM") $APP_ID" 2>&1 | sed -u 's/\r$//; /^DONE$/q'
   exit 0
 fi
