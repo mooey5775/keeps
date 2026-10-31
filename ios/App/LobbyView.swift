@@ -7,10 +7,12 @@ struct LobbyView: View {
   @AppStorage("level") private var level = BotLevel.hard.rawValue
   @AppStorage("marks") private var marks = 3
   @AppStorage("first") private var first = Game.Setup.First.random.rawValue
+  @FocusState private var naming: Bool
 
   var body: some View {
     ZStack {
-      Theme.background.ignoresSafeArea()
+      // Touching anywhere else puts the keyboard away.
+      Theme.background.ignoresSafeArea().onTapGesture { naming = false }
       VStack(spacing: 28) {
         Spacer()
         VStack(spacing: 6) {
@@ -19,11 +21,27 @@ struct LobbyView: View {
         }
         VStack(alignment: .leading, spacing: 18) {
           row("Your name") {
-            TextField("Your name", text: $name, prompt: Text("For the game's log").foregroundStyle(Theme.muted))
-              .font(Theme.text(.body))
-              .textContentType(.givenName)
-              .submitLabel(.done)
-              .onChange(of: name) { _, new in if new.count > 20 { name = String(new.prefix(20)) } }  // the server's NAME_MAX
+            HStack(spacing: 8) {
+              TextField("Your name", text: $name, prompt: Text("For the game's log").foregroundStyle(Theme.muted.opacity(0.7)))
+                .font(Theme.text(.body))
+                .foregroundStyle(Theme.text)
+                .textContentType(.givenName)
+                .autocorrectionDisabled()
+                .submitLabel(.done)
+                .focused($naming)
+                .onSubmit { naming = false }
+                .onChange(of: name) { _, new in if new.count > 20 { name = String(new.prefix(20)) } }  // the server's NAME_MAX
+              Image(systemName: naming ? "checkmark.circle.fill" : "pencil")
+                .foregroundStyle(naming ? Theme.gold : Theme.muted)
+                .onTapGesture { naming.toggle() }
+                .accessibilityHidden(true)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Theme.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+            .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(naming ? Theme.gold : Theme.line, lineWidth: naming ? 1.5 : 1) }
+            .contentShape(Rectangle())
+            .onTapGesture { naming = true }
           }
           row("Midstrike plays") {
             Picker("Level", selection: $level) {
@@ -62,6 +80,12 @@ struct LobbyView: View {
       }
       .padding(.horizontal, 24)
       .frame(maxWidth: 520)
+    }
+    .toolbar {
+      ToolbarItemGroup(placement: .keyboard) {
+        Spacer()
+        Button("Done") { naming = false }
+      }
     }
   }
 

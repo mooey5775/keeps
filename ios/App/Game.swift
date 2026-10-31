@@ -56,6 +56,8 @@ final class Game {
   private(set) var lastSearch: ToAppSearch?
   /// Something went wrong (shown until dismissed).
   var problem: String?
+  /// The card shown large while a finger holds it (a long press; letting go only puts it away).
+  var preview: CardId?
 
   private var connection: Int?
   private var setup = Setup()
@@ -76,6 +78,7 @@ final class Game {
   /// A new room with Midstrike, set up as `setup`, and its game started.
   func play(_ setup: Setup, autoplay: Int = 0) {
     leave()
+    feed = []
     self.setup = setup
     self.autoplay = autoplay
     started = false
@@ -89,6 +92,8 @@ final class Game {
   func playAgain() {
     guard let connection else { return play(setup) }
     game = nil
+    lines = []
+    feed = []
     started = false
     screen = .starting
     core.send(connection, .backToLobby)
@@ -104,6 +109,10 @@ final class Game {
     lines = []
     table = nil
     picked = []
+    dragging = nil
+    preview = nil
+    feed = []
+    awaitingMine = false
     screen = .lobby
   }
 

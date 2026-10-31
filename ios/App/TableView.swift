@@ -57,11 +57,16 @@ struct TableView: View {
         }
         .coordinateSpace(.named(DropZones.space))
       }
+      .overlay {
+        if let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
+      }
+      .animation(.snappy(duration: 0.2), value: game.preview)
       .environment(\.dropZones, zones)
       .environment(\.cardSpace, cards)
       // What's felt: picking an element, picking up a card, each of your moves, each of Midstrike's, a round's end.
       .sensoryFeedback(.selection, trigger: game.picked)
       .sensoryFeedback(.selection, trigger: game.dragging?.ref)
+      .sensoryFeedback(.impact(weight: .light), trigger: game.preview) { _, new in new != nil }
       .sensoryFeedback(.impact(weight: .medium), trigger: game.movesMade)
       .sensoryFeedback(.impact(weight: .light, intensity: 0.7), trigger: game.botMoves)
       .sensoryFeedback(trigger: view.phase) { _, phase in
@@ -91,11 +96,20 @@ struct TableView: View {
       Text("Round \(Int(view.round)) · first to \(Int(view.marksToWin)) \(view.marksToWin == 1 ? "mark" : "marks")")
         .font(Theme.text(.footnote)).foregroundStyle(Theme.muted)
       Spacer()
+      Button { showLog = true } label: {
+        Label("Log", systemImage: "list.bullet.rectangle")
+          .font(Theme.text(.footnote))
+          .foregroundStyle(Theme.gold)
+          .padding(.horizontal, 10)
+          .padding(.vertical, 5)
+          .background(Theme.panel, in: Capsule())
+          .overlay { Capsule().strokeBorder(Theme.line, lineWidth: 0.5) }
+      }
+      .accessibilityLabel("Game log")
       Menu {
         Toggle(isOn: Binding(get: { game.training }, set: { game.setTraining($0) })) {
           Label("Training mode", systemImage: "graduationcap")
         }
-        Button { showLog = true } label: { Label("Game log", systemImage: "list.bullet.rectangle") }
         Divider()
         Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }
       } label: {
@@ -167,8 +181,10 @@ struct TableView: View {
   }
 }
 
-/// A card on the table that's part of moves: touched to choose it, picked up and carried to where it goes (when it
-/// starts a move), long-pressed to see it (and its moves). It glides when it moves to another place on the table.
+/// A card on the table that's part of moves. A finger on it does one of three things, told apart by what it does
+/// first: lifted at once, it touches the card (choosing it); moved, it carries the card to where it goes (when it
+/// starts a move); held still a moment, it shows the card large until lifted, and nothing else (no move, no carry).
+/// The card glides when it moves to another place on the table.
 struct TableCard: View {
   let game: Game
   let id: CardId?
@@ -180,55 +196,73 @@ struct TableCard: View {
   var placed = true
   @Environment(\.dropZones) private var zones
   @Environment(\.cardSpace) private var space
+  @State private var press = Press.idle
+  @State private var holding: Task<Void, Never>?
+
+  /// What a finger on the card is doing.
+  private enum Press { case idle, down, previewing, carrying, slid }
+
+  /// How long a finger stays still before the card is shown large, and how far it may wander meanwhile.
+  private static let hold = Duration.milliseconds(320)
+  private static let slack: CGFloat = 8
 
   var body: some View {
     let touch = ref.map(game.touchability) ?? .none
-    let moves = ref.map { ref in game.options.filter { $0.refs.contains(ref) } } ?? []
     let carried = ref != nil && game.dragging?.ref == ref
     CardView(book: game.book, id: id, faceDown: faceDown, width: width, touch: touch)
       .opacity(carried ? 0.25 : 1)
       .modifier(Glide(id: placed ? id : nil, space: space))
       .modifier(DropZoneIf(ref: placed ? ref : nil))
-      .onTapGesture {
-        if let ref, touch != .none { game.touch(ref) }
-      }
-      .gesture(carry, including: ref.map(game.canDrag) == true ? .all : .subviews)
+      .gesture(finger)
       .accessibilityIdentifier(ref ?? "")
-      .contextMenu {
-        ForEach(Array(moves.prefix(12).enumerated()), id: \.offset) { _, option in
-          Button(option.label) { game.send(option.command) }
-        }
-      } preview: {
-        if let id {
-          VStack(spacing: 10) {
-            CardView(book: game.book, id: id, width: 240)
-            Text(game.book.text(id)).font(Theme.text(.footnote)).foregroundStyle(Theme.text).multilineTextAlignment(.center)
-          }
-          .padding(16)
-          .frame(width: 280)
-          .background(Theme.panel)
-        } else {
-          CardView(book: game.book, id: nil, width: 240).padding(16).background(Theme.panel)
-        }
-      }
       .accessibilityAddTraits(touch == .none ? [] : .isButton)
+      .accessibilityAction { if let ref, touch != .none { game.touch(ref) } }
+      .accessibilityAction(named: "Show the card") { if let id { game.preview = id } }
   }
 
-  /// Picking the card up and letting it go somewhere.
-  private var carry: some Gesture {
-    DragGesture(minimumDistance: 8, coordinateSpace: .named(DropZones.space))
+  private var finger: some Gesture {
+    DragGesture(minimumDistance: 0, coordinateSpace: .named(DropZones.space))
       .onChanged { drag in
-        guard let ref else { return }
-        if game.dragging == nil {
-          game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
-        } else {
+        switch press {
+        case .idle:
+          press = .down
+          holding = Task { @MainActor in
+            try? await Task.sleep(for: Self.hold)
+            guard !Task.isCancelled, press == .down, let id else { return }
+            press = .previewing
+            game.preview = id
+          }
+        case .down:
+          guard hypot(drag.translation.width, drag.translation.height) > Self.slack else { return }
+          holding?.cancel()
+          if let ref, game.canDrag(ref) {
+            press = .carrying
+            game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
+          } else {
+            press = .slid
+          }
+        case .carrying:
           game.moveDrag(to: drag.location)
+        case .previewing, .slid:
+          break
         }
       }
       .onEnded { drag in
-        guard let carried = game.dragging else { return }
-        let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
-        withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
+        holding?.cancel()
+        switch press {
+        case .down:
+          if let ref, game.touchability(ref) != .none { game.touch(ref) }
+        case .carrying:
+          if let carried = game.dragging {
+            let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
+            withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
+          }
+        case .previewing:
+          withAnimation(.easeOut(duration: 0.15)) { game.preview = nil }
+        case .idle, .slid:
+          break
+        }
+        press = .idle
       }
   }
 }
@@ -269,10 +303,23 @@ struct SeatArea: View {
     let player = game.touchability("player:\(seat)")
     VStack(alignment: .leading, spacing: 4) {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
-        Text(table.names[seat]).font(Theme.heading(22, relativeTo: .title3))
-          .foregroundStyle(player == .none ? Theme.text : Theme.goldBright)
-          .onTapGesture { if player != .none { game.touch("player:\(seat)") } }
-          .dropZone("player:\(seat)")
+        // The name; a gold button when the player is a choice (Pickpocket, Legerdemain): the whole row takes the touch.
+        HStack(spacing: 6) {
+          Text(table.names[seat]).font(Theme.heading(22, relativeTo: .title3))
+            .foregroundStyle(player == .none ? Theme.text : Theme.goldBright)
+          if player != .none {
+            Image(systemName: "hand.tap.fill").font(.footnote).foregroundStyle(Theme.goldBright)
+          }
+        }
+        .padding(.horizontal, player == .none ? 0 : 10)
+        .padding(.vertical, player == .none ? 0 : 3)
+        .background {
+          if player != .none {
+            Capsule().fill(Theme.gold.opacity(player == .picked ? 0.35 : 0.18)).overlay { Capsule().strokeBorder(Theme.gold, lineWidth: 1.5) }
+          }
+        }
+        .dropZone("player:\(seat)")
+        .accessibilityAddTraits(player == .none ? [] : .isButton)
         if view.turn?.seat == seat {
           Circle().fill(Theme.gold).frame(width: 7, height: 7).accessibilityLabel("Their turn")
         }
@@ -293,6 +340,12 @@ struct SeatArea: View {
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
     .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
+    .overlay(alignment: .top) {
+      // Choosing the player: the header row is the button.
+      if player != .none {
+        Color.clear.frame(height: 44).contentShape(Rectangle()).onTapGesture { game.touch("player:\(seat)") }
+      }
+    }
     .overlay {
       RoundedRectangle(cornerRadius: 14).strokeBorder(active ? Theme.gold.opacity(0.7) : Theme.line, lineWidth: active ? 1.5 : 0.5)
     }
@@ -432,5 +485,36 @@ struct Feed: View {
       .accessibilityAddTraits(.updatesFrequently)
       .accessibilityHint("Opens the game log")
     }
+  }
+}
+
+
+/// A card shown large, with its text, while a finger holds it (it takes no touches: lifting the finger puts it away).
+struct CardPreview: View {
+  let book: CardBook
+  let id: CardId
+
+  var body: some View {
+    GeometryReader { geo in
+      let width = min(geo.size.width - 56, 420, (geo.size.height - 220) / 1.4)
+      ZStack {
+        Color.black.opacity(0.6).ignoresSafeArea()
+        VStack(spacing: 14) {
+          CardView(book: book, id: id, width: width)
+          Text(book.text(id))
+            .font(Theme.text(.callout))
+            .foregroundStyle(Theme.text)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: width)
+        }
+        .padding(18)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
+        .environment(\.colorScheme, .dark)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+    .allowsHitTesting(false)
+    .accessibilityElement(children: .combine)
+    .accessibilityLabel("\(book.name(id)): \(book.text(id))")
   }
 }

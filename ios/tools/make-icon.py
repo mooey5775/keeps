@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""The app's icon: the Keeps mark (keepsgame.com's four ovals, as on the card back) in gold leaf on black, framed by
-a thin gold line like the card's border. Drawn here at three times the size and scaled down, so it's the same every
-time and needs no image editor. Writes the asset catalogue's icons (light, dark, tinted).
+"""The app's icon: the Keeps mark (keepsgame.com's four ovals, as on the card back) in glassy gold on dark, in the
+manner of the system's own icons: translucent material lit from above (a gloss on top, a bright rim where the light
+catches, a glow where it comes through at the bottom), no texture, and no border (the system's rounded shape frames
+it; a line of another radius would compete with it). Drawn here
+at three times the size and scaled down, so it's the same every time and needs no image editor. Writes the asset catalogue's icons (light, dark, tinted).
 
     python3 ios/tools/make-icon.py
 """
@@ -17,9 +19,9 @@ SS = 3  # supersampling
 N = SIZE * SS
 
 # The mark, measured from keepsgame.com's icon (135 px): ovals 35 wide and 38 tall (the side pair turned), their
-# centres 33.5 from the middle; scaled so the mark spans 46% of the icon.
+# centres 33.5 from the middle; scaled so the mark spans 64% of the icon.
 SPAN = 102.0  # the mark's width in the 135 px icon
-SCALE = 0.46 * N / SPAN
+SCALE = 0.64 * N / SPAN
 OVALS = [  # (centre x, centre y, half width, half height), in mark units from the middle
     (0.0, -33.5, 17.5, 19.0),
     (-31.5, 1.0, 19.0, 17.5),
@@ -47,66 +49,62 @@ def ramp(t):
     return out
 
 
-def leaf_texture(rng):
-    """Gold leaf's crinkle: noise at a few scales (the finest crisp, for the leaf's flakes), around 1."""
-    tex = np.zeros((N, N), dtype=np.float32)
-    for cells, weight in ((18, 0.35), (70, 0.35), (300, 0.3)):
-        small = rng.random((cells, cells))
-        layer = np.array(Image.fromarray((small * 255).astype(np.uint8)).resize((N, N), Image.BICUBIC), dtype=np.float32) / 255.0
-        tex += weight * layer
-    return 0.9 + 0.2 * tex
-
-
 def main():
-    rng = np.random.default_rng(2026)
     y, x = np.mgrid[0:N, 0:N].astype(np.float32)
     cx = cy = N / 2
 
-    # The background: warm black, a little lighter at the middle.
+    # The background: a smooth dark gradient, warmer and a little lighter at the top.
+    t = y / N
+    bg = np.stack([28 - 18 * t, 22 - 15 * t, 17 - 12 * t], axis=-1)
     r = np.hypot(x - cx, y - cy) / (N / 2)
-    bg = np.stack([22 - 14 * r, 17 - 12 * r, 13 - 10 * r], axis=-1).clip(4, 255)
-    img = bg.copy()
+    img = bg * (1 - 0.25 * np.clip(r - 0.6, 0, 1))[..., None]
 
-    # The frame: the card's rounded border, thin, in flat gold with a soft sheen.
-    inset, radius, width = 0.085 * N, 0.13 * N, 0.011 * N
-    qx = np.abs(x - cx) - (cx - inset - radius)
-    qy = np.abs(y - cy) - (cy - inset - radius)
-    outside = np.hypot(np.maximum(qx, 0), np.maximum(qy, 0)) + np.minimum(np.maximum(qx, qy), 0) - radius
-    frame = np.clip(1 - np.abs(outside) / (width / 2), 0, 1) ** 0.6
-    frame_colour = ramp(0.25 + 0.45 * (x + y) / (2 * N))
-    img = img * (1 - frame[..., None]) + frame_colour * frame[..., None]
+    def blurred(mask, radius):
+        return np.array(Image.fromarray((mask * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(radius)), dtype=np.float32) / 255.0
 
-    # A soft glow under the mark, to lift it off the black.
+    # The mark's shape, for its shadow and glow.
     mark = np.zeros((N, N), dtype=np.float32)
     for ox, oy, rx, ry in OVALS:
         u = (x - (cx + ox * SCALE)) / (rx * SCALE)
         v = (y - (cy + oy * SCALE)) / (ry * SCALE)
         mark = np.maximum(mark, (u * u + v * v <= 1).astype(np.float32))
-    glow = np.array(Image.fromarray((mark * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(N * 0.035))) / 255.0
-    img = img + glow[..., None] * np.array([90, 62, 20]) * 0.55
+    # A soft shadow below, then a warm glow around: the glass sits a little above the dark.
+    shadow = np.roll(blurred(mark, N * 0.02), int(N * 0.018), axis=0)
+    img = img * (1 - 0.55 * shadow)[..., None]
+    glow = blurred(mark, N * 0.045)
+    img = img + glow[..., None] * np.array([120, 84, 26]) * 0.45
 
-    # The ovals: flat gold leaf. One sheen runs across the whole mark (lighter at the top left, a bright band on the
-    # diagonal, darker to the bottom right), each oval has a fine bevel (its top-left edge catching the light, its
-    # bottom-right edge in shadow), and the leaf's crinkle shows through.
-    texture = leaf_texture(rng)
-    half = 0.5 * SPAN * SCALE
-    diagonal = ((x - cx) + (y - cy)) / (2 * half)  # -1 at the mark's top left, 1 at its bottom right
-    sheen = np.exp(-(((x - cx) + (y - cy)) / (0.35 * half) + 0.15) ** 2)
-    base = ramp(0.46 + 0.2 * diagonal - 0.2 * sheen)
+    # The ovals: translucent gold, lighter at the top, deeper at the bottom; a gloss over the upper part; a bright rim
+    # where the light catches the top-left edge; a warm glow inside the bottom edge, where light comes through.
+    top, bottom = np.array([255, 222, 140]), np.array([200, 138, 42])
     for ox, oy, rx, ry in OVALS:
         u = (x - (cx + ox * SCALE)) / (rx * SCALE)
         v = (y - (cy + oy * SCALE)) / (ry * SCALE)
         d = np.sqrt(u * u + v * v)
         inside = d <= 1
-        edge = np.clip((d - 0.9) / 0.1, 0, 1)
-        facing = -(u + v) / np.maximum(d, 1e-6) / np.sqrt(2)  # 1 where the edge faces the top left
-        bevel = 1 + edge * 0.45 * facing
-        colour = base * (texture * bevel)[..., None]
+        f = np.clip((v + 1) / 2, 0, 1)[..., None]
+        colour = top * (1 - f) + bottom * f
+        # Translucent: a little of what's behind shows through.
+        colour = 0.88 * colour + 0.12 * img
+        # The glow inside the bottom edge.
+        caustic = np.clip((d - 0.62) / 0.38, 0, 1) ** 2 * np.clip(v, 0, 1)
+        colour = colour + caustic[..., None] * np.array([255, 214, 120]) * 0.35
+        # The gloss: a soft lens of light over the upper part.
+        gu, gv = u / 0.72, (v + 0.42) / 0.36
+        gloss = np.clip(1 - (gu * gu + gv * gv), 0, 1) ** 1.5
+        colour = colour * (1 - 0.32 * gloss[..., None]) + np.array([255, 250, 232]) * (0.32 * gloss[..., None])
+        # The rim: a thin bright line, strongest where the edge faces the top left, gone at the bottom right.
+        facing = np.clip(-(0.55 * u + 0.83 * v) / np.maximum(d, 1e-6), 0, 1)
+        rim = np.clip(1 - np.abs(d - 0.965) / 0.03, 0, 1) * facing
+        colour = colour * (1 - 0.75 * rim[..., None]) + np.array([255, 252, 238]) * (0.75 * rim[..., None])
+        # The edge: slightly darker, so the shape reads against the glow.
+        edge = np.clip((d - 0.985) / 0.015, 0, 1) * (1 - facing)
+        colour = colour * (1 - 0.25 * edge[..., None])
         img[inside] = colour[inside]
 
     light_icon = Image.fromarray(img.clip(0, 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)
 
-    # Tinted (the system colours it): the mark and frame by brightness, on black.
+    # Tinted (the system colours it): the mark by brightness, on black.
     grey = np.array(light_icon.convert("L")).astype(np.float32)
     tinted = Image.fromarray(np.clip((grey - 20) * 1.25, 0, 255).astype(np.uint8)).convert("RGB")
 
