@@ -80,6 +80,23 @@ final class Core: NSObject, WKScriptMessageHandler {
     MainActor.assumeIsolated { self.received(json) }
   }
 
+  /// Where the games' replays go (Documents/games, one file per game, rewritten after every move): they can be
+  /// replayed or looked into later (`xcrun devicectl device copy from` fetches them).
+  static let gamesFolder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("games")
+  private let writer = DispatchQueue(label: "keeps.games", qos: .utility)
+
+  private func keep(_ saved: ToAppSaved) {
+    let url = Core.gamesFolder.appendingPathComponent((saved.file as NSString).lastPathComponent)
+    writer.async {
+      do {
+        try FileManager.default.createDirectory(at: Core.gamesFolder, withIntermediateDirectories: true)
+        try Data(saved.text.utf8).write(to: url, options: .atomic)
+      } catch {
+        print("could not keep the game's replay \(url.lastPathComponent): \(error)")
+      }
+    }
+  }
+
   private func received(_ json: String) {
     let message: ToApp
     do {
@@ -103,6 +120,8 @@ final class Core: NSObject, WKScriptMessageHandler {
       connections[Int(server.id)]?(server)
     case .search(let search):
       onSearch?(search)
+    case .saved(let saved):
+      keep(saved)
     }
   }
 }

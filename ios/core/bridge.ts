@@ -49,6 +49,8 @@ export interface TableText {
 export type ToApp =
   | { t: 'ready'; workers: number; network: string; cards: CardInfo[] }
   | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText }
+  /** A game's replay log so far (engine/src/replay.ts, as the website's server keeps it), after each move: the app keeps it as `file`. */
+  | { t: 'saved'; file: string; text: string }
   /** Each of Midstrike's searches, as it finishes. */
   | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
   | { t: 'failed'; message: string };

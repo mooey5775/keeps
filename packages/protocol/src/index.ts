@@ -159,3 +159,8 @@ export type ServerMessage =
 
 export const NAME_MAX = 20;
 export const ROOM_CODE = /^[A-Z]{4}$/;
+
+/** A game's replay file (engine/src/replay.ts's format), by its room and when it started: "ABCD-2026-10-30T22-41-36-000Z.jsonl". The server and the app keep games so. */
+export function replayFileName(code: string, startedAt: number): string {
+  return `${code}-${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}.jsonl`;
+}

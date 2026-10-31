@@ -6,6 +6,8 @@
 // `core` message handler. A connection speaks the website's own protocol (packages/protocol), so the app is a client
 // like a browser; each game message comes with what the web client works out for itself: the options (every legal
 // move, with what it involves on the table: web/src/game/options.ts) and the log's lines (web/src/game/log.ts).
+import { formatReplayLog } from '../../packages/engine/src/index.ts';
+import { replayFileName } from '../../packages/protocol/src/index.ts';
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { midstrikeHost } from '../../packages/learn/demo/host.ts';
 import { setSearchMode, setWorlds } from '../../packages/learn/demo/search-bot.ts';
@@ -57,6 +59,8 @@ async function boot(): Promise<void> {
     seed: () => [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, '0')).join(''),
     random: Math.random,
     now: Date.now,
+    // Each game's replay, after every move, for the app to keep (it can be replayed, or looked into, later).
+    saveReplay: (code, startedAt, log) => post({ t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log) }),
     bot: {
       policy,
       schedule: (fn, ms) => {

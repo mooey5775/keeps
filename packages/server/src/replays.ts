@@ -1,6 +1,10 @@
 import { mkdirSync, readdirSync, statfsSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { formatReplayLog, type ReplayLog } from '@keeps/engine';
+import { replayFileName } from '@keeps/protocol';
+
+// (The file name is the protocol package's, so the app names the games it keeps the same way.)
+export { replayFileName };
 
 // Replay logs on disk: one file per game, rewritten after every move. They're
 // a debugging aid, so they must never break a game: write errors are logged,
@@ -23,10 +27,6 @@ export interface ReplayStoreOptions {
   /** Stop deleting once this share of the disk is free. */
   targetFree?: number;
   log?: (message: string) => void;
-}
-
-export function replayFileName(code: string, startedAt: number): string {
-  return `${code}-${new Date(startedAt).toISOString().replace(/[:.]/g, '-')}.jsonl`;
 }
 
 export function statfsSpace(dir: string): DiskSpace | null {

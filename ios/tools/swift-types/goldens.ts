@@ -34,7 +34,8 @@ type FromApp = import('../../core/bridge.ts').FromApp;
 type ToApp = import('../../core/bridge.ts').ToApp;
 type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
-const { apply } = await import('../../../packages/engine/src/index.ts');
+const { apply, formatReplayLog } = await import('../../../packages/engine/src/index.ts');
+const { replayFileName } = await import('../../../packages/protocol/src/index.ts');
 const { click, clickable, panelItems } = await import('../../../packages/web/src/game/options.ts');
 type Option = import('../../../packages/web/src/game/options.ts').Option;
 type Ref = import('../../../packages/web/src/game/options.ts').Ref;
@@ -160,6 +161,10 @@ const server = new LocalServer({
   seed: () => `golden-${deals++}`,
   random: chance,
   now: Date.now,
+  // The app keeps each game's replay: the core sends it after every move (recorded in the scripted games).
+  saveReplay: (code: string, startedAt: number, log: import('../../../packages/engine/src/index.ts').ReplayLog) => {
+    if (recordAll) toApp.push(JSON.stringify({ t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log) } satisfies ToApp));
+  },
   bot: {
     policy,
     schedule: (fn, ms) => {

@@ -3638,6 +3638,7 @@ public struct TableTextShown: Codable, Equatable, Sendable {
 public enum ToApp: Codable, Equatable, Sendable {
   case failed(ToAppFailed)
   case ready(ToAppReady)
+  case saved(ToAppSaved)
   case search(ToAppSearch)
   case server(ToAppServer)
 
@@ -3648,6 +3649,7 @@ public enum ToApp: Codable, Equatable, Sendable {
     switch try container.decode(String.self, forKey: .tag) {
     case "failed": self = .failed(try ToAppFailed(from: decoder))
     case "ready": self = .ready(try ToAppReady(from: decoder))
+    case "saved": self = .saved(try ToAppSaved(from: decoder))
     case "search": self = .search(try ToAppSearch(from: decoder))
     case "server": self = .server(try ToAppServer(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "ToApp: no case \(other)")
@@ -3663,6 +3665,9 @@ public enum ToApp: Codable, Equatable, Sendable {
     case .ready(let value):
       try container.encode("ready", forKey: .tag)
       try value.encode(to: encoder)
+    case .saved(let value):
+      try container.encode("saved", forKey: .tag)
+      try value.encode(to: encoder)
     case .search(let value):
       try container.encode("search", forKey: .tag)
       try value.encode(to: encoder)
@@ -3677,6 +3682,7 @@ public enum ToApp: Codable, Equatable, Sendable {
     switch self {
     case .failed: return "failed"
     case .ready: return "ready"
+    case .saved: return "saved"
     case .search: return "search"
     case .server: return "server"
     }
@@ -3734,6 +3740,33 @@ public struct ToAppReady: Codable, Equatable, Sendable {
     try container.encode(workers, forKey: .workers)
     try container.encode(network, forKey: .network)
     try container.encode(cards, forKey: .cards)
+  }
+}
+
+public struct ToAppSaved: Codable, Equatable, Sendable {
+  public var file: String
+  public var text: String
+
+  public init(file: String, text: String) {
+    self.file = file
+    self.text = text
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case file
+    case text
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    file = try container.decode(String.self, forKey: .file)
+    text = try container.decode(String.self, forKey: .text)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(file, forKey: .file)
+    try container.encode(text, forKey: .text)
   }
 }
 
