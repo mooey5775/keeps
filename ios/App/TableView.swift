@@ -66,7 +66,8 @@ struct TableView: View {
         }
         .coordinateSpace(.named(DropZones.space))
       }
-      .cardPreviews(game)
+      // (Not while the discard's sheet is up: it shows the card held there itself, over the table.)
+      .cardPreviews(game, shown: !showDiscard)
       .onChange(of: game.arrived) { _, arrived in
         guard arrived, let card = game.landing?.card else {
           if arrived { game.finishLanding() }
@@ -582,10 +583,11 @@ extension View {
         ended: { if let id, game.preview == id { withAnimation(.easeOut(duration: 0.15)) { game.preview = nil } } }))
   }
 
-  /// Shows the card being held (Game.preview) over this view: the table, or a sheet over it (which hides the table's).
-  func cardPreviews(_ game: Game) -> some View {
+  /// Shows the card being held (Game.preview) over this view: the table, or a sheet over it (the topmost only:
+  /// `shown` false for the table while a sheet with cards to hold is up).
+  func cardPreviews(_ game: Game, shown: Bool = true) -> some View {
     overlay {
-      if let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
+      if shown, let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
     }
     .animation(.snappy(duration: 0.2), value: game.preview)
   }
