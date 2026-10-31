@@ -38,7 +38,7 @@ struct TableView: View {
         .safeAreaInset(edge: .bottom, spacing: 0) {
           VStack(spacing: 0) {
             // What Midstrike just did, rising from above your hand and fading.
-            Feed(lines: game.feed) { showLog = true }.padding(.horizontal, 16)
+            Feed(lines: game.feed).padding(.horizontal, 16)
             hand(view, width: large).padding(.horizontal, 16).padding(.bottom, 6)
             DecisionPanel(game: game, view: view, table: table, leave: { confirmLeave = true })
           }
@@ -182,9 +182,9 @@ struct TableView: View {
 }
 
 /// A card on the table that's part of moves. A finger on it does one of three things, told apart by what it does
-/// first: held still a moment (three tenths of a second), it shows the card large until lifted, and nothing else (no move,
-/// no carry); moved, it carries the card to where it goes (when it starts a move); lifted at once, it touches the card.
-/// The card glides when it moves to another place on the table.
+/// first: lifted at once, it touches the card (choosing it); moved, it carries the card to where it goes (when it
+/// starts a move); held still a moment (three tenths of a second), it shows the card large until lifted, and nothing
+/// else. The card glides when it moves to another place on the table.
 struct TableCard: View {
   let game: Game
   let id: CardId?
@@ -196,39 +196,45 @@ struct TableCard: View {
   var placed = true
   @Environment(\.dropZones) private var zones
   @Environment(\.cardSpace) private var space
+  /// Whether a finger is carrying this card. The system resets it however the drag ends, cancelled included (when it
+  /// calls no end handler): a carry still showing then is put away.
+  @GestureState private var carrying = false
   /// How long a finger stays still before the card is shown large, and how far it may wander meanwhile.
   private static let hold = 0.3
   private static let slack: CGFloat = 8
 
   var body: some View {
     let touch = ref.map(game.touchability) ?? .none
-    let carried = ref != nil && game.dragging?.ref == ref
+    let lifted = ref != nil && game.dragging?.ref == ref
     CardView(book: game.book, id: id, faceDown: faceDown, width: width, touch: touch)
-      .opacity(carried ? 0.25 : 1)
+      .opacity(lifted ? 0.25 : 1)
       .modifier(Glide(id: placed ? id : nil, space: space))
       .modifier(DropZoneIf(ref: placed ? ref : nil))
-      .gesture(finger)
+      // A touch chooses it; a hold shows it until the finger lifts (and does nothing else); a carry takes it where it goes.
+      .onTapGesture { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
+      .onLongPressGesture(minimumDuration: Self.hold, maximumDistance: Self.slack) {
+        if let id { game.preview = id }
+      } onPressingChanged: { pressing in
+        if !pressing, let id, game.preview == id { withAnimation(.easeOut(duration: 0.15)) { game.preview = nil } }
+      }
+      // Only a card that can be picked up listens for a carry: on the others (those shown for a choice, in a row that
+      // scrolls), a swipe has to reach the scrolling.
+      .simultaneousGesture(carried, including: ref.map(game.canDrag) == true ? .all : .subviews)
+      .onChange(of: carrying) { _, now in
+        if !now, let ref, game.dragging?.ref == ref { game.endDrag(on: nil) }
+      }
       .accessibilityIdentifier(ref ?? "")
       .accessibilityAddTraits(touch == .none ? [] : .isButton)
       .accessibilityAction { if let ref, touch != .none { game.touch(ref) } }
       .accessibilityAction(named: "Show the card") { if let id { game.preview = id } }
   }
 
-  /// The finger, as the system's own recognisers tell it: held still, then the card is shown until lifted (and does
-  /// nothing else); else moved, then carried; else lifted at once, a touch.
-  private var finger: AnyGesture<Void> {
-    let shown = LongPressGesture(minimumDuration: Self.hold, maximumDistance: Self.slack)
-      .sequenced(before: DragGesture(minimumDistance: 0))
-      .onChanged { value in
-        guard case .second(true, _) = value, game.preview == nil, let id else { return }
-        game.preview = id
-      }
-      .onEnded { _ in
-        withAnimation(.easeOut(duration: 0.15)) { game.preview = nil }
-      }
-    let carried = DragGesture(minimumDistance: Self.slack, coordinateSpace: .named(DropZones.space))
+  /// Picking the card up and letting it go somewhere (not while it's shown large).
+  private var carried: some Gesture {
+    DragGesture(minimumDistance: Self.slack, coordinateSpace: .named(DropZones.space))
+      .updating($carrying) { _, state, _ in state = true }
       .onChanged { drag in
-        guard let ref, game.canDrag(ref) else { return }
+        guard let ref, game.preview == nil, game.canDrag(ref) else { return }
         if game.dragging == nil {
           game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
         } else {
@@ -240,13 +246,6 @@ struct TableCard: View {
         let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
         withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
       }
-    let touched = TapGesture().onEnded { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
-    // Only a card that can be picked up listens for a carry: on the others (those shown for a choice, in a row that
-    // scrolls), a swipe has to reach the scrolling.
-    if let ref, game.canDrag(ref) {
-      return AnyGesture(shown.exclusively(before: carried).exclusively(before: touched).map { _ in () })
-    }
-    return AnyGesture(shown.exclusively(before: touched).map { _ in () })
   }
 }
 
@@ -438,10 +437,9 @@ struct EmptySlot: View {
 }
 
 /// What just happened that you didn't do: the newest log lines, each rising from above your hand as the next comes and
-/// fading after a few seconds. Touching them opens the whole log.
+/// fading after a few seconds.
 struct Feed: View {
   let lines: [Game.FeedLine]
-  let open: () -> Void
 
   var body: some View {
     // No height of its own: the lines rise over the table above.
@@ -461,12 +459,10 @@ struct Feed: View {
       }
       .padding(.bottom, 6)
       .frame(maxWidth: .infinity, alignment: .leading)
-      .contentShape(Rectangle())
-      .onTapGesture(perform: open)
-      .allowsHitTesting(!lines.isEmpty)
+      // It takes no touches: it's over your seat, whose piles and cards must answer them (the Log button opens the log).
+      .allowsHitTesting(false)
       .accessibilityElement(children: .combine)
       .accessibilityAddTraits(.updatesFrequently)
-      .accessibilityHint("Opens the game log")
     }
   }
 }

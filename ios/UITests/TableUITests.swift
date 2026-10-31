@@ -53,4 +53,43 @@ final class TableUITests: XCTestCase {
     }
     XCTAssertGreaterThan(carried, 0, "no card carried from the hand made a move")
   }
+
+  /// Your pile, as the table names it ("Your pile, 9 cards").
+  private var yourPile: XCUIElement {
+    app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH 'Your pile'")).firstMatch
+  }
+
+  /// Waits up to `seconds` for `condition`.
+  private func eventually(_ seconds: TimeInterval, _ condition: () -> Bool) -> Bool {
+    let end = Date().addingTimeInterval(seconds)
+    while Date() < end {
+      if condition() { return true }
+      RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+    }
+    return condition()
+  }
+
+  func testTouchingYourPileDraws() throws {
+    XCTAssertTrue(yourTurn())
+    let before = handCards.count
+    yourPile.tap()
+    XCTAssertTrue(eventually(5) { handCards.count > before }, "touching your pile drew no card")
+  }
+
+  func testHoldingACardOnlyShowsItAndTouchingItChoosesIt() throws {
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    XCTAssertTrue(eventually(5) { handCards.contains { $0.isHittable } })
+    // Still your turn (one action left): the card you drew is a move to make.
+    XCTAssertTrue(yourTurn(10))
+    let card = handCards.first { $0.isHittable }!
+    let id = card.identifier
+    card.press(forDuration: 1.2)
+    // Held, then let go: shown, and nothing else (not picked, not played).
+    XCTAssertTrue(element(id).exists, "holding the card played it")
+    XCTAssertFalse(app.buttons["Cancel selection"].exists, "holding the card picked it")
+    // Touched: picked (a move that needs more), or played.
+    element(id).tap()
+    XCTAssertTrue(eventually(5) { app.buttons["Cancel selection"].exists || !self.element(id).exists }, "touching the card did nothing")
+  }
 }

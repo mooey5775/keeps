@@ -40,8 +40,8 @@ final class Game {
   /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
   private(set) var movesMade = 0
   private(set) var botMoves = 0
-  /// What just happened that you didn't do (Midstrike's moves, mostly): the log's newest lines, each shown a few
-  /// seconds as it rises and fades over the table.
+  /// What just happened that you didn't do (Midstrike's moves, mostly, and every turn and round that starts): the
+  /// log's newest lines, each shown a few seconds as it rises and fades over the table.
   private(set) var feed: [FeedLine] = []
   private var feedCount = 0
   /// A move of yours was sent: the log lines that come back with it are yours, not news.
@@ -138,50 +138,78 @@ final class Game {
 
   // MARK: Dragging
 
-  /// A card picked up from the table: where it can go (the elements that make a move with it), and whether letting it
-  /// go in `aloneZone` makes a move on its own: a card from your hand in the middle of the table ("Play Hocus Pocus"),
-  /// an ability card from your keep there too (to use it), your pile's top in your hand (to draw).
+  /// Something picked up from the table, and where it can go: the elements that make a move with it (`targets`; a move
+  /// for each of `direct`'s, as it is, the others as touching it then them would), and whether letting it go in
+  /// `aloneZone` makes a move on its own (`alone`, in `aloneWords`).
   struct Drag: Equatable {
     let ref: String
     let card: CardId?
     var location: CGPoint
     let targets: Set<String>
+    let direct: [String: Command]
     let alone: Command?
     let aloneZone: String
-    /// What letting it go in `aloneZone` does, in a few words.
     let aloneWords: String
   }
 
-  /// Whether `ref` can be picked up: a card that starts a move (from your hand, or your keep), or your pile, to draw
-  /// from it. (A drag starts afresh, whatever was touched.)
-  func canDrag(_ ref: String) -> Bool {
-    if ref.hasPrefix("pile:") { return ref == "pile:\(me)" && drawCommand != nil }
-    return (ref.hasPrefix("hand:") || ref.hasPrefix("keepcard:")) && Choosing.touchable(options, []).contains(ref)
+  /// What can be picked up is what moves: a card from your hand, to where it's played; a card leaving your keep
+  /// (Blunder onto a pile, Shackles to the discard); a pile, to your hand to draw from it (yours; another with
+  /// Sanction), or onto another pile to swap them (Juggling). Cards that stay put when used (Sanction, Juggling,
+  /// Acquisition, Tithes) are touched, not carried.
+  private func plan(_ ref: String) -> (targets: Set<String>, direct: [String: Command], alone: Command?, zone: String, words: String)? {
+    if ref.hasPrefix("hand:") {
+      guard Choosing.touchable(options, []).contains(ref) else { return nil }
+      let moves = Choosing.narrow(options, [ref])
+      return (Set(moves.flatMap(\.refs)).subtracting([ref]), [:], moves.first { $0.refs == [ref] }?.command, "middle", "Let go here to play it")
+    }
+    if ref.hasPrefix("keepcard:") {
+      let moves = Choosing.narrow(options, [ref]).filter { option in
+        switch Self.ability(option.command) {
+        case .blunder, .shackles: true
+        default: false
+        }
+      }
+      guard !moves.isEmpty else { return nil }
+      let alone = moves.first { $0.refs == [ref] }?.command
+      return (Set(moves.flatMap(\.refs)).subtracting([ref]), [:], alone, "middle", "Let go here to discard it")
+    }
+    if ref.hasPrefix("pile:"), let pile = Int(ref.dropFirst(5)) {
+      var draw: Command?
+      var sanction: Command?
+      var swaps: [String: Command] = [:]
+      for option in options {
+        if case .answer(let answer) = option.command, case .action(let action) = answer.answer, case .draw = action.choice, pile == me {
+          draw = option.command
+        }
+        switch Self.ability(option.command) {
+        case .sanction(let s) where s.from == pile: sanction = option.command
+        case .juggling(let j) where j.piles.contains(pile):
+          if let other = j.piles.first(where: { $0 != pile }) { swaps["pile:\(other)"] = option.command }
+        default: break
+        }
+      }
+      let alone = draw ?? sanction
+      guard alone != nil || !swaps.isEmpty else { return nil }
+      return (Set(swaps.keys), swaps, alone, "hand", draw != nil ? "Let go to draw" : "Let go to draw (Sanction)")
+    }
+    return nil
   }
 
-  /// Drawing from your pile, when it's a move now.
-  private var drawCommand: Command? {
-    options.first { option in
-      guard option.refs == ["pile:\(me)"], case .answer(let answer) = option.command, case .action(let action) = answer.answer,
-        case .draw = action.choice
-      else { return false }
-      return true
-    }?.command
+  /// A move's ability, if it uses one.
+  private static func ability(_ command: Command) -> ActionChoiceAbility? {
+    guard case .answer(let answer) = command, case .action(let action) = answer.answer, case .ability(let ability) = action.choice else { return nil }
+    return ability
   }
+
+  /// Whether `ref` can be picked up now (see `plan`). A drag starts afresh, whatever was touched.
+  func canDrag(_ ref: String) -> Bool { plan(ref) != nil }
 
   func startDrag(_ ref: String, card: CardId?, at location: CGPoint) {
+    guard let plan = plan(ref) else { return }
     picked = []
-    if ref.hasPrefix("pile:") {
-      dragging = Drag(ref: ref, card: nil, location: location, targets: [], alone: drawCommand, aloneZone: "hand", aloneWords: "Let go to draw")
-      return
-    }
-    let moves = Choosing.narrow(options, [ref])
     dragging = Drag(
-      ref: ref, card: card, location: location,
-      targets: Set(moves.flatMap(\.refs)).subtracting([ref]),
-      alone: moves.first(where: { $0.refs == [ref] })?.command,
-      aloneZone: "middle",
-      aloneWords: ref.hasPrefix("keepcard:") ? "Let go here to use it" : "Let go here to play it")
+      ref: ref, card: ref.hasPrefix("pile:") ? nil : card, location: location, targets: plan.targets, direct: plan.direct,
+      alone: plan.alone, aloneZone: plan.zone, aloneWords: plan.words)
   }
 
   func moveDrag(to location: CGPoint) { dragging?.location = location }
@@ -198,6 +226,10 @@ final class Game {
       return true
     }
     guard let target, drag.targets.contains(target) else { return false }
+    if let move = drag.direct[target] {
+      send(move)
+      return true
+    }
     switch Choosing.touch(options, [drag.ref], target) {
     case .send(let command): send(command)
     case .pick(let next): picked = next
@@ -259,7 +291,13 @@ final class Game {
       // What happened, unless it was your own move.
       let all = server.lines ?? []
       let fresh = all.count >= lines.count && game != nil ? Array(all.dropFirst(lines.count)) : []
-      if awaitingMine, !fresh.isEmpty { awaitingMine = false } else { tell(fresh) }
+      // (A turn or round that starts with it is news even so: your move may have ended your turn.)
+      if awaitingMine, !fresh.isEmpty {
+        awaitingMine = false
+        tell(fresh.filter(\.heading))
+      } else {
+        tell(fresh)
+      }
       // The table moves to the new position with its cards gliding to their new places.
       withAnimation(.snappy(duration: 0.35)) {
         // A new decision clears a half-made selection (and a card still being dragged).
