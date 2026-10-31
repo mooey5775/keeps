@@ -74,10 +74,23 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.KeepsTests
         GENERATE_INFOPLIST_FILE: YES
+  KeepsUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: UITests
+    dependencies:
+      - target: Keeps
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.KeepsUITests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Keeps
 schemes:
   KeepsTests:
     build:
       targets:
         KeepsTests: [test]
+        KeepsUITests: [test]
     test:
-      targets: [KeepsTests]
+      targets: [KeepsTests, KeepsUITests]

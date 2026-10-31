@@ -82,19 +82,33 @@ final class Core: NSObject, WKScriptMessageHandler {
 
   /// Where the games' replays go (Documents/games, one file per game, rewritten after every move): they can be
   /// replayed or looked into later (`xcrun devicectl device copy from` fetches them).
-  static let gamesFolder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("games")
+  nonisolated static let gamesFolder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("games")
   private let writer = DispatchQueue(label: "keeps.games", qos: .utility)
+
+  /// The most games kept (a game is some tens of kilobytes): when a new one starts, the oldest go.
+  nonisolated static let gamesKept = 200
 
   private func keep(_ saved: ToAppSaved) {
     let url = Core.gamesFolder.appendingPathComponent((saved.file as NSString).lastPathComponent)
     writer.async {
+      let files = FileManager.default
       do {
-        try FileManager.default.createDirectory(at: Core.gamesFolder, withIntermediateDirectories: true)
+        try files.createDirectory(at: Core.gamesFolder, withIntermediateDirectories: true)
+        let new = !files.fileExists(atPath: url.path)
         try Data(saved.text.utf8).write(to: url, options: .atomic)
+        if new { Core.pruneGames() }
       } catch {
         print("could not keep the game's replay \(url.lastPathComponent): \(error)")
       }
     }
+  }
+
+  /// Keeps the newest `gamesKept` games (by when they were last written).
+  private nonisolated static func pruneGames() {
+    let files = FileManager.default
+    guard let urls = try? files.contentsOfDirectory(at: gamesFolder, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+    let dated = urls.map { url in (url, (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+    for (url, _) in dated.sorted(by: { $0.1 > $1.1 }).dropFirst(gamesKept) { try? files.removeItem(at: url) }
   }
 
   private func received(_ json: String) {

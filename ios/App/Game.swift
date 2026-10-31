@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import SwiftUI
 
 /// A game against Midstrike, as the app holds it: one connection to the core's server (the website's protocol), the
 /// room it made, and the game's latest message with what the core worked out for it (the options, the log's lines,
@@ -32,6 +33,11 @@ final class Game {
   private(set) var table: TableText?
   /// The table elements touched so far for the move being made.
   private(set) var picked: [String] = []
+  /// The card being dragged, if one is.
+  private(set) var dragging: Drag?
+  /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
+  private(set) var movesMade = 0
+  private(set) var botMoves = 0
   /// Midstrike's last search: how many deals it played out, and how long it took.
   private(set) var lastSearch: ToAppSearch?
   /// Something went wrong (shown until dismissed).
@@ -103,7 +109,54 @@ final class Game {
   var remaining: [Option] { Choosing.narrow(options, picked) }
 
   func touchability(_ ref: String) -> Touchability {
-    picked.contains(ref) ? .picked : touchable.contains(ref) ? .touchable : .none
+    if let dragging { return ref == dragging.ref ? .picked : dragging.targets.contains(ref) ? .touchable : .none }
+    return picked.contains(ref) ? .picked : touchable.contains(ref) ? .touchable : .none
+  }
+
+  // MARK: Dragging
+
+  /// A card picked up from the table: where it can go (the elements that make a move with it), and whether dropping
+  /// it in the middle of the table makes a move on its own ("Play Hocus Pocus").
+  struct Drag: Equatable {
+    let ref: String
+    let card: CardId?
+    var location: CGPoint
+    let targets: Set<String>
+    let alone: Command?
+  }
+
+  /// Whether the card at `ref` can be picked up: it starts a move (a drag starts afresh, whatever was touched).
+  func canDrag(_ ref: String) -> Bool { Choosing.touchable(options, []).contains(ref) }
+
+  func startDrag(_ ref: String, card: CardId?, at location: CGPoint) {
+    let moves = Choosing.narrow(options, [ref])
+    picked = []
+    dragging = Drag(
+      ref: ref, card: card, location: location,
+      targets: Set(moves.flatMap(\.refs)).subtracting([ref]),
+      alone: moves.first(where: { $0.refs == [ref] })?.command)
+  }
+
+  func moveDrag(to location: CGPoint) { dragging?.location = location }
+
+  /// The card let go over `target` (an element, "middle" for the middle of the table, or nil for nowhere): the move
+  /// it makes, as touching the card then the target would; the rest of the move picked if it needs more. Returns
+  /// whether it went somewhere.
+  @discardableResult
+  func endDrag(on target: String?) -> Bool {
+    guard let drag = dragging else { return false }
+    dragging = nil
+    if target == "middle", let alone = drag.alone {
+      send(alone)
+      return true
+    }
+    guard let target, drag.targets.contains(target) else { return false }
+    switch Choosing.touch(options, [drag.ref], target) {
+    case .send(let command): send(command)
+    case .pick(let next): picked = next
+    case .ignore: return false
+    }
+    return true
   }
 
   /// A touch on a table element (see Choosing).
@@ -127,6 +180,7 @@ final class Game {
   func send(_ command: Command) {
     picked = []
     guard let connection else { return }
+    movesMade += 1
     core.send(connection, .command(ClientMessageCommand(command: command)))
   }
 
@@ -150,13 +204,23 @@ final class Game {
         core.send(connection, .start)
       }
     case .game(let message):
-      // A new decision clears a half-made selection.
-      if message.view.legal != game?.view.legal { picked = [] }
-      game = message
-      options = server.options ?? []
-      lines = server.lines ?? []
-      table = server.table
-      screen = .table
+      // Midstrike's moves (a tap each), seen in the log's new entries.
+      if let bot = botSeat, message.log.contains(where: { if case .action(let a) = $0.payload { return a.seat == bot } else { return false } }) {
+        botMoves += 1
+      }
+      // The table moves to the new position with its cards gliding to their new places.
+      withAnimation(.snappy(duration: 0.35)) {
+        // A new decision clears a half-made selection (and a card still being dragged).
+        if message.view.legal != game?.view.legal {
+          picked = []
+          dragging = nil
+        }
+        game = message
+        options = server.options ?? []
+        lines = server.lines ?? []
+        table = server.table
+        screen = .table
+      }
       playAtRandom()
     case .error(let error):
       problem = error.message

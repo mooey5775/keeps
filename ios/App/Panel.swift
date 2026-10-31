@@ -131,7 +131,7 @@ struct ShownCards: View {
         HStack(alignment: .top, spacing: 8) {
           ForEach(Array(shown.cards.enumerated()), id: \.offset) { _, card in
             VStack(spacing: 3) {
-              TableCard(game: game, id: card.card, ref: card.ref, width: 64)
+              TableCard(game: game, id: card.card, ref: card.ref, width: 64, placed: false)
               if let caption = card.caption { Text(caption).font(Theme.text(.caption)).foregroundStyle(Theme.muted) }
             }
           }

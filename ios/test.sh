@@ -28,7 +28,7 @@ else
 fi
 
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build'
-rsync -a --delete ios/App ios/Shared ios/Spike ios/Tests ios/project.yml "$MAC:src/keeps/ios/"
+rsync -a --delete ios/App ios/Shared ios/Spike ios/Tests ios/UITests ios/project.yml "$MAC:src/keeps/ios/"
 rsync -a --delete ios/build/goldens "$MAC:src/keeps/ios/build/"
 ssh "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" <<'REMOTE'
 set -euo pipefail
