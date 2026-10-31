@@ -72,7 +72,8 @@ struct TableView: View {
       // Cards set off from where they are now, and fly to their places once those are laid out.
       .onAppear {
         game.framesNow = { [zones] in zones.cardFrames }
-        zones.onPlace = { [weak game] card, frame in game?.placed(card, at: frame) }
+        // (Weakly: the game holds the zones, through framesNow.)
+        zones.onPlace = { [weak game = self.game] card, frame in game?.placed(card, at: frame) }
       }
       .environment(\.dropZones, zones)
       // What's felt: picking an element, picking up a card, each of your moves, each of Midstrike's, a round's end.
