@@ -1184,6 +1184,33 @@ public struct CommandAnswer: Codable, Equatable, Sendable {
   }
 }
 
+public struct Drag: Codable, Equatable, Sendable {
+  public var from: String
+  public var to: String
+
+  public init(from: String, to: String) {
+    self.from = from
+    self.to = to
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case from
+    case to
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    from = try container.decode(String.self, forKey: .from)
+    to = try container.decode(String.self, forKey: .to)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(from, forKey: .from)
+    try container.encode(to, forKey: .to)
+  }
+}
+
 public enum FromApp: Codable, Equatable, Sendable {
   case client(FromAppClient)
   case close(FromAppClose)
@@ -1283,23 +1310,28 @@ public struct FromAppClose: Codable, Equatable, Sendable {
 
 public struct FromAppConfig: Codable, Equatable, Sendable {
   public var botDelayMs: Double
+  public var seed: String?
 
-  public init(botDelayMs: Double) {
+  public init(botDelayMs: Double, seed: String? = nil) {
     self.botDelayMs = botDelayMs
+    self.seed = seed
   }
 
   private enum CodingKeys: String, CodingKey {
     case botDelayMs
+    case seed
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     botDelayMs = try container.decode(Double.self, forKey: .botDelayMs)
+    seed = try container.decodeIfPresent(String.self, forKey: .seed)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(botDelayMs, forKey: .botDelayMs)
+    try container.encodeIfPresent(seed, forKey: .seed)
   }
 }
 
@@ -1505,14 +1537,16 @@ public struct Option: Codable, Equatable, Sendable {
   public var command: Command
   public var refs: [String]
   public var label: String
+  public var drags: [Drag]?
   public var cards: [CardId]
   public var starts: [String]?
   public var groups: [String]?
 
-  public init(command: Command, refs: [String], label: String, cards: [CardId], starts: [String]? = nil, groups: [String]? = nil) {
+  public init(command: Command, refs: [String], label: String, drags: [Drag]? = nil, cards: [CardId], starts: [String]? = nil, groups: [String]? = nil) {
     self.command = command
     self.refs = refs
     self.label = label
+    self.drags = drags
     self.cards = cards
     self.starts = starts
     self.groups = groups
@@ -1522,6 +1556,7 @@ public struct Option: Codable, Equatable, Sendable {
     case command
     case refs
     case label
+    case drags
     case cards
     case starts
     case groups
@@ -1532,6 +1567,7 @@ public struct Option: Codable, Equatable, Sendable {
     command = try container.decode(Command.self, forKey: .command)
     refs = try container.decode([String].self, forKey: .refs)
     label = try container.decode(String.self, forKey: .label)
+    drags = try container.decodeIfPresent([Drag].self, forKey: .drags)
     cards = try container.decode([CardId].self, forKey: .cards)
     starts = try container.decodeIfPresent([String].self, forKey: .starts)
     groups = try container.decodeIfPresent([String].self, forKey: .groups)
@@ -1542,6 +1578,7 @@ public struct Option: Codable, Equatable, Sendable {
     try container.encode(command, forKey: .command)
     try container.encode(refs, forKey: .refs)
     try container.encode(label, forKey: .label)
+    try container.encodeIfPresent(drags, forKey: .drags)
     try container.encode(cards, forKey: .cards)
     try container.encodeIfPresent(starts, forKey: .starts)
     try container.encodeIfPresent(groups, forKey: .groups)

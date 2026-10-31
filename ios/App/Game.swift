@@ -37,6 +37,8 @@ final class Game {
   private(set) var picked: [String] = []
   /// The card being dragged, if one is.
   private(set) var dragging: Drag?
+  /// A card let go where it makes a move, waiting there for the move's position (it glides from there to its place).
+  private(set) var landing: Drag?
   /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
   private(set) var movesMade = 0
   private(set) var botMoves = 0
@@ -110,6 +112,7 @@ final class Game {
     table = nil
     picked = []
     dragging = nil
+    landing = nil
     preview = nil
     feed = []
     awaitingMine = false
@@ -138,102 +141,51 @@ final class Game {
 
   // MARK: Dragging
 
-  /// Something picked up from the table, and where it can go: the elements that make a move with it (`targets`; a move
-  /// for each of `direct`'s, as it is, the others as touching it then them would), and whether letting it go in
-  /// `aloneZone` makes a move on its own (`alone`, in `aloneWords`).
+  /// Something picked up from the table, and the moves letting it go makes: by where (an element, or "table" for the
+  /// table's middle, "hand" for your hand), as the options declare their drags (web/src/game/options.ts): the app
+  /// knows nothing of what any card does.
   struct Drag: Equatable {
     let ref: String
     let card: CardId?
     var location: CGPoint
-    let targets: Set<String>
-    let direct: [String: Command]
-    let alone: Command?
-    let aloneZone: String
-    let aloneWords: String
+    let moves: [String: [Option]]
+    var targets: Set<String> { Set(moves.keys) }
   }
 
-  /// What can be picked up is what moves: a card from your hand, to where it's played; a card leaving your keep
-  /// (Blunder onto a pile, Shackles to the discard); a pile, to your hand to draw from it (yours; another with
-  /// Sanction), or onto another pile to swap them (Juggling). Cards that stay put when used (Sanction, Juggling,
-  /// Acquisition, Tithes) are touched, not carried.
-  private func plan(_ ref: String) -> (targets: Set<String>, direct: [String: Command], alone: Command?, zone: String, words: String)? {
-    if ref.hasPrefix("hand:") {
-      guard Choosing.touchable(options, []).contains(ref) else { return nil }
-      let moves = Choosing.narrow(options, [ref])
-      return (Set(moves.flatMap(\.refs)).subtracting([ref]), [:], moves.first { $0.refs == [ref] }?.command, "middle", "Let go here to play it")
-    }
-    if ref.hasPrefix("keepcard:") {
-      let moves = Choosing.narrow(options, [ref]).filter { option in
-        switch Self.ability(option.command) {
-        case .blunder, .shackles: true
-        default: false
-        }
-      }
-      guard !moves.isEmpty else { return nil }
-      let alone = moves.first { $0.refs == [ref] }?.command
-      return (Set(moves.flatMap(\.refs)).subtracting([ref]), [:], alone, "middle", "Let go here to discard it")
-    }
-    if ref.hasPrefix("pile:"), let pile = Int(ref.dropFirst(5)) {
-      var draw: Command?
-      var sanction: Command?
-      var swaps: [String: Command] = [:]
-      for option in options {
-        if case .answer(let answer) = option.command, case .action(let action) = answer.answer, case .draw = action.choice, pile == me {
-          draw = option.command
-        }
-        switch Self.ability(option.command) {
-        case .sanction(let s) where s.from == pile: sanction = option.command
-        case .juggling(let j) where j.piles.contains(pile):
-          if let other = j.piles.first(where: { $0 != pile }) { swaps["pile:\(other)"] = option.command }
-        default: break
-        }
-      }
-      let alone = draw ?? sanction
-      guard alone != nil || !swaps.isEmpty else { return nil }
-      return (Set(swaps.keys), swaps, alone, "hand", draw != nil ? "Let go to draw" : "Let go to draw (Sanction)")
-    }
-    return nil
-  }
-
-  /// A move's ability, if it uses one.
-  private static func ability(_ command: Command) -> ActionChoiceAbility? {
-    guard case .answer(let answer) = command, case .action(let action) = answer.answer, case .ability(let ability) = action.choice else { return nil }
-    return ability
-  }
-
-  /// Whether `ref` can be picked up now (see `plan`). A drag starts afresh, whatever was touched.
-  func canDrag(_ ref: String) -> Bool { plan(ref) != nil }
+  /// Whether `ref` can be picked up now: some move is made by carrying it.
+  func canDrag(_ ref: String) -> Bool { options.contains { $0.drags?.contains { $0.from == ref } == true } }
 
   func startDrag(_ ref: String, card: CardId?, at location: CGPoint) {
-    guard let plan = plan(ref) else { return }
+    var moves: [String: [Option]] = [:]
+    for option in options {
+      for drag in option.drags ?? [] where drag.from == ref { moves[drag.to, default: []].append(option) }
+    }
+    guard !moves.isEmpty else { return }
     picked = []
-    dragging = Drag(
-      ref: ref, card: ref.hasPrefix("pile:") ? nil : card, location: location, targets: plan.targets, direct: plan.direct,
-      alone: plan.alone, aloneZone: plan.zone, aloneWords: plan.words)
+    dragging = Drag(ref: ref, card: ref.hasPrefix("pile:") ? nil : card, location: location, moves: moves)
+  }
+
+  /// What letting the carried thing go at `place` does, in words: its move, or how many there are to choose from.
+  func dropWords(_ place: String) -> String? {
+    guard let moves = dragging?.moves[place] else { return nil }
+    return moves.count == 1 ? moves[0].label : "\(moves.count) moves: let go to choose"
   }
 
   func moveDrag(to location: CGPoint) { dragging?.location = location }
 
-  /// The card let go over `target` (an element, "middle" for the middle of the table, or nil for nowhere): the move
-  /// it makes, as touching the card then the target would; the rest of the move picked if it needs more. Returns
-  /// whether it went somewhere.
+  /// The thing let go over `target` (an element, "table", "hand", or nil for nowhere): the move it makes there; if
+  /// several, the moves left to choose from in the panel (as touching the thing, then the target, would leave them).
+  /// Returns whether it went somewhere.
   @discardableResult
   func endDrag(on target: String?) -> Bool {
     guard let drag = dragging else { return false }
     dragging = nil
-    if target == drag.aloneZone, let alone = drag.alone {
-      send(alone)
-      return true
-    }
-    guard let target, drag.targets.contains(target) else { return false }
-    if let move = drag.direct[target] {
-      send(move)
-      return true
-    }
-    switch Choosing.touch(options, [drag.ref], target) {
-    case .send(let command): send(command)
-    case .pick(let next): picked = next
-    case .ignore: return false
+    guard let target, let moves = drag.moves[target] else { return false }
+    if moves.count == 1 {
+      landing = drag
+      send(moves[0].command)
+    } else {
+      picked = [drag.ref] + (target == "table" || target == "hand" ? [] : [target])
     }
     return true
   }
@@ -306,6 +258,7 @@ final class Game {
           dragging = nil
         }
         game = message
+        landing = nil
         options = server.options ?? []
         lines = server.lines ?? []
         table = server.table

@@ -10,6 +10,7 @@ import { formatReplayLog } from '../../packages/engine/src/index.ts';
 import { replayFileName } from '../../packages/protocol/src/index.ts';
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { midstrikeHost } from '../../packages/learn/demo/host.ts';
+import { seeded } from '../../packages/learn/demo/random.ts';
 import { setSearchMode, setWorlds } from '../../packages/learn/demo/search-bot.ts';
 import { cardCatalog, coreBridge, type ToApp } from './bridge.ts';
 import { LocalServer } from './local-server.ts';
@@ -48,6 +49,10 @@ async function boot(): Promise<void> {
   setSearchMode('best-q');
   setWorlds(WORLDS.hard);
   let botDelayMs = 900;
+  // For tests (FromApp config's seed): every game dealt the same, and the server's chance (the seating, Midstrike's
+  // draws from its network) drawn from that seed.
+  let fixedSeed: string | null = null;
+  let fixedRandom: (() => number) | null = null;
   const host = midstrikeHost({
     name: 'Midstrike',
     search: { hard: capped(search, WORLDS.hard), medium: capped(search, WORLDS.medium) },
@@ -56,8 +61,8 @@ async function boot(): Promise<void> {
   const server = new LocalServer({
     token: () => randomString(18),
     id: () => randomString(6),
-    seed: () => [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, '0')).join(''),
-    random: Math.random,
+    seed: () => fixedSeed ?? [...crypto.getRandomValues(new Uint8Array(12))].map((b) => b.toString(16).padStart(2, '0')).join(''),
+    random: () => (fixedRandom ?? Math.random)(),
     now: Date.now,
     // Each game's replay, after every move, for the app to keep (it can be replayed, or looked into, later).
     saveReplay: (code, startedAt, log) => post({ t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log) }),
@@ -75,7 +80,13 @@ async function boot(): Promise<void> {
   });
 
   (window as unknown as { keepsCore: { receive(json: string): void } }).keepsCore = {
-    receive: coreBridge(server, post, (ms) => (botDelayMs = ms)),
+    receive: coreBridge(server, post, (ms, seed) => {
+      botDelayMs = ms;
+      if (seed !== undefined) {
+        fixedSeed = seed;
+        fixedRandom = seeded([...seed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261), 1);
+      }
+    }),
   };
   post({ t: 'ready', workers: search.size, network: `${policy.info.run} ${policy.info.step} (${policy.info.fingerprint})`, cards: cardCatalog() });
 }

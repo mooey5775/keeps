@@ -46,10 +46,17 @@ describe('options', () => {
     expect(clicks(view, ['hand:hocus-pocus'])).toBe('Play Hocus Pocus');
   });
 
-  it('does not auto-send when a card could also be copied by Joker', () => {
+  it('plays a card on its own at a click though Joker could copy it: copying starts at Joker', () => {
     const view = viewFor(buildPosition({ hands: { 0: ['hocus-pocus', 'joker'] }, turn: 0 }), 0);
-    expect(clicks(view, ['hand:hocus-pocus'])).toEqual(['hand:hocus-pocus']);
+    expect(clicks(view, ['hand:hocus-pocus'])).toBe('Play Hocus Pocus');
     expect(clicks(view, ['hand:joker', 'hand:hocus-pocus'])).toBe('Play Joker as Hocus Pocus');
+  });
+
+  it('draws at a click on your pile though Sanction could draw from it too: Sanction starts at Sanction', () => {
+    const view = viewFor(buildPosition({ keeps: { 0: ['sanction'] }, piles: { 0: ['chalice'], 1: ['dagger'] }, turn: 0 }), 0);
+    expect(clicks(view, ['pile:0'])).toBe('Draw from your pile');
+    expect(clicks(view, ['keepcard:0:0', 'pile:0'])).toBe('Sanction: draw from your pile (1 card)');
+    expect(clicks(view, ['keepcard:0:0', 'pile:1'])).toBe("Sanction: draw from Bo's pile (1 card)");
   });
 
   it('uses abilities from the keep: Juggling picks two piles', () => {
@@ -87,6 +94,49 @@ describe('options', () => {
       "Put Juggling into Cy's keep",
       "Put Juggling into Di's keep",
     ]);
+  });
+});
+
+describe('drags', () => {
+  /** The moves made by carrying `from` to `to`, by label. */
+  const carrying = (view: PlayerView, from: Ref, to: string) =>
+    optionsOf(view)
+      .filter((o) => o.drags?.some((d) => d.from === from && d.to === to))
+      .map((o) => o.label);
+
+  it('carry what moves: a card from your hand to where it is played, your pile to your hand', () => {
+    const view = viewFor(buildPosition({ hands: { 0: ['dagger', 'hocus-pocus'] }, piles: { 0: ['chalice'] }, turn: 0 }), 0);
+    expect(carrying(view, 'hand:dagger', 'keep:2')).toEqual(["Play Dagger into Cy's keep"]);
+    expect(carrying(view, 'hand:hocus-pocus', 'table')).toEqual(['Play Hocus Pocus']);
+    expect(carrying(view, 'pile:0', 'hand')).toEqual(['Draw from your pile']);
+  });
+
+  it('carry piles for Sanction and Juggling, and a card leaving the keep for Blunder; never the card used where it lies', () => {
+    const view = viewFor(
+      buildPosition({ keeps: { 0: ['sanction', 'juggling'] }, piles: { 0: ['medallion'], 1: ['chalice'], 3: ['dagger'] }, turn: 0 }),
+      0,
+    );
+    expect(carrying(view, 'pile:1', 'hand')).toEqual(["Sanction: draw from Bo's pile (1 card)"]);
+    // Your own pile to your hand is only the plain draw (not Sanction's draw from it).
+    expect(carrying(view, 'pile:0', 'hand')).toEqual(['Draw from your pile']);
+    expect(carrying(view, 'pile:1', 'pile:3')).toEqual(["Juggling: swap Bo's pile (1 card) with Di's pile (1 card)"]);
+    expect(carrying(view, 'pile:3', 'pile:1')).toEqual(["Juggling: swap Bo's pile (1 card) with Di's pile (1 card)"]);
+    // The cards used where they lie aren't carried.
+    expect(optionsOf(view).flatMap((o) => o.drags ?? []).filter((d) => d.from.startsWith('keepcard:'))).toEqual([]);
+    const blunder = viewFor(buildPosition({ keeps: { 0: ['blunder'] }, turn: 0 }), 0);
+    expect(carrying(blunder, 'keepcard:0:0', 'pile:2')).toEqual(['Blunder (2 actions): put it face up on Cy\'s pile']);
+  });
+
+  it('every carry is a move the table can also make by touching: its ends are among the move\'s elements', () => {
+    for (const puzzle of PUZZLES) {
+      const view = viewFor(puzzleState(puzzle), YOU);
+      for (const o of optionsOf(view)) {
+        for (const d of o.drags ?? []) {
+          expect(o.refs).toContain(d.from);
+          if (d.to !== 'table' && d.to !== 'hand') expect(o.refs).toContain(d.to);
+        }
+      }
+    }
   });
 });
 

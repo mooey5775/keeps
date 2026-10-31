@@ -317,6 +317,8 @@ struct LogSheet: View {
       .navigationBarTitleDisplayMode(.inline)
     }
     .presentationDetents([.medium, .large])
+    // A swipe scrolls the log, at either height (not the sheet's height).
+    .presentationContentInteraction(.scrolls)
     .environment(\.colorScheme, .dark)
   }
 }
@@ -331,12 +333,13 @@ struct DiscardSheet: View {
       ScrollView {
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 76), spacing: 10)], spacing: 10) {
           ForEach(Array(cards.enumerated()), id: \.offset) { _, card in
-            CardView(book: game.book, id: card, width: 76)
+            CardView(book: game.book, id: card, width: 76).previewable(card, in: game)
           }
         }
         .padding()
       }
       .background(Theme.background)
+      .cardPreviews(game)
       .navigationTitle("Discard (\(cards.count))")
       .navigationBarTitleDisplayMode(.inline)
     }

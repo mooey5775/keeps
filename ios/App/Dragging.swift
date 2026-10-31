@@ -31,7 +31,7 @@ struct Fan: Layout {
 /// Where each table element is (in the table's coordinate space), for finding what a dragged card is let go over.
 /// Not observed: the frames change as the table lays out, and nothing is drawn from them.
 final class DropZones {
-  static let space = "table"
+  static let space = "table-space"
   fileprivate var frames: [String: CGRect] = [:]
 
   /// The element under `point` among `refs` (the innermost, when one holds another: a card in a keep).

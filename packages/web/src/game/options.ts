@@ -18,6 +18,12 @@ import { abilityCost, acquisitionOrder, CARDS, rotatedFrom, rotatedTo, type Card
 // Cards on display for a decision (the pile you're looking through, the
 // discard, revealed hands) are listed by `shownCards`; the table shows them at
 // readable size, and the ones that are choices carry their own refs.
+//
+// A move can also say how it's made by carrying something across the table
+// (`drags`): what's picked up is what moves (a card from your hand to where
+// it's played, a card leaving your keep, a pile to your hand to draw from it),
+// so a card used where it lies (Sanction, Acquisition) is touched, not carried.
+// Tables that drag (the app's) need no rules of their own: only these.
 
 export type Ref =
   | `hand:${CardId}`
@@ -29,10 +35,24 @@ export type Ref =
   /** The n-th card in `shownCards` (one with no other place on the table). */
   | `shown:${number}`;
 
+/**
+ * Where a carried thing is let go: an element, the table's middle (`table`: a card played on its own, or discarded),
+ * or your hand (`hand`: a card drawn into it).
+ */
+export type DropTarget = Ref | 'table' | 'hand';
+
+/** A way to make a move by carrying something: pick up `from`, let it go on `to`. */
+export interface Drag {
+  from: Ref;
+  to: DropTarget;
+}
+
 export interface Option {
   command: Command;
   refs: Ref[];
   label: string;
+  /** How the move is made by carrying something (none: only by touching). */
+  drags?: Drag[];
   /** Cards to picture on the option's button. */
   cards: CardId[];
   /** Elements that can begin a selection (default: the first ref). Providence's two cards are equal. */
@@ -96,7 +116,13 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
         const choice = answer.choice;
         switch (choice.action) {
           case 'draw':
-            return { command, refs: me === null ? [] : [`pile:${me}`], label: 'Draw from your pile', cards: [] };
+            return {
+              command,
+              refs: me === null ? [] : [`pile:${me}`],
+              label: 'Draw from your pile',
+              cards: [],
+              ...(me === null ? {} : { drags: [{ from: `pile:${me}`, to: 'hand' }] }),
+            };
           case 'pass':
             return { command, refs: [], label: 'Pass (skip Last Laugh’s action)', cards: [] };
           case 'play':
@@ -107,6 +133,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 label: `Play Joker as ${name(choice.copy)}`,
                 cards: ['joker', choice.copy],
                 groups: ['Play Joker…'],
+                drags: [{ from: `hand:${choice.card}`, to: `hand:${choice.copy}` }],
               };
             }
             if (choice.target !== undefined) {
@@ -116,9 +143,16 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 label: `Play ${name(choice.card)} into ${names.possessive(choice.target)} keep`,
                 cards: [choice.card],
                 groups: [`Play ${name(choice.card)}…`],
+                drags: [{ from: `hand:${choice.card}`, to: `keep:${choice.target}` }],
               };
             }
-            return { command, refs: [`hand:${choice.card}`], label: `Play ${name(choice.card)}`, cards: [choice.card] };
+            return {
+              command,
+              refs: [`hand:${choice.card}`],
+              label: `Play ${name(choice.card)}`,
+              cards: [choice.card],
+              drags: [{ from: `hand:${choice.card}`, to: 'table' }],
+            };
           case 'ability': {
             const source = me === null ? [] : abilityRef(view, me, choice.card);
             switch (choice.card) {
@@ -129,6 +163,11 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                   label: `Juggling: swap ${pile(choice.piles[0])} with ${pile(choice.piles[1])}`,
                   cards: ['juggling'],
                   groups: ['Juggling: swap two piles…', `Juggling: swap ${pileOf(choice.piles[0])} with…`],
+                  // Either pile onto the other.
+                  drags: [
+                    { from: `pile:${choice.piles[0]}`, to: `pile:${choice.piles[1]}` },
+                    { from: `pile:${choice.piles[1]}`, to: `pile:${choice.piles[0]}` },
+                  ],
                 };
               case 'sanction':
                 return {
@@ -137,6 +176,8 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                   label: `Sanction: draw from ${pile(choice.from)}`,
                   cards: ['sanction'],
                   groups: ['Sanction: draw from any pile…'],
+                  // Your own pile carried to your hand is a plain draw.
+                  ...(choice.from === me ? {} : { drags: [{ from: `pile:${choice.from}` as const, to: 'hand' as const }] }),
                 };
               case 'acquisition': {
                 // Name the piles: "left" and "right" mean little when the seats aren't
@@ -151,7 +192,13 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                 };
               }
               case 'shackles':
-                return { command, refs: source, label: 'Discard Shackles from your keep', cards: ['shackles'] };
+                return {
+                  command,
+                  refs: source,
+                  label: 'Discard Shackles from your keep',
+                  cards: ['shackles'],
+                  drags: source.map((from) => ({ from, to: 'table' as const })),
+                };
               case 'tithes':
                 return { command, refs: source, label: 'Tithes: discard your Coin cards and reorder your pile', cards: ['tithes'] };
               case 'blunder':
@@ -161,6 +208,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
                   label: `Blunder (${plural(abilityCost(choice), 'action')}): put it face up on ${pileOf(choice.pile)}`,
                   cards: ['blunder'],
                   groups: [`Blunder (${plural(abilityCost(choice), 'action')}): put it on a pile…`],
+                  drags: source.map((from) => ({ from, to: `pile:${choice.pile}` as const })),
                 };
               default:
                 return choice satisfies never;
@@ -261,8 +309,16 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
           label: `Take ${name(answer.card)} from ${names.possessive(answer.seat)} hand`,
           cards: [answer.card],
         };
-      case 'give-card':
-        return { command, refs: [`hand:${answer.card}`], label: `Give ${name(answer.card)}`, cards: [answer.card] };
+      case 'give-card': {
+        const to = prompt?.kind === 'give-card' ? prompt.to : null;
+        return {
+          command,
+          refs: [`hand:${answer.card}`],
+          label: `Give ${name(answer.card)}`,
+          cards: [answer.card],
+          ...(to === null ? {} : { drags: [{ from: `hand:${answer.card}`, to: `player:${to}` }] }),
+        };
+      }
       case 'joker-copy':
         return { command, refs: [`hand:${answer.card}`], label: `Joker copies ${name(answer.card)}`, cards: [answer.card] };
       case 'claim-pile': {
@@ -277,6 +333,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
           label: `Hide ${name(answer.card)} face down in ${names.possessive(answer.target)} keep`,
           cards: [answer.card],
           groups: [`Hide ${name(answer.card)}…`],
+          drags: [{ from: `hand:${answer.card}`, to: `keep:${answer.target}` }],
         };
       case 'reveal-window':
         return { command, refs: [], label: answer.reveal ? 'Reveal the face-down card' : 'Keep it hidden', cards: [] };
@@ -387,6 +444,11 @@ export type ClickResult =
 /**
  * Handles a click on a table element. Sends a command once exactly one option
  * remains and all its elements have been clicked; otherwise extends the picks.
+ * A first click also sends the one option it completes when that option starts
+ * at the clicked element and every other option involving it starts elsewhere:
+ * your pile draws, though Sanction could draw from it too (Sanction's options
+ * start at Sanction); a card played on its own is played, though Joker could
+ * copy it (Joker's start at Joker).
  */
 export function click(options: Option[], picked: Ref[], ref: Ref): ClickResult {
   if (picked.includes(ref)) return { kind: 'pick', picked: picked.filter((r) => r !== ref) };
@@ -400,6 +462,11 @@ export function click(options: Option[], picked: Ref[], ref: Ref): ClickResult {
   }
   const [only] = remaining;
   if (remaining.length === 1 && only!.refs.every((r) => next.includes(r))) return { kind: 'send', command: only!.command };
+  if (next.length === 1) {
+    const startingHere = remaining.filter((o) => (o.starts ?? o.refs.slice(0, 1)).includes(ref));
+    const [move] = startingHere;
+    if (startingHere.length === 1 && move!.refs.every((r) => next.includes(r))) return { kind: 'send', command: move!.command };
+  }
   return { kind: 'pick', picked: next };
 }
 

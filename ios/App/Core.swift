@@ -60,9 +60,10 @@ final class Core: NSObject, WKScriptMessageHandler {
     connections[id] = nil
   }
 
-  /// How long Midstrike waits before each move, so a person can follow it.
-  func configure(botDelayMs: Int) {
-    deliver(.config(FromAppConfig(botDelayMs: Double(botDelayMs))))
+  /// How long Midstrike waits before each move, so a person can follow it; and, for tests, a seed that makes every
+  /// game the same.
+  func configure(botDelayMs: Int, seed: String? = nil) {
+    deliver(.config(FromAppConfig(botDelayMs: Double(botDelayMs), seed: seed)))
   }
 
   private func deliver(_ message: FromApp) {

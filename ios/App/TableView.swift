@@ -33,6 +33,8 @@ struct TableView: View {
           .padding(.bottom, 8)
         }
         .scrollIndicators(.hidden)
+        // Only when the table doesn't fit.
+        .scrollBounceBehavior(.basedOnSize)
         .background(Theme.background.ignoresSafeArea())
         // Your hand and your choices stay in view, whatever the table above them needs.
         .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -44,23 +46,25 @@ struct TableView: View {
           }
           .background(alignment: .bottom) { Theme.background.ignoresSafeArea() }
         }
-        // While a card is carried, the table stays put under it.
-        .scrollDisabled(game.dragging != nil)
+        // While a card is carried or shown large, the table stays put under it.
+        .scrollDisabled(game.dragging != nil || game.preview != nil)
         .overlay(alignment: .topLeading) {
-          if let drag = game.dragging {
-            CardView(book: game.book, id: drag.card, width: large, touch: .picked)
+          // The card carried, or let go and waiting for its move: the card's own place meanwhile (it glides from here).
+          if let drag = game.dragging ?? game.landing {
+            CardView(book: game.book, id: drag.card, width: large, touch: game.dragging == nil ? .none : .picked)
               .scaleEffect(1.08)
               .rotationEffect(.degrees(-3))
+              .modifier(Glide(id: drag.card, space: cards))
               .position(drag.location)
               .allowsHitTesting(false)
+              // Gone at once when the card reaches its place: the card there glides from here; this copy mustn't
+              // glide (or fade) too, or a ghost of it flies off.
+              .transition(.asymmetric(insertion: .identity, removal: .opacity.animation(.linear(duration: 0.01))))
           }
         }
         .coordinateSpace(.named(DropZones.space))
       }
-      .overlay {
-        if let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
-      }
-      .animation(.snappy(duration: 0.2), value: game.preview)
+      .cardPreviews(game)
       .environment(\.dropZones, zones)
       .environment(\.cardSpace, cards)
       // What's felt: picking an element, picking up a card, each of your moves, each of Midstrike's, a round's end.
@@ -123,7 +127,8 @@ struct TableView: View {
   /// The ghosts' piles either side of the discard: the middle of the table, where a card that makes a move on its own
   /// is let go to play it.
   private func center(_ view: PlayerView, _ table: TableText, width: CGFloat) -> some View {
-    let open = game.dragging.map { $0.alone != nil && $0.aloneZone == "middle" } ?? false
+    let words = game.dropWords("table")
+    let open = words != nil
     return HStack(alignment: .top) {
       PileStack(game: game, view: view, seat: game.seat(at: 1), width: width, caption: table.names[game.seat(at: 1)])
       Spacer()
@@ -132,6 +137,7 @@ struct TableView: View {
           CardView(book: game.book, id: top, width: width * 1.1)
             .matchedGeometryEffect(id: top, in: cards)
             .onTapGesture { showDiscard = true }
+            .previewable(top, in: game)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Shows the discard pile")
         } else {
@@ -150,18 +156,19 @@ struct TableView: View {
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(open ? Theme.gold : .clear, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])) }
     }
     .overlay(alignment: .bottom) {
-      if open, let words = game.dragging?.aloneWords { Text(words).font(Theme.text(.caption)).foregroundStyle(Theme.goldBright).offset(y: 14) }
+      if let words { Text(words).font(Theme.text(.caption)).foregroundStyle(Theme.goldBright).lineLimit(1).offset(y: 14) }
     }
-    .dropZone("middle")
-    .accessibilityIdentifier("middle")
+    .dropZone("table")
+    .accessibilityIdentifier("table")
   }
 
   /// Your hand: also where your pile's top is let go, to draw it.
   private func hand(_ view: PlayerView, width: CGFloat) -> some View {
     let cards = view.hands[game.me].cards ?? []
-    let open = game.dragging.map { $0.alone != nil && $0.aloneZone == "hand" } ?? false
+    let words = game.dropWords("hand")
+    let open = words != nil
     return VStack(alignment: .leading, spacing: 0) {
-      Text(open ? (game.dragging?.aloneWords ?? "") : "Your hand").font(Theme.text(.caption)).foregroundStyle(open ? Theme.goldBright : Theme.muted)
+      Text(words ?? "Your hand").font(Theme.text(.caption)).foregroundStyle(open ? Theme.goldBright : Theme.muted).lineLimit(1)
       Fan(spacing: 8) {
         ForEach(cards, id: \.self) { card in
           TableCard(game: game, id: card, ref: "hand:\(card.rawValue)", width: width)
@@ -196,56 +203,97 @@ struct TableCard: View {
   var placed = true
   @Environment(\.dropZones) private var zones
   @Environment(\.cardSpace) private var space
-  /// Whether a finger is carrying this card. The system resets it however the drag ends, cancelled included (when it
-  /// calls no end handler): a carry still showing then is put away.
-  @GestureState private var carrying = false
-  /// How long a finger stays still before the card is shown large, and how far it may wander meanwhile.
-  private static let hold = 0.3
+  /// How far a finger moves before it's carrying the card.
   private static let slack: CGFloat = 8
 
   var body: some View {
     let touch = ref.map(game.touchability) ?? .none
-    let lifted = ref != nil && game.dragging?.ref == ref
+    // Carried (or let go and waiting for its move): the copy over the table is the card meanwhile; this one stays as a
+    // ghost of where it came from, out of the glide.
+    let lifted = ref != nil && (game.dragging?.ref == ref || game.landing?.ref == ref)
     CardView(book: game.book, id: id, faceDown: faceDown, width: width, touch: touch)
-      .opacity(lifted ? 0.25 : 1)
-      .modifier(Glide(id: placed ? id : nil, space: space))
+      .opacity(lifted ? (game.landing == nil ? 0.25 : 0) : 1)
+      .modifier(Glide(id: placed && !lifted ? id : nil, space: space))
       .modifier(DropZoneIf(ref: placed ? ref : nil))
       // A touch chooses it; a hold shows it until the finger lifts (and does nothing else); a carry takes it where it goes.
       .onTapGesture { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
-      .onLongPressGesture(minimumDuration: Self.hold, maximumDistance: Self.slack) {
-        if let id { game.preview = id }
-      } onPressingChanged: { pressing in
-        if !pressing, let id, game.preview == id { withAnimation(.easeOut(duration: 0.15)) { game.preview = nil } }
-      }
+      .previewable(id, in: game)
       // Only a card that can be picked up listens for a carry: on the others (those shown for a choice, in a row that
       // scrolls), a swipe has to reach the scrolling.
-      .simultaneousGesture(carried, including: ref.map(game.canDrag) == true ? .all : .subviews)
-      .onChange(of: carrying) { _, now in
-        if !now, let ref, game.dragging?.ref == ref { game.endDrag(on: nil) }
-      }
+      .modifier(Carrying(enabled: ref.map(game.canDrag) == true, game: game, moved: carry, ended: drop))
       .accessibilityIdentifier(ref ?? "")
       .accessibilityAddTraits(touch == .none ? [] : .isButton)
       .accessibilityAction { if let ref, touch != .none { game.touch(ref) } }
       .accessibilityAction(named: "Show the card") { if let id { game.preview = id } }
   }
 
-  /// Picking the card up and letting it go somewhere (not while it's shown large).
-  private var carried: some Gesture {
-    DragGesture(minimumDistance: Self.slack, coordinateSpace: .named(DropZones.space))
-      .updating($carrying) { _, state, _ in state = true }
-      .onChanged { drag in
-        guard let ref, game.preview == nil, game.canDrag(ref) else { return }
-        if game.dragging == nil {
-          game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
-        } else {
-          game.moveDrag(to: drag.location)
-        }
-      }
-      .onEnded { drag in
-        guard let carried = game.dragging, carried.ref == ref else { return }
-        let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
-        withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
-      }
+  /// The card carried to `location` (in the table's space): picked up, the first time.
+  private func carry(to location: CGPoint) {
+    guard let ref, game.preview == nil else { return }
+    if game.dragging == nil {
+      game.startDrag(ref, card: faceDown ? nil : id, at: location)
+    } else {
+      game.moveDrag(to: location)
+    }
+  }
+
+  /// The card let go at `location` (nil: the carry was cancelled, and it goes back).
+  private func drop(at location: CGPoint?) {
+    guard let carried = game.dragging, carried.ref == ref else { return }
+    let target = location.flatMap { zones.element(at: $0, among: carried.targets) }
+    withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
+  }
+}
+
+/// Carrying a card: UIKit's pan, so that it and the hold that shows a card (HoldToShow, also UIKit's) are told apart by
+/// UIKit's own rules: a carry never begins while the card is shown, and moving before the hold's time ends the hold.
+private struct Carrying: ViewModifier {
+  let enabled: Bool
+  let game: Game
+  let moved: (CGPoint) -> Void
+  let ended: (CGPoint?) -> Void
+
+  func body(content: Content) -> some View {
+    if enabled {
+      content.gesture(Carry(allowed: { game.preview == nil }, moved: moved, ended: ended))
+    } else {
+      content
+    }
+  }
+}
+
+private struct Carry: UIGestureRecognizerRepresentable {
+  let allowed: () -> Bool
+  let moved: (CGPoint) -> Void
+  let ended: (CGPoint?) -> Void
+
+  func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator(allowed: allowed) }
+
+  func makeUIGestureRecognizer(context: Context) -> UIPanGestureRecognizer {
+    let pan = UIPanGestureRecognizer()
+    pan.maximumNumberOfTouches = 1
+    pan.delegate = context.coordinator
+    return pan
+  }
+
+  func updateUIGestureRecognizer(_ pan: UIPanGestureRecognizer, context: Context) {
+    context.coordinator.allowed = allowed
+  }
+
+  func handleUIGestureRecognizerAction(_ pan: UIPanGestureRecognizer, context: Context) {
+    let location = context.converter.location(in: .named(DropZones.space))
+    switch pan.state {
+    case .began, .changed: moved(location)
+    case .ended: ended(location)
+    case .cancelled, .failed: ended(nil)
+    default: break
+    }
+  }
+
+  final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    var allowed: () -> Bool
+    init(allowed: @escaping () -> Bool) { self.allowed = allowed }
+    func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { allowed() }
   }
 }
 
@@ -495,5 +543,56 @@ struct CardPreview: View {
     .allowsHitTesting(false)
     .accessibilityElement(children: .combine)
     .accessibilityLabel("\(book.name(id)): \(book.text(id))")
+  }
+}
+
+extension View {
+  /// Held still a moment (three tenths of a second, the finger wandering no more than a little), the card shows large
+  /// until the finger lifts, wherever it moves meanwhile, and nothing else happens (see cardPreviews).
+  func previewable(_ id: CardId?, in game: Game) -> some View {
+    gesture(
+      HoldToShow(
+        began: { if let id { game.preview = id } },
+        ended: { if let id, game.preview == id { withAnimation(.easeOut(duration: 0.15)) { game.preview = nil } } }))
+  }
+
+  /// Shows the card being held (Game.preview) over this view: the table, or a sheet over it (which hides the table's).
+  func cardPreviews(_ game: Game) -> some View {
+    overlay {
+      if let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
+    }
+    .animation(.snappy(duration: 0.2), value: game.preview)
+  }
+}
+
+/// UIKit's long press: once it begins, it follows the finger until it lifts, however far it then moves (SwiftUI's ends
+/// when the finger wanders and a scroll view takes the touch). It works alongside the card's touch and carry, taking no
+/// touches from them; the table stops scrolling while a card is shown (TableView's scrollDisabled), before the finger
+/// can move.
+private struct HoldToShow: UIGestureRecognizerRepresentable {
+  let began: () -> Void
+  let ended: () -> Void
+
+  func makeCoordinator(converter: CoordinateSpaceConverter) -> Coordinator { Coordinator() }
+
+  func makeUIGestureRecognizer(context: Context) -> UILongPressGestureRecognizer {
+    let hold = UILongPressGestureRecognizer()
+    hold.minimumPressDuration = 0.3
+    hold.allowableMovement = 8
+    hold.cancelsTouchesInView = false
+    hold.delegate = context.coordinator
+    return hold
+  }
+
+  func handleUIGestureRecognizerAction(_ hold: UILongPressGestureRecognizer, context: Context) {
+    switch hold.state {
+    case .began: began()
+    case .ended, .cancelled, .failed: ended()
+    default: break
+    }
+  }
+
+  final class Coordinator: NSObject, UIGestureRecognizerDelegate {
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool { true }
   }
 }

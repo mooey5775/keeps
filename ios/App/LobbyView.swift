@@ -13,10 +13,15 @@ struct LobbyView: View {
     ZStack {
       // Touching anywhere else puts the keyboard away.
       Theme.background.ignoresSafeArea().onTapGesture { naming = false }
+      // The game's cards drifting down behind, a little veiled so the words stay clear.
+      FallingCards(book: game.book).ignoresSafeArea()
+      LinearGradient(colors: [Theme.background.opacity(0.35), Theme.background.opacity(0.7), Theme.background.opacity(0.35)], startPoint: .top, endPoint: .bottom)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
       VStack(spacing: 28) {
         Spacer()
         VStack(spacing: 6) {
-          Text("Keeps").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
+          Text("KEEPS").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
           Text("against Midstrike").font(Theme.text(.title3)).italic().foregroundStyle(Theme.muted)
         }
         VStack(alignment: .leading, spacing: 18) {

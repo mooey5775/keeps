@@ -14,8 +14,11 @@ export type FromApp =
   | { t: 'connect'; id: number }
   | { t: 'client'; id: number; message: ClientMessage }
   | { t: 'close'; id: number }
-  /** How long Midstrike waits before each move, so a person can follow it (0 for tests). */
-  | { t: 'config'; botDelayMs: number };
+  /**
+   * How long Midstrike waits before each move, so a person can follow it (0 for tests); and, for tests, a seed that
+   * makes every game the same (the deal, the seating, Midstrike's draws from its network).
+   */
+  | { t: 'config'; botDelayMs: number; seed?: string };
 
 /** A card as the app shows it: its name, its text, and its picture (a file in the app's cards folder). */
 export interface CardInfo {
@@ -59,10 +62,10 @@ export type ToApp =
 type Connection = { receive(m: ClientMessage): void; close(): void; events: TraceEvent[] };
 
 /**
- * The app's messages (JSON, FromApp) to `receive`; the core's to `post`. `configure`: the app's settings for Midstrike
- * (botDelayMs). A message that fails to be handled is posted back as `failed`.
+ * The app's messages (JSON, FromApp) to `receive`; the core's to `post`. `configure`: the app's settings (Midstrike's
+ * botDelayMs; a seed for tests). A message that fails to be handled is posted back as `failed`.
  */
-export function coreBridge(server: LocalServer, post: (m: ToApp) => void, configure: (botDelayMs: number) => void): (json: string) => void {
+export function coreBridge(server: LocalServer, post: (m: ToApp) => void, configure: (botDelayMs: number, seed?: string) => void): (json: string) => void {
   const connections = new Map<number, Connection>();
   const deliver = (id: number, message: ServerMessage) => {
     const connection = connections.get(id);
@@ -78,7 +81,7 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
   return (json: string) => {
     try {
       const m = JSON.parse(json) as FromApp;
-      if (m.t === 'config') configure(m.botDelayMs);
+      if (m.t === 'config') configure(m.botDelayMs, m.seed);
       else if (m.t === 'connect') connections.set(m.id, { ...server.connect((message) => deliver(m.id, message)), events: [] });
       else if (m.t === 'client') connections.get(m.id)?.receive(m.message);
       else if (m.t === 'close') {

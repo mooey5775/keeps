@@ -26,7 +26,9 @@ enum Choosing {
   }
 
   /// A touch on a table element. A move once exactly one option remains and all its elements have been touched;
-  /// otherwise the touched elements, this one added (or, if nothing involves them all, this one alone).
+  /// otherwise the touched elements, this one added (or, if nothing involves them all, this one alone). A first touch
+  /// also makes the one move it completes when that move starts at the touched element and every other move involving
+  /// it starts elsewhere (your pile draws, though Sanction could draw from it: Sanction's moves start at Sanction).
   static func touch(_ options: [Option], _ picked: [String], _ ref: String) -> Touch {
     if picked.contains(ref) { return .pick(picked.filter { $0 != ref }) }
     var next = picked + [ref]
@@ -37,6 +39,10 @@ enum Choosing {
       if remaining.isEmpty { return .ignore }
     }
     if remaining.count == 1, remaining[0].refs.allSatisfy(next.contains) { return .send(remaining[0].command) }
+    if next.count == 1 {
+      let startingHere = remaining.filter { ($0.starts ?? Array($0.refs.prefix(1))).contains(ref) }
+      if startingHere.count == 1, startingHere[0].refs.allSatisfy(next.contains) { return .send(startingHere[0].command) }
+    }
     return .pick(next)
   }
 

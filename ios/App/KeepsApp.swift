@@ -50,6 +50,8 @@ struct KeepsApp: App {
         status = "Self-test done"
         return
       }
+      // KEEPS_SEED (for tests): every game dealt the same.
+      if let seed = environment["KEEPS_SEED"] { core.configure(botDelayMs: 900, seed: seed) }
       let game = Game(core: core, book: CardBook(ready.cards))
       self.game = game
       // KEEPS_PLAY=easy:3[:12]: straight into a game (for screenshots and trying the table), your first 12 moves at random.
@@ -94,7 +96,7 @@ struct Splash: View {
     ZStack {
       Theme.background.ignoresSafeArea()
       VStack(spacing: 12) {
-        Text("Keeps").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
+        Text("KEEPS").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
         Text(status).font(Theme.text(.callout)).foregroundStyle(Theme.muted).multilineTextAlignment(.center)
       }
       .padding()
