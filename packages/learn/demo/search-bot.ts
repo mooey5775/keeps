@@ -152,7 +152,10 @@ export async function searchChoose(
   // seat training mode advises may well answer first), so the search keeps copies.
   const myLog = [...b.log];
   const belief = b.belief.clone();
-  const decision = new Decision(view, legalCommands(state, seat));
+  const legal = legalCommands(state, seat);
+  // (A decision with no moves would never complete below: a caller's mistake, said plainly.)
+  if (!legal.length) throw new Error(`searchChoose: seat ${seat} has no move to make`);
+  const decision = new Decision(view, legal);
   const first = decision.next([]);
   // Tithes' reorder lists no commands (any order of up to 12 cards is legal). The network orders the
   // pile one card at a time, each step a decision of its own: search each step in turn, the candidates

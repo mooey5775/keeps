@@ -18,6 +18,45 @@ Decisions (2026-10-21):
   the engine's reveal windows. Revealing while the opponent is deciding is not modelled, to keep one player acting
   at a time as OpenSpiel requires.
 
+## TODO (a running list)
+
+For the bot and its next training run; each with what it would take. (The iOS app's list is in ios/README.md.)
+
+- **Providence is sometimes missed.** The network plays it 16% of the time on average where it's playable, and under 1%
+  at three positions in four, and in game XDMY (2026-10-30) it missed a swap that won the round outright: only search
+  found it (100% against 78% for drawing), in the player's seat or in Midstrike's playouts of the player.
+  `packages/learn/analysis/providence.ts` is a benchmark for it: 327 self-play positions where Providence is playable
+  (`benchmarks/providence-positions.jsonl`), reference values from Midstrike's search at 1,024 worlds, from the
+  decider's information (`benchmarks/providence-reference-vrpo1-40000.jsonl`), and a scorer that rates any network
+  against them in seconds: `node providence.ts score benchmarks/providence-positions.jsonl
+  benchmarks/providence-reference-vrpo1-40000.jsonl <weights.bin>`. vrpo1 40,000 (2026-10-30):
+
+  | | Positions | vrpo1 40,000 |
+  |---|---|---|
+  | Providence clearly best (by 3+ points) | 27 (8%) | plays it 59% |
+  | Providence clearly worse | 257 (79%) | plays it 1.3% |
+  | Where it's best, the best pair | 27 | 59% |
+  | Expected loss of win chance a decision, Providence best | | 6.15 points |
+  | Expected loss of win chance a decision, elsewhere | | 1.52 points |
+
+  Mostly sound: rarely playing it is right, since it's clearly worse at four positions in five. The weakness is the
+  rare positions where it wins: missed two times in five, and then the wrong pair two times in five. Hold the next
+  trained network to it (the reference is the current network's search, so a much stronger network may want a new
+  one). Likely causes: the move is two choices (play it, then the pair), the first worth only what the best pair is;
+  the winning positions are rare.
+- **Network rollouts miss replies only search finds.** Midstrike's search plays its candidates out with the network on
+  both sides, so it overrates a move whose refutation the network doesn't see by instinct (XDMY: its Duplicity into the
+  player's keep rated 52%, but the network-played opponent in its playouts never answered with the Providence swap
+  that won). Possible remedies: search at key opponent decisions inside the playouts (costly), or a network that sees
+  more of these replies (the Providence item).
+- **Count sampler give-ups and the bot's fallbacks in production**, somewhere persistent: the console logs on Fly last
+  minutes. They'd have shown the seen-pile and Duplicity-reveal sampler failures before a hunt did.
+- **Analysis on the batched path.** Most analysis tools search on the CPU (`RolloutPool`, minutes a position for a big
+  search); with the network served on a GPU (`bot/keeps_bot/serve.py`, `SEARCH_INFERENCE=<socket>`) a few seconds.
+  providence.ts takes it (its reference ran on the laptop's RTX 5080 in about 25 minutes); the others don't yet.
+- The two belief items under Known limitations below (a pile seen then taken from unseen; "just taken" through a
+  Duplicity reveal): both change what the network sees, so they go in with the next training run.
+
 ## Known limitations
 
 - **The bot can't reveal a hidden Shackles to end the opponent's turn (C-14).** The official trick is: Duplicity's

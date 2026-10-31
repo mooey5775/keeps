@@ -12,6 +12,10 @@ One-off investigations that may be worth repeating. Each script's header says wh
 - `noise.ts`: how spread out each policy is (entropy, mass under 3%).
 - `juggling.ts`: how a network uses Juggling in self-play.
 
+**Benchmarks** (fixed positions and reference values in `benchmarks/`, so any network is scored in seconds):
+- `providence.ts`: does a network play Providence where it should, and pick the right pair (docs/BOT.md's TODO has
+  vrpo1 40,000's result).
+
 **Game questions:**
 - `pilevalue.ts`, `pilevalue_head.ts`, `foolcheck.ts`: the value of starting behind each pile type, and why the Fool pile does badly.
 - `calib.ts`: value-head calibration and the first player's edge.
