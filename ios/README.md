@@ -23,6 +23,9 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
   - the Swift tests on the simulator: the protocol round trips, choosing, and the table's UI tests (touching, holding, carrying).
 - `KEEPS_SELFTEST=1 ios/sync.sh` plays whole games headless on the phone or simulator.
 - `KEEPS_SEED=ui-7` at launch makes every game the same, for the UI tests: the deal, the seating, Midstrike's draws.
+  The UI tests use `ui-7` (your first cards played on their own) and `ui-keep-3` (your first card a Keep card).
+- `xcrun simctl io booted recordVideo` while a UI test runs, then `ffmpeg` frames tiled into a sheet: how the glides were
+  checked frame by frame.
 - `ios/tools/pull-games.sh` fetches the games the app kept: each one's replay log, in `Documents/games`.
 - `python3 ios/tools/make-icon.py` draws the icon.
 
@@ -34,5 +37,4 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
   opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
 
 - **The round review** (the website's end-of-round review, with each move's win chance and better moves). The core already makes it; the app doesn't show it yet. It should run on the phone at a reduced budget: reuse Midstrike's live searches, use smaller samples, at low priority.
-- **A ghost on letting go of a carried card.** A copy flies off the screen as the card glides to its place. Record it on the simulator, frame by frame, to find which view it is.
 - **Before the App Store:** confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app.

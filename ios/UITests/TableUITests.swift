@@ -5,13 +5,23 @@ import XCTest
 final class TableUITests: XCTestCase {
   private var app: XCUIApplication!
 
+  /// Fixed deals, so each test plays the same game every time (whichever seat you get):
+  /// - ui-7: your first three draws aren't HOT, and are played on their own (Epiphany, Prayer, Providence; or
+  ///   Requisition, Legerdemain, Scepter);
+  /// - ui-keep-3: your first draw is a Keep card, played into a keep (Retribution; or Scepter).
+  private enum Deal: String {
+    case alone = "ui-7"
+    case keep = "ui-keep-3"
+  }
+
   override func setUp() {
     continueAfterFailure = false
+  }
+
+  private func launch(_ deal: Deal = .alone) {
     app = XCUIApplication()
     app.launchEnvironment["KEEPS_PLAY"] = "easy:5"
-    // The same game every time: your first three draws aren't HOT, whichever seat you get (Epiphany, Prayer and
-    // Providence; or Requisition, Legerdemain and Scepter).
-    app.launchEnvironment["KEEPS_SEED"] = "ui-7"
+    app.launchEnvironment["KEEPS_SEED"] = deal.rawValue
     app.launch()
   }
 
@@ -40,6 +50,7 @@ final class TableUITests: XCTestCase {
   private func yourTurn(_ seconds: TimeInterval = 30) -> Bool { app.buttons["Draw from your pile"].waitForExistence(timeout: seconds) }
 
   func testACardCarriedToWhereItGoesMakesTheMove() throws {
+    launch()
     var carried = 0
     for _ in 0..<30 where carried < 2 {
       guard yourTurn() else { break }
@@ -79,6 +90,7 @@ final class TableUITests: XCTestCase {
   }
 
   func testTouchingYourPileDraws() throws {
+    launch()
     XCTAssertTrue(yourTurn())
     let before = handCards.count
     yourPile.tap()
@@ -86,6 +98,7 @@ final class TableUITests: XCTestCase {
   }
 
   func testHoldingACardOnlyShowsItAndTouchingItChoosesIt() throws {
+    launch()
     XCTAssertTrue(yourTurn())
     yourPile.tap()
     placeHot()
@@ -109,6 +122,7 @@ final class TableUITests: XCTestCase {
   }
 
   func testMovingAFingerWhileACardIsShownCarriesNothing() throws {
+    launch()
     XCTAssertTrue(yourTurn())
     yourPile.tap()
     placeHot()
@@ -126,5 +140,28 @@ final class TableUITests: XCTestCase {
     card.press(forDuration: 1.0, thenDragTo: element("table"))
     XCTAssertTrue(element(id).exists, "the card was carried after it was shown")
     XCTAssertFalse(app.buttons["Cancel selection"].exists)
+  }
+
+  func testACardCarriedIntoYourKeepGoesThere() throws {
+    launch(.keep)
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    XCTAssertTrue(eventually(5) { handCards.contains { $0.isHittable } }, "no card drawn")
+    let drawn = handCards.first { $0.isHittable }!
+    let id = drawn.identifier
+    let name = drawn.label
+    // A Keep card, carried onto your keep (and nowhere else): it leaves your hand for your keep.
+    drawn.press(forDuration: 0.12, thenDragTo: element("Your keep"))
+    XCTAssertTrue(gone(element(id), within: 3), "the Keep card carried onto your keep stayed in your hand")
+    let keepCard = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'keepcard:' AND label == %@", name)).firstMatch
+    XCTAssertTrue(keepCard.waitForExistence(timeout: 3), "the card isn't in a keep")
+  }
+
+  func testYourPileCarriedToYourHandDraws() throws {
+    launch()
+    XCTAssertTrue(yourTurn())
+    let before = handCards.count
+    yourPile.press(forDuration: 0.12, thenDragTo: element("Your hand"))
+    XCTAssertTrue(eventually(5) { handCards.count > before }, "carrying your pile to your hand drew no card")
   }
 }

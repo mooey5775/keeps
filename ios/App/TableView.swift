@@ -50,21 +50,38 @@ struct TableView: View {
         .scrollDisabled(game.dragging != nil || game.preview != nil)
         .overlay(alignment: .topLeading) {
           // The card carried, or let go and waiting for its move: the card's own place meanwhile (it glides from here).
+          // Placed by padding from the corner, so that its layout frame is where it's drawn (the glide reads frames:
+          // placed with position(), it would be moved twice, and its copy fly off).
           if let drag = game.dragging ?? game.landing {
-            CardView(book: game.book, id: drag.card, width: large, touch: game.dragging == nil ? .none : .picked)
-              .scaleEffect(1.08)
-              .rotationEffect(.degrees(-3))
-              .modifier(Glide(id: drag.card, space: cards))
-              .position(drag.location)
+            let width = drag.width ?? large
+            CardView(book: game.book, id: drag.card, width: width, touch: game.dragging == nil ? .none : .picked)
+              .scaleEffect(drag.width == nil ? 1.08 : 1)
+              .rotationEffect(.degrees(drag.width == nil ? -3 : 0))
+              .padding(.leading, drag.location.x - width / 2)
+              .padding(.top, drag.location.y - width * 0.7)
               .allowsHitTesting(false)
-              // Gone at once when the card reaches its place: the card there glides from here; this copy mustn't
-              // glide (or fade) too, or a ghost of it flies off.
-              .transition(.asymmetric(insertion: .identity, removal: .opacity.animation(.linear(duration: 0.01))))
+              // Swapped for the card in its place without a trace (that card was hidden until now).
+              .transition(.identity)
           }
         }
         .coordinateSpace(.named(DropZones.space))
       }
       .cardPreviews(game)
+      .onChange(of: game.arrived) { _, arrived in
+        guard arrived, let card = game.landing?.card else {
+          if arrived { game.finishLanding() }
+          return
+        }
+        // (Once the new position is laid out, where the card's place is.)
+        DispatchQueue.main.async {
+          guard let place = zones.place(of: card) else { return game.finishLanding() }
+          withAnimation(.snappy(duration: 0.3)) {
+            game.land(at: CGPoint(x: place.midX, y: place.midY), width: place.width)
+          } completion: {
+            game.finishLanding()
+          }
+        }
+      }
       .environment(\.dropZones, zones)
       .environment(\.cardSpace, cards)
       // What's felt: picking an element, picking up a card, each of your moves, each of Midstrike's, a round's end.
@@ -134,8 +151,11 @@ struct TableView: View {
       Spacer()
       VStack(spacing: 4) {
         if let top = view.discard.last {
+          let landing = game.landing?.card == top
           CardView(book: game.book, id: top, width: width * 1.1)
-            .matchedGeometryEffect(id: top, in: cards)
+            .opacity(landing ? 0 : 1)
+            .modifier(Glide(id: landing ? nil : top, space: cards))
+            .cardPlace(top)
             .onTapGesture { showDiscard = true }
             .previewable(top, in: game)
             .accessibilityAddTraits(.isButton)
@@ -211,9 +231,12 @@ struct TableCard: View {
     // Carried (or let go and waiting for its move): the copy over the table is the card meanwhile; this one stays as a
     // ghost of where it came from, out of the glide.
     let lifted = ref != nil && (game.dragging?.ref == ref || game.landing?.ref == ref)
+    // The card a dropped card is landing as: hidden until it has landed here.
+    let landing = placed && id != nil && game.landing?.card == id && !lifted
     CardView(book: game.book, id: id, faceDown: faceDown, width: width, touch: touch)
-      .opacity(lifted ? (game.landing == nil ? 0.25 : 0) : 1)
-      .modifier(Glide(id: placed && !lifted ? id : nil, space: space))
+      .opacity(lifted ? (game.landing == nil ? 0.25 : 0) : landing ? 0 : 1)
+      .modifier(Glide(id: placed && !lifted && !landing ? id : nil, space: space))
+      .cardPlace(placed && !faceDown ? id : nil)
       .modifier(DropZoneIf(ref: placed ? ref : nil))
       // A touch chooses it; a hold shows it until the finger lifts (and does nothing else); a carry takes it where it goes.
       .onTapGesture { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
@@ -304,7 +327,8 @@ private struct Glide: ViewModifier {
 
   func body(content: Content) -> some View {
     if let id, let space {
-      content.matchedGeometryEffect(id: id, in: space).transition(.scale(scale: 0.7).combined(with: .opacity))
+      // Gliding from its last place, or (from nowhere: Midstrike's card) fading in where it lands.
+      content.matchedGeometryEffect(id: id, in: space).transition(.opacity)
     } else {
       content
     }
@@ -456,6 +480,8 @@ struct KeepRow: View {
     .contentShape(Rectangle())
     .onTapGesture { if touch != .none { game.touch(ref) } }
     .dropZone(ref)
+    // The keep, its cards each reachable (VoiceOver's, and tests').
+    .accessibilityElement(children: .contain)
     .accessibilityLabel("\(table.possessive[seat]) keep")
   }
 }

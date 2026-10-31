@@ -37,8 +37,11 @@ final class Game {
   private(set) var picked: [String] = []
   /// The card being dragged, if one is.
   private(set) var dragging: Drag?
-  /// A card let go where it makes a move, waiting there for the move's position (it glides from there to its place).
+  /// A card let go where it makes a move: it waits where it was let go until the move's position comes, then moves to
+  /// its new place (`arrived`), and is swapped for the card there (hidden until then).
   private(set) var landing: Drag?
+  /// The move's position has come: the landing card moves to its place on the table.
+  private(set) var arrived = false
   /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
   private(set) var movesMade = 0
   private(set) var botMoves = 0
@@ -113,6 +116,7 @@ final class Game {
     picked = []
     dragging = nil
     landing = nil
+    arrived = false
     preview = nil
     feed = []
     awaitingMine = false
@@ -150,6 +154,8 @@ final class Game {
     var location: CGPoint
     let moves: [String: [Option]]
     var targets: Set<String> { Set(moves.keys) }
+    /// Its width once landing at its place (nil: as carried).
+    var width: CGFloat?
   }
 
   /// Whether `ref` can be picked up now: some move is made by carrying it.
@@ -171,6 +177,18 @@ final class Game {
     return moves.count == 1 ? moves[0].label : "\(moves.count) moves: let go to choose"
   }
 
+  /// The landing card at its place: `location` (its centre) and `width`, in the table's space.
+  func land(at location: CGPoint, width: CGFloat) {
+    landing?.location = location
+    landing?.width = width
+  }
+
+  /// The landing card swapped for the card in its place.
+  func finishLanding() {
+    landing = nil
+    arrived = false
+  }
+
   func moveDrag(to location: CGPoint) { dragging?.location = location }
 
   /// The thing let go over `target` (an element, "table", "hand", or nil for nowhere): the move it makes there; if
@@ -183,7 +201,13 @@ final class Game {
     guard let target, let moves = drag.moves[target] else { return false }
     if moves.count == 1 {
       landing = drag
+      arrived = false
       send(moves[0].command)
+      // (Should the position never come, the card isn't left hanging.)
+      Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .seconds(3))
+        if self?.landing == drag { self?.finishLanding() }
+      }
     } else {
       picked = [drag.ref] + (target == "table" || target == "hand" ? [] : [target])
     }
@@ -258,7 +282,7 @@ final class Game {
           dragging = nil
         }
         game = message
-        landing = nil
+        if landing != nil { arrived = true }
         options = server.options ?? []
         lines = server.lines ?? []
         table = server.table

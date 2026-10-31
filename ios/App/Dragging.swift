@@ -34,6 +34,11 @@ final class DropZones {
   static let space = "table-space"
   fileprivate var frames: [String: CGRect] = [:]
 
+  /// Each card's place on the table (where it is now), for a card let go to move to.
+  fileprivate var cards: [CardId: CGRect] = [:]
+
+  func place(of card: CardId) -> CGRect? { cards[card] }
+
   /// The element under `point` among `refs` (the innermost, when one holds another: a card in a keep).
   func element(at point: CGPoint, among refs: Set<String>) -> String? {
     frames.filter { refs.contains($0.key) && $0.value.contains(point) }.min { $0.value.width * $0.value.height < $1.value.width * $1.value.height }?.key
@@ -63,6 +68,22 @@ extension EnvironmentValues {
 extension View {
   /// Registers this view as the table element `ref`, for drops.
   func dropZone(_ ref: String) -> some View { modifier(DropZoneModifier(ref: ref)) }
+
+  /// Registers this view as `card`'s place on the table, for a card let go to move to.
+  func cardPlace(_ card: CardId?) -> some View { modifier(CardPlaceModifier(card: card)) }
+}
+
+private struct CardPlaceModifier: ViewModifier {
+  let card: CardId?
+  @Environment(\.dropZones) private var zones
+
+  func body(content: Content) -> some View {
+    if let card {
+      content.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(DropZones.space)) }) { zones.cards[card] = $0 }
+    } else {
+      content
+    }
+  }
 }
 
 private struct DropZoneModifier: ViewModifier {
