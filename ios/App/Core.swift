@@ -18,6 +18,9 @@ final class Core: NSObject, WKScriptMessageHandler {
   var onSearch: ((ToAppSearch) -> Void)?
   /// Something in the core failed (its message).
   var onFailure: ((String) -> Void)?
+  /// For tests (KEEPS_LAG): the game server's messages are held this long, as on a slow phone (in order: each is held
+  /// as long).
+  var lag: TimeInterval = 0
 
   /// Throws if the network (Core ML) or the core's files aren't in `bundle`.
   init(bundle: Bundle = .main) throws {
@@ -135,7 +138,11 @@ final class Core: NSObject, WKScriptMessageHandler {
         onFailure?(failed.message)
       }
     case .server(let server):
-      connections[Int(server.id)]?(server)
+      if lag > 0 {
+        DispatchQueue.main.asyncAfter(deadline: .now() + lag) { self.connections[Int(server.id)]?(server) }
+      } else {
+        connections[Int(server.id)]?(server)
+      }
     case .search(let search):
       onSearch?(search)
     case .saved(let saved):

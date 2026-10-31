@@ -18,10 +18,11 @@ final class TableUITests: XCTestCase {
     continueAfterFailure = false
   }
 
-  private func launch(_ deal: Deal = .alone) {
+  private func launch(_ deal: Deal = .alone, lag: Int = 0) {
     app = XCUIApplication()
     app.launchEnvironment["KEEPS_PLAY"] = "easy:5"
     app.launchEnvironment["KEEPS_SEED"] = deal.rawValue
+    if lag > 0 { app.launchEnvironment["KEEPS_LAG"] = String(lag) }
     app.launch()
   }
 
@@ -155,6 +156,20 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(gone(element(id), within: 3), "the Keep card carried onto your keep stayed in your hand")
     let keepCard = app.descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'keepcard:' AND label == %@", name)).firstMatch
     XCTAssertTrue(keepCard.waitForExistence(timeout: 3), "the card isn't in a keep")
+  }
+
+  func testAMoveTouchedTwiceIsMadeOnce() throws {
+    // (The game's answers held 2 s, as on a very slow phone: the second touch comes before the table moves on.)
+    launch(lag: 2000)
+    XCTAssertTrue(yourTurn())
+    let before = handCards.count
+    // Two touches on the panel's move before the table moves on: one draw, and no complaint.
+    let draw = app.buttons["Draw from your pile"]
+    draw.tap()
+    draw.tap()
+    XCTAssertTrue(eventually(8) { handCards.count > before }, "the move wasn't made")
+    XCTAssertFalse(app.alerts["Something went wrong"].waitForExistence(timeout: 2), "the move was sent twice")
+    XCTAssertEqual(handCards.count, before + 1, "the move was made twice")
   }
 
   func testYourPileCarriedToYourHandDraws() throws {

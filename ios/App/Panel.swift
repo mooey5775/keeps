@@ -339,7 +339,6 @@ struct DiscardSheet: View {
         .padding()
       }
       .background(Theme.background)
-      .cardPreviews(game)
       .navigationTitle("Discard (\(cards.count))")
       .navigationBarTitleDisplayMode(.inline)
     }

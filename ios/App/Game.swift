@@ -37,11 +37,33 @@ final class Game {
   private(set) var picked: [String] = []
   /// The card being dragged, if one is.
   private(set) var dragging: Drag?
-  /// A card let go where it makes a move: it waits where it was let go until the move's position comes, then moves to
-  /// its new place (`arrived`), and is swapped for the card there (hidden until then).
-  private(set) var landing: Drag?
-  /// The move's position has come: the landing card moves to its place on the table.
-  private(set) var arrived = false
+  /// Cards moving across the table: each drawn over it, from where it was to its new place (one card, never two).
+  private(set) var flights: [Flight] = []
+  /// The cards on their way: hidden in their places on the table until their flights land.
+  private(set) var travelling: Set<CardId> = []
+  /// Counts the positions that set cards off (a flight belongs to one).
+  private var trips = 0
+  /// The cards' frames on the table now, in the table's space (the table answers): where cards set off from.
+  var framesNow: () -> [CardId: CGRect] = { [:] }
+  /// The width a carried card is drawn at (the table says).
+  var carriedWidth: CGFloat = 74
+
+  struct Flight: Identifiable, Equatable {
+    let id: CardId
+    var frame: CGRect
+    /// The position that set it off.
+    var trip = 0
+    var stage = Stage.setOff
+
+    enum Stage {
+      /// Let go, waiting where it was let go for the position the move makes.
+      case waiting
+      /// Set off by a new position: waits for its place there to be laid out.
+      case setOff
+      /// On its way to its place.
+      case landing
+    }
+  }
   /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
   private(set) var movesMade = 0
   private(set) var botMoves = 0
@@ -51,6 +73,9 @@ final class Game {
   private var feedCount = 0
   /// A move of yours was sent: the log lines that come back with it are yours, not news.
   private var awaitingMine = false
+  /// The decisions you've sent a move for that the core hasn't yet shown answered (a second touch on the panel before
+  /// the table moves on would answer one twice).
+  private var answering: Set<String> = []
 
   struct FeedLine: Identifiable, Equatable {
     let id: Int
@@ -114,9 +139,10 @@ final class Game {
     lines = []
     table = nil
     picked = []
+    answering = []
     dragging = nil
-    landing = nil
-    arrived = false
+    flights = []
+    travelling = []
     preview = nil
     feed = []
     awaitingMine = false
@@ -154,8 +180,6 @@ final class Game {
     var location: CGPoint
     let moves: [String: [Option]]
     var targets: Set<String> { Set(moves.keys) }
-    /// Its width once landing at its place (nil: as carried).
-    var width: CGFloat?
   }
 
   /// Whether `ref` can be picked up now: some move is made by carrying it.
@@ -177,16 +201,56 @@ final class Game {
     return moves.count == 1 ? moves[0].label : "\(moves.count) moves: let go to choose"
   }
 
-  /// The landing card at its place: `location` (its centre) and `width`, in the table's space.
-  func land(at location: CGPoint, width: CGFloat) {
-    landing?.location = location
-    landing?.width = width
+  /// A card's place on the table, laid out at `frame`: a card on its way there flies to it. Its place reports it once
+  /// the table has been laid out for the new position (only then is it known where that is).
+  func placed(_ card: CardId, at frame: CGRect) {
+    guard let index = flights.firstIndex(where: { $0.id == card && $0.stage == .setOff }) else { return }
+    let trip = flights[index].trip
+    flights[index].stage = .landing
+    withAnimation(.snappy(duration: 0.32)) {
+      flights[index].frame = frame
+    } completion: { [weak self] in
+      self?.landed(card, trip: trip)
+    }
   }
 
-  /// The landing card swapped for the card in its place.
-  func finishLanding() {
-    landing = nil
-    arrived = false
+  /// A flight over: the card is shown in its place.
+  private func landed(_ card: CardId, trip: Int) {
+    guard flights.contains(where: { $0.id == card && $0.trip == trip }) else { return }
+    flights.removeAll { $0.id == card }
+    travelling.remove(card)
+  }
+
+  /// Cards still waiting to set off after `seconds` (no place reported them: it may not show the card) are shown
+  /// where they are instead of left hanging.
+  private func grounding(_ trip: Int, after seconds: Double) {
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(seconds))
+      guard let self else { return }
+      for flight in self.flights where flight.trip == trip && flight.stage != .landing { self.landed(flight.id, trip: trip) }
+    }
+  }
+
+  /// Where each card on the table is (a hand, a keep, the discard's top, a pile's top face up): a card whose place
+  /// changes between two positions moves across the table.
+  private static func places(_ view: PlayerView) -> [CardId: String] {
+    var out: [CardId: String] = [:]
+    for (seat, hand) in view.hands.enumerated() {
+      for card in hand.cards ?? [] { out[card] = "hand:\(seat)" }
+    }
+    for keep in view.keeps {
+      for card in keep.cards {
+        switch card {
+        case .notFaceDown(let c): out[c.id] = "keep:\(keep.seat)"
+        case .faceDown(let c): if let id = c.id { out[id] = "keep:\(keep.seat)" }
+        }
+      }
+    }
+    for pile in view.piles {
+      if let top = pile.top { out[top] = "pile:\(pile.position)" }
+    }
+    if let top = view.discard.last { out[top] = "discard" }
+    return out
   }
 
   func moveDrag(to location: CGPoint) { dragging?.location = location }
@@ -200,13 +264,14 @@ final class Game {
     dragging = nil
     guard let target, let moves = drag.moves[target] else { return false }
     if moves.count == 1 {
-      landing = drag
-      arrived = false
-      send(moves[0].command)
-      // (Should the position never come, the card isn't left hanging.)
-      Task { @MainActor [weak self] in
-        try? await Task.sleep(for: .seconds(3))
-        if self?.landing == drag { self?.finishLanding() }
+      // The card waits where it was let go (as carried), for the move's position to send it to its place.
+      if send(moves[0].command), let card = drag.card {
+        let width = carriedWidth * 1.08
+        trips += 1
+        flights = [Flight(id: card, frame: CGRect(x: drag.location.x - width / 2, y: drag.location.y - width * 0.7, width: width, height: width * 1.4), trip: trips, stage: .waiting)]
+        travelling = [card]
+        // (Should the position never come, the card isn't left hanging.)
+        grounding(trips, after: 3)
       }
     } else {
       picked = [drag.ref] + (target == "table" || target == "hand" ? [] : [target])
@@ -232,12 +297,17 @@ final class Game {
 
   func clearPicked() { picked = [] }
 
-  func send(_ command: Command) {
+  /// Sends a move of yours; returns whether it went. Only an answer to a decision open in the position shown, and only
+  /// one answer each (see Choosing.answersOpen).
+  @discardableResult
+  func send(_ command: Command) -> Bool {
     picked = []
-    guard let connection else { return }
+    guard let connection, let game, Choosing.answersOpen(command, game.view.legal), answering.insert(Choosing.decision(command)).inserted
+    else { return false }
     movesMade += 1
     awaitingMine = true
     core.send(connection, .command(ClientMessageCommand(command: command)))
+    return true
   }
 
   func setTraining(_ on: Bool) {
@@ -274,7 +344,24 @@ final class Game {
       } else {
         tell(fresh)
       }
-      // The table moves to the new position with its cards gliding to their new places.
+      // The cards that change places set off from where they are (a card let go, from where it was let go); hidden in
+      // their new places until they arrive there (TableView sends them, once the new position is laid out).
+      let before = game.map { Self.places($0.view) } ?? [:]
+      let after = Self.places(message.view)
+      let frames = framesNow()
+      trips += 1
+      var setOff: [Flight] = []
+      for (card, place) in after where before[card] != nil && before[card] != place {
+        if let frame = flights.first(where: { $0.id == card })?.frame ?? frames[card] { setOff.append(Flight(id: card, frame: frame, trip: trips)) }
+      }
+      // (A card let go keeps waiting, should this position come before its move's: Midstrike's, say.)
+      let waiting = flights.filter { flight in flight.stage == .waiting && !setOff.contains { $0.id == flight.id } }
+      flights = setOff + waiting
+      travelling = Set(flights.map(\.id))
+      if !setOff.isEmpty { grounding(trips, after: 1) }
+      // Decisions still open haven't been answered yet (this position may predate your move).
+      answering.formIntersection(message.view.legal.map(Choosing.decision))
+      // The table moves to the new position; cards within a row shift to their new places.
       withAnimation(.snappy(duration: 0.35)) {
         // A new decision clears a half-made selection (and a card still being dragged).
         if message.view.legal != game?.view.legal {
@@ -282,7 +369,6 @@ final class Game {
           dragging = nil
         }
         game = message
-        if landing != nil { arrived = true }
         options = server.options ?? []
         lines = server.lines ?? []
         table = server.table
@@ -290,6 +376,8 @@ final class Game {
       }
       playAtRandom()
     case .error(let error):
+      // A move refused: its decision may be answered again.
+      answering = []
       problem = error.message
     case .gone, .replaced:
       leave()
@@ -321,7 +409,8 @@ final class Game {
     for prompt in view.prompts {
       if case .mine(.orderPile(let order)) = prompt {
         autoplay -= 1
-        return send(.answer(CommandAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards)))))
+        send(.answer(CommandAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards)))))
+        return
       }
     }
     guard view.prompts.contains(where: { $0.seat == me }), let option = choices.randomElement() else { return }

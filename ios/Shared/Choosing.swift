@@ -46,6 +46,24 @@ enum Choosing {
     return .pick(next)
   }
 
+  /// The decision a command answers: its prompt, or the command itself (next round, Duplicity's reveal).
+  static func decision(_ command: Command) -> String {
+    switch command {
+    case .answer(let answer): "prompt:\(answer.promptId)"
+    case .nextRound: "next-round"
+    case .revealDuplicity: "reveal-duplicity"
+    }
+  }
+
+  /// Whether `command` answers a decision open in the position whose legal moves are `legal`: a move made from a button
+  /// not yet redrawn for the next position answers one already answered. Not whether it's a legal answer (that's the
+  /// engine's to say, and it says so loudly): a pile's order is any order of its cards, though its legal moves list
+  /// only two.
+  static func answersOpen(_ command: Command, _ legal: [Command]) -> Bool {
+    let wanted = decision(command)
+    return legal.contains { decision($0) == wanted }
+  }
+
   /// Elements worth touching next. Before anything is touched, only those an option can start from (the card to play,
   /// the pile to draw from, the ability card; either card of a Providence swap), so targets light up once you've
   /// chosen what to do.

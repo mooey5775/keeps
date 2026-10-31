@@ -52,6 +52,8 @@ struct KeepsApp: App {
       }
       // KEEPS_SEED (for tests): every game dealt the same.
       if let seed = environment["KEEPS_SEED"] { core.configure(botDelayMs: 900, seed: seed) }
+      // KEEPS_LAG=300 (for tests): the game's messages arrive 300 ms late, as on a slow phone.
+      if let lag = environment["KEEPS_LAG"].flatMap(Double.init) { core.lag = lag / 1000 }
       let game = Game(core: core, book: CardBook(ready.cards))
       self.game = game
       // KEEPS_PLAY=easy:3[:12]: straight into a game (for screenshots and trying the table), your first 12 moves at random.
@@ -81,6 +83,8 @@ struct RootView: View {
       case .table: TableView(game: game)
       }
     }
+    // The card being held, shown over everything: the table, and any sheet over it.
+    .background(PreviewWindow(game: game))
     .alert("Something went wrong", isPresented: Binding(get: { game.problem != nil }, set: { if !$0 { game.problem = nil } })) {
       Button("OK") { game.problem = nil }
     } message: {

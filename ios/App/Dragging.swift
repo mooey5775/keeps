@@ -34,10 +34,14 @@ final class DropZones {
   static let space = "table-space"
   fileprivate var frames: [String: CGRect] = [:]
 
-  /// Each card's place on the table (where it is now), for a card let go to move to.
+  /// Each card's place on the table (where it is now): where a card moving across the table sets off from and lands.
   fileprivate var cards: [CardId: CGRect] = [:]
 
-  func place(of card: CardId) -> CGRect? { cards[card] }
+  var cardFrames: [CardId: CGRect] { cards }
+
+  /// Told each time a card's place is laid out (a card arriving there, or one already there moving): the table's
+  /// flights land on it.
+  var onPlace: (CardId, CGRect) -> Void = { _, _ in }
 
   /// The element under `point` among `refs` (the innermost, when one holds another: a card in a keep).
   func element(at point: CGPoint, among refs: Set<String>) -> String? {
@@ -49,19 +53,10 @@ private struct DropZonesKey: EnvironmentKey {
   static let defaultValue = DropZones()
 }
 
-/// The table's namespace for cards gliding from one place to another (a card is the same view wherever it goes).
-private struct CardSpaceKey: EnvironmentKey {
-  static let defaultValue: Namespace.ID? = nil
-}
-
 extension EnvironmentValues {
   var dropZones: DropZones {
     get { self[DropZonesKey.self] }
     set { self[DropZonesKey.self] = newValue }
-  }
-  var cardSpace: Namespace.ID? {
-    get { self[CardSpaceKey.self] }
-    set { self[CardSpaceKey.self] = newValue }
   }
 }
 
@@ -73,13 +68,22 @@ extension View {
   func cardPlace(_ card: CardId?) -> some View { modifier(CardPlaceModifier(card: card)) }
 }
 
+private struct Place: Equatable {
+  let card: CardId
+  let frame: CGRect
+}
+
 private struct CardPlaceModifier: ViewModifier {
   let card: CardId?
   @Environment(\.dropZones) private var zones
 
   func body(content: Content) -> some View {
     if let card {
-      content.onGeometryChange(for: CGRect.self, of: { $0.frame(in: .named(DropZones.space)) }) { zones.cards[card] = $0 }
+      // (The card is part of what's watched: a place that shows a new card, the discard's top, is that card's place.)
+      content.onGeometryChange(for: Place.self, of: { Place(card: card, frame: $0.frame(in: .named(DropZones.space))) }) {
+        zones.cards[$0.card] = $0.frame
+        zones.onPlace($0.card, $0.frame)
+      }
     } else {
       content
     }

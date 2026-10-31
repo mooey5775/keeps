@@ -24,8 +24,9 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
 - `KEEPS_SELFTEST=1 ios/sync.sh` plays whole games headless on the phone or simulator.
 - `KEEPS_SEED=ui-7` at launch makes every game the same, for the UI tests: the deal, the seating, Midstrike's draws.
   The UI tests use `ui-7` (your first cards played on their own) and `ui-keep-3` (your first card a Keep card).
-- `xcrun simctl io booted recordVideo` while a UI test runs, then `ffmpeg` frames tiled into a sheet: how the glides were
-  checked frame by frame.
+- `KEEPS_LAG=2000` holds the game's messages 2 s, as on a slow phone (a move touched twice in that time is made once).
+- `xcrun simctl io booted recordVideo` while a UI test runs, then `ffmpeg` frames tiled into a sheet: how cards flying
+  to their places were checked frame by frame (one card, no ghost).
 - `ios/tools/pull-games.sh` fetches the games the app kept: each one's replay log, in `Documents/games`.
 - `python3 ios/tools/make-icon.py` draws the icon.
 
@@ -35,6 +36,8 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
   playkeeps.online (the core opening a WebSocket to the website's server, its messages through the same bridge).
 - **Analytics:** collect game traces (each game's replay log, already kept on the phone and on the website's server),
   opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
+  With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's
+  replay and the app's version (also in the table's menu: a shake can't be found, and UI tests can't shake).
 
 - **The round review** (the website's end-of-round review, with each move's win chance and better moves). The core already makes it; the app doesn't show it yet. It should run on the phone at a reduced budget: reuse Midstrike's live searches, use smaller samples, at low priority.
 - **Before the App Store:** confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app.

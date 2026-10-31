@@ -14,7 +14,6 @@ struct TableView: View {
   @State private var showDiscard = false
   @State private var confirmLeave = false
   @State private var zones = DropZones()
-  @Namespace private var cards
 
   var body: some View {
     if let message = game.game, let table = game.table {
@@ -22,6 +21,7 @@ struct TableView: View {
       GeometryReader { geo in
         let small = min(46, (geo.size.width - 40) / 7.6)
         let large = min(74, (geo.size.width - 40) / 5.2)
+        let _ = (game.carriedWidth = large)
         ScrollView {
           VStack(spacing: 8) {
             topBar(view)
@@ -49,42 +49,32 @@ struct TableView: View {
         // While a card is carried or shown large, the table stays put under it.
         .scrollDisabled(game.dragging != nil || game.preview != nil)
         .overlay(alignment: .topLeading) {
-          // The card carried, or let go and waiting for its move: the card's own place meanwhile (it glides from here).
-          // Placed by padding from the corner, so that its layout frame is where it's drawn (the glide reads frames:
-          // placed with position(), it would be moved twice, and its copy fly off).
-          if let drag = game.dragging ?? game.landing {
-            let width = drag.width ?? large
-            CardView(book: game.book, id: drag.card, width: width, touch: game.dragging == nil ? .none : .picked)
-              .scaleEffect(drag.width == nil ? 1.08 : 1)
-              .rotationEffect(.degrees(drag.width == nil ? -3 : 0))
-              .padding(.leading, drag.location.x - width / 2)
-              .padding(.top, drag.location.y - width * 0.7)
+          // The card carried. Placed by padding from the corner, so that its layout frame is where it's drawn.
+          if let drag = game.dragging {
+            CardView(book: game.book, id: drag.card, width: large, touch: .picked)
+              .scaleEffect(1.08)
+              .rotationEffect(.degrees(-3))
+              .padding(.leading, drag.location.x - large / 2)
+              .padding(.top, drag.location.y - large * 0.7)
               .allowsHitTesting(false)
-              // Swapped for the card in its place without a trace (that card was hidden until now).
+          }
+          // Cards moving across the table, one copy each, from where they were to their new places.
+          ForEach(game.flights) { flight in
+            CardView(book: game.book, id: flight.id, width: flight.frame.width)
+              .padding(.leading, flight.frame.minX)
+              .padding(.top, flight.frame.minY)
+              .allowsHitTesting(false)
               .transition(.identity)
           }
         }
         .coordinateSpace(.named(DropZones.space))
       }
-      // (Not while the discard's sheet is up: it shows the card held there itself, over the table.)
-      .cardPreviews(game, shown: !showDiscard)
-      .onChange(of: game.arrived) { _, arrived in
-        guard arrived, let card = game.landing?.card else {
-          if arrived { game.finishLanding() }
-          return
-        }
-        // (Once the new position is laid out, where the card's place is.)
-        DispatchQueue.main.async {
-          guard let place = zones.place(of: card) else { return game.finishLanding() }
-          withAnimation(.snappy(duration: 0.3)) {
-            game.land(at: CGPoint(x: place.midX, y: place.midY), width: place.width)
-          } completion: {
-            game.finishLanding()
-          }
-        }
+      // Cards set off from where they are now, and fly to their places once those are laid out.
+      .onAppear {
+        game.framesNow = { [zones] in zones.cardFrames }
+        zones.onPlace = { [weak game] card, frame in game?.placed(card, at: frame) }
       }
       .environment(\.dropZones, zones)
-      .environment(\.cardSpace, cards)
       // What's felt: picking an element, picking up a card, each of your moves, each of Midstrike's, a round's end.
       .sensoryFeedback(.selection, trigger: game.picked)
       .sensoryFeedback(.selection, trigger: game.dragging?.ref)
@@ -152,11 +142,10 @@ struct TableView: View {
       Spacer()
       VStack(spacing: 4) {
         if let top = view.discard.last {
-          let landing = game.landing?.card == top
           CardView(book: game.book, id: top, width: width * 1.1)
-            .opacity(landing ? 0 : 1)
-            .modifier(Glide(id: landing ? nil : top, space: cards))
+            .opacity(game.travelling.contains(top) ? 0 : 1)
             .cardPlace(top)
+            .transition(.asymmetric(insertion: .opacity, removal: .identity))
             .onTapGesture { showDiscard = true }
             .previewable(top, in: game)
             .accessibilityAddTraits(.isButton)
@@ -223,7 +212,6 @@ struct TableCard: View {
   /// Whether it's the card's place on the table (it glides from there), not a copy shown elsewhere.
   var placed = true
   @Environment(\.dropZones) private var zones
-  @Environment(\.cardSpace) private var space
   /// How far a finger moves before it's carrying the card.
   private static let slack: CGFloat = 8
 
@@ -231,13 +219,14 @@ struct TableCard: View {
     let touch = ref.map(game.touchability) ?? .none
     // Carried (or let go and waiting for its move): the copy over the table is the card meanwhile; this one stays as a
     // ghost of where it came from, out of the glide.
-    let lifted = ref != nil && (game.dragging?.ref == ref || game.landing?.ref == ref)
-    // The card a dropped card is landing as: hidden until it has landed here.
-    let landing = placed && id != nil && game.landing?.card == id && !lifted
+    let lifted = ref != nil && game.dragging?.ref == ref
+    // On its way to a new place (or from this one): its flight is drawn instead.
+    let travelling = placed && id.map(game.travelling.contains) == true
     CardView(book: game.book, id: id, faceDown: faceDown, width: width, touch: touch)
-      .opacity(lifted ? (game.landing == nil ? 0.25 : 0) : landing ? 0 : 1)
-      .modifier(Glide(id: placed && !lifted && !landing ? id : nil, space: space))
-      .cardPlace(placed && !faceDown ? id : nil)
+      .opacity(lifted ? 0.25 : travelling ? 0 : 1)
+      .cardPlace(placed ? id : nil)
+      // A card leaving its place is gone at once: if it went somewhere on the table, its flight carries it there.
+      .transition(.asymmetric(insertion: .opacity, removal: .identity))
       .modifier(DropZoneIf(ref: placed ? ref : nil))
       // A touch chooses it; a hold shows it until the finger lifts (and does nothing else); a carry takes it where it goes.
       .onTapGesture { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
@@ -318,21 +307,6 @@ private struct Carry: UIGestureRecognizerRepresentable {
     var allowed: () -> Bool
     init(allowed: @escaping () -> Bool) { self.allowed = allowed }
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool { allowed() }
-  }
-}
-
-/// A card's identity on the table, for gliding to its next place (none for a card back or a copy).
-private struct Glide: ViewModifier {
-  let id: CardId?
-  let space: Namespace.ID?
-
-  func body(content: Content) -> some View {
-    if let id, let space {
-      // Gliding from its last place, or (from nowhere: Midstrike's card) fading in where it lands.
-      content.matchedGeometryEffect(id: id, in: space).transition(.opacity)
-    } else {
-      content
-    }
   }
 }
 
@@ -575,21 +549,12 @@ struct CardPreview: View {
 
 extension View {
   /// Held still a moment (three tenths of a second, the finger wandering no more than a little), the card shows large
-  /// until the finger lifts, wherever it moves meanwhile, and nothing else happens (see cardPreviews).
+  /// until the finger lifts, wherever it moves meanwhile, and nothing else happens (see PreviewWindow).
   func previewable(_ id: CardId?, in game: Game) -> some View {
     gesture(
       HoldToShow(
         began: { if let id { game.preview = id } },
         ended: { if let id, game.preview == id { withAnimation(.easeOut(duration: 0.15)) { game.preview = nil } } }))
-  }
-
-  /// Shows the card being held (Game.preview) over this view: the table, or a sheet over it (the topmost only:
-  /// `shown` false for the table while a sheet with cards to hold is up).
-  func cardPreviews(_ game: Game, shown: Bool = true) -> some View {
-    overlay {
-      if shown, let id = game.preview { CardPreview(book: game.book, id: id).transition(.opacity.combined(with: .scale(scale: 0.92))) }
-    }
-    .animation(.snappy(duration: 0.2), value: game.preview)
   }
 }
 

@@ -112,6 +112,11 @@ export function otherTabInRoom(code: string): Promise<boolean> {
   });
 }
 
+/** The decision a command answers: its prompt, or the command itself. */
+function decision(command: Command): string {
+  return command.type === 'answer' ? `prompt:${command.promptId}` : command.type;
+}
+
 class RoomStore {
   private state: RoomState = initial;
   private listeners = new Set<() => void>();
@@ -121,6 +126,9 @@ class RoomStore {
   private retry = 0;
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private errorId = 0;
+  /** The decisions a move was sent for that no position has yet shown answered (a second click before the table moves
+   *  on would answer one twice, and the server refuses it: "no open prompt"). */
+  private answering = new Set<string>();
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -160,6 +168,9 @@ class RoomStore {
   }
 
   command(command: Command): void {
+    const key = decision(command);
+    if (this.answering.has(key)) return;
+    this.answering.add(key);
     this.send({ t: 'command', command });
   }
 
@@ -184,6 +195,7 @@ class RoomStore {
 
   private close(): void {
     this.hello = null;
+    this.answering.clear();
     if (this.retryTimer) clearTimeout(this.retryTimer);
     const socket = this.socket;
     this.socket = null;
@@ -222,6 +234,8 @@ class RoomStore {
   private receive(message: ServerMessage): void {
     switch (message.t) {
       case 'welcome': {
+        // A move sent before a reconnect may have been lost: it may be sent again.
+        this.answering.clear();
         saveToken(message.code, message.token);
         // From now on, reconnecting means resuming this seat.
         this.hello = { t: 'resume', code: message.code, token: message.token, client: clientId() };
@@ -250,10 +264,15 @@ class RoomStore {
       case 'game': {
         const previous = this.state.game;
         const log = message.reset || !previous ? message.log : [...previous.log, ...message.log];
+        // Decisions still open haven't been answered yet (this position may predate the move).
+        const open = new Set(message.view.legal.map(decision));
+        for (const key of this.answering) if (!open.has(key)) this.answering.delete(key);
         this.set({ game: { view: message.view, log, names: message.names, undo: message.undo, hints: message.hints ?? null } });
         return;
       }
       case 'error':
+        // A move refused: its decision may be answered again.
+        this.answering.clear();
         this.set({ error: { id: ++this.errorId, message: message.message } });
         // A failed create/join leaves us without a room.
         if (!this.state.playerId) {
