@@ -76,8 +76,11 @@ final class Core: NSObject, WKScriptMessageHandler {
   }
 
   nonisolated func userContentController(_ controller: WKUserContentController, didReceive message: WKScriptMessage) {
-    guard let json = message.body as? String else { return }
-    MainActor.assumeIsolated { self.received(json) }
+    // (WebKit delivers on the main thread; the message is the main actor's to read.)
+    MainActor.assumeIsolated {
+      guard let json = message.body as? String else { return }
+      received(json)
+    }
   }
 
   /// Where the games' replays go (Documents/games, one file per game, rewritten after every move): they can be
