@@ -72,15 +72,31 @@ struct LobbyView: View {
         .padding(20)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .environment(\.colorScheme, .dark)
-        Button {
-          let trimmed = name.trimmingCharacters(in: .whitespaces)
-          game.play(Game.Setup(name: trimmed.isEmpty ? "Player" : trimmed, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))
-        } label: {
-          Text("Play").font(Theme.heading(30)).frame(maxWidth: .infinity).padding(.vertical, 6)
+        VStack(spacing: 12) {
+          // The game the app closed on, to take up again.
+          if let kept = game.unfinished {
+            Button { game.resume() } label: {
+              VStack(spacing: 2) {
+                Text("Continue").font(Theme.heading(30))
+                Text(Self.describe(kept.game)).font(Theme.text(.footnote))
+              }
+              .frame(maxWidth: .infinity)
+              .padding(.vertical, 6)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Theme.gold)
+            .foregroundStyle(Theme.background)
+          }
+          Button {
+            let trimmed = name.trimmingCharacters(in: .whitespaces)
+            game.play(Game.Setup(name: trimmed.isEmpty ? "Player" : trimmed, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))
+          } label: {
+            Text(game.unfinished == nil ? "Play" : "New game").font(Theme.heading(game.unfinished == nil ? 30 : 24)).frame(maxWidth: .infinity).padding(.vertical, 6)
+          }
+          .buttonStyle(.borderedProminent)
+          .tint(game.unfinished == nil ? Theme.gold : Theme.panel)
+          .foregroundStyle(game.unfinished == nil ? Theme.background : Theme.gold)
         }
-        .buttonStyle(.borderedProminent)
-        .tint(Theme.gold)
-        .foregroundStyle(Theme.background)
         Spacer()
       }
       .padding(.horizontal, 24)
@@ -92,6 +108,13 @@ struct LobbyView: View {
         Button("Done") { naming = false }
       }
     }
+  }
+
+  /// A kept game, in a few words: "Against Hard Midstrike, first to 3".
+  private static func describe(_ game: GameRecord) -> String {
+    let level = (game.settings.botLevel ?? .hard).rawValue.capitalized
+    let marks = Int(game.settings.marksToWin)
+    return "Against \(level) Midstrike, first to \(marks) \(marks == 1 ? "mark" : "marks")"
   }
 
   private var levelNote: String {

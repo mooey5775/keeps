@@ -8,7 +8,7 @@ import WebKit
 /// through keepsCore.receive(json) and come back through the `core` message handler. A connection is one client of
 /// the core's server, speaking the website's protocol.
 @MainActor
-final class Core: NSObject, WKScriptMessageHandler {
+final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   /// The web view: it must be in the window for its page to run at full speed (CoreView puts it there, unseen).
   let webView: WKWebView
   private var started: CheckedContinuation<ToAppReady, Error>?
@@ -18,6 +18,14 @@ final class Core: NSObject, WKScriptMessageHandler {
   var onSearch: ((ToAppSearch) -> Void)?
   /// Something in the core failed (its message).
   var onFailure: ((String) -> Void)?
+  /// The core's process ended, and every room and connection with it: it's starting again (onRestarted follows).
+  var onEnded: (() -> Void)?
+  /// The core started again after its process ended (iOS ends a web view's process to free memory, mostly while the
+  /// app is in the background): every room and connection went with it. Told once it's ready again.
+  var onRestarted: (() -> Void)?
+  /// The core's settings, sent again when it starts again.
+  private var config: FromAppConfig?
+  private var restarting = false
   /// For tests (KEEPS_LAG): the game server's messages are held this long, as on a slow phone (in order: each is held
   /// as long).
   var lag: TimeInterval = 0
@@ -33,6 +41,26 @@ final class Core: NSObject, WKScriptMessageHandler {
     // (The controller is shared with the view; a handler holds its target strongly: the core lives as long as the app.)
     config.userContentController.add(self, name: "core")
     webView.isInspectable = true
+    webView.navigationDelegate = self
+  }
+
+  /// The page's process ended: the core loads again, and says when it's ready (onRestarted).
+  func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+    print("The core's process ended: starting it again")
+    connections = [:]
+    restarting = true
+    onEnded?()
+    webView.load(URLRequest(url: URL(string: "keeps://app/index.html")!))
+  }
+
+  /// For tests (KEEPS_TEST_HOOKS): ends the core's process, as iOS might (WebKit's own, unpublished, way).
+  func endProcessForTest() {
+    let end = NSSelectorFromString("_killWebContentProcess")
+    guard webView.responds(to: end) else {
+      onFailure?("WebKit can't end its process here")
+      return
+    }
+    webView.perform(end)
   }
 
   /// Loads the core and waits until it's ready: its network loaded, its search workers started. Returns what it said.
@@ -53,12 +81,25 @@ final class Core: NSObject, WKScriptMessageHandler {
     return id
   }
 
-  /// Sends a client message (the website's protocol) on connection `id`.
+  /// The game kept (Core.kept) taken up again, as a new client of the core's server in your seat; its messages arrive
+  /// at `receive`. Returns the connection's id.
+  func restore(_ kept: Kept, replay: String, _ receive: @escaping (ToAppServer) -> Void) -> Int {
+    let id = nextConnection
+    nextConnection += 1
+    connections[id] = receive
+    deliver(.restore(FromAppRestore(id: Double(id), game: kept.game, replay: replay)))
+    return id
+  }
+
+  /// Sends a client message (the website's protocol) on connection `id` (if it's still there: it isn't, once the core's
+  /// process has ended).
   func send(_ id: Int, _ message: ClientMessage) {
+    guard connections[id] != nil else { return }
     deliver(.client(FromAppClient(id: Double(id), message: message)))
   }
 
   func close(_ id: Int) {
+    guard connections[id] != nil else { return }
     deliver(.close(FromAppClose(id: Double(id))))
     connections[id] = nil
   }
@@ -66,7 +107,9 @@ final class Core: NSObject, WKScriptMessageHandler {
   /// How long Midstrike waits before each move, so a person can follow it; and, for tests, a seed that makes every
   /// game the same.
   func configure(botDelayMs: Int, seed: String? = nil) {
-    deliver(.config(FromAppConfig(botDelayMs: Double(botDelayMs), seed: seed)))
+    let config = FromAppConfig(botDelayMs: Double(botDelayMs), seed: seed)
+    self.config = config
+    deliver(.config(config))
   }
 
   private func deliver(_ message: FromApp) {
@@ -92,6 +135,35 @@ final class Core: NSObject, WKScriptMessageHandler {
   nonisolated static let gamesFolder = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("games")
   private let writer = DispatchQueue(label: "keeps.games", qos: .utility)
 
+  /// The game in progress, kept as it's played (Documents/playing.json), to be taken up again should the app close:
+  /// its replay's file (in gamesFolder) and what restoring it takes. Gone once the game is over, or left.
+  struct Kept: Codable, Equatable {
+    let file: String
+    let game: GameRecord
+  }
+
+  nonisolated static let keptURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("playing.json")
+
+  /// The game in progress the app kept, and its replay log; nil if there's none. One that can't be read is said so
+  /// (onFailure), and dropped.
+  func kept() -> (kept: Kept, replay: String)? {
+    writer.sync {}  // (anything being written is written first)
+    guard FileManager.default.fileExists(atPath: Core.keptURL.path) else { return nil }
+    do {
+      let kept = try JSONDecoder().decode(Kept.self, from: Data(contentsOf: Core.keptURL))
+      return (kept, try String(contentsOf: Core.gamesFolder.appendingPathComponent(kept.file), encoding: .utf8))
+    } catch {
+      onFailure?("The game kept from last time couldn't be read (\(error)).")
+      forgetKept()
+      return nil
+    }
+  }
+
+  /// No game in progress to take up again (it was left).
+  func forgetKept() {
+    writer.async { try? FileManager.default.removeItem(at: Core.keptURL) }
+  }
+
   /// The most games kept (a game is some tens of kilobytes): when a new one starts, the oldest go.
   nonisolated static let gamesKept = 200
 
@@ -104,6 +176,12 @@ final class Core: NSObject, WKScriptMessageHandler {
         let new = !files.fileExists(atPath: url.path)
         try Data(saved.text.utf8).write(to: url, options: .atomic)
         if new { Core.pruneGames() }
+        // The game in progress, to take up again; over, nothing to take up.
+        if !saved.game.over {
+          try JSONEncoder().encode(Kept(file: url.lastPathComponent, game: saved.game)).write(to: Core.keptURL, options: .atomic)
+        } else if let data = try? Data(contentsOf: Core.keptURL), (try? JSONDecoder().decode(Kept.self, from: data))?.file == url.lastPathComponent {
+          try files.removeItem(at: Core.keptURL)
+        }
       } catch {
         print("could not keep the game's replay \(url.lastPathComponent): \(error)")
       }
@@ -130,6 +208,11 @@ final class Core: NSObject, WKScriptMessageHandler {
     case .ready(let ready):
       started?.resume(returning: ready)
       started = nil
+      if restarting {
+        restarting = false
+        if let config { deliver(.config(config)) }
+        onRestarted?()
+      }
     case .failed(let failed):
       if let started {
         started.resume(throwing: KeepsError("the core failed to start: \(failed.message)"))

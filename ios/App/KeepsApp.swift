@@ -79,7 +79,7 @@ struct RootView: View {
     Group {
       switch game.screen {
       case .lobby: LobbyView(game: game)
-      case .starting: Splash(status: "Dealing…")
+      case .starting: Splash(status: game.starting)
       case .table: TableView(game: game)
       }
     }

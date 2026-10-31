@@ -30,15 +30,8 @@ if [ "$TARGET" = KeepsSpike ]; then
   cp ios/build/positions.json "$WEIGHTS" ios/build/web/
   BUNDLE=web
 else
-  packages/learn/node_modules/.bin/tsc -p ios/tsconfig.json
-  $VITE build --config ios/core/vite.config.mjs
-  cp "$WEIGHTS" ios/build/core/
+  ios/tools/build-core.sh
   BUNDLE=core
-  # The website's card pictures and heading font, and the text font (ios/Fonts): the app's own copies, made here.
-  rm -rf ios/build/cards ios/build/fonts
-  mkdir -p ios/build/fonts
-  cp -r packages/web/public/cards ios/build/cards
-  cp packages/web/src/assets/fonts/HamletOrNot.ttf ios/Fonts/*.ttf ios/build/fonts/
 fi
 
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/bot ~/src/keeps/packages/learn/demo/weights'

@@ -73,13 +73,12 @@ struct DecisionPanel: View {
           }
         }
         .scrollIndicators(.hidden)
-        if items.count > 2 || remaining.count > 2 {
-          Button { allMoves = true } label: {
-            Image(systemName: "list.bullet").font(.body.weight(.semibold)).foregroundStyle(Theme.gold).frame(width: 36, height: 36)
-              .background(Theme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
-          }
-          .accessibilityLabel("All moves")
+        // (Always: the row may scroll some out of sight.)
+        Button { allMoves = true } label: {
+          Image(systemName: "list.bullet").font(.body.weight(.semibold)).foregroundStyle(Theme.gold).frame(width: 36, height: 36)
+            .background(Theme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
         }
+        .accessibilityLabel("All moves")
       }
       .sheet(isPresented: $allMoves) { AllMovesSheet(game: game) }
     }
@@ -100,17 +99,43 @@ struct OptionChip: View {
         ForEach(Array(OptionButton.cards(item, remaining).prefix(2).enumerated()), id: \.offset) { _, card in
           CardView(book: game.book, id: card, width: 18)
         }
-        Text(OptionButton.label(item)).font(Theme.text(.footnote)).foregroundStyle(Theme.text).lineLimit(2).multilineTextAlignment(.leading)
+        // (All of it, on as many lines as it takes: a move's words are never cut off.)
+        Capped(width: 180) {
+          Text(OptionButton.label(item)).font(Theme.text(.footnote)).foregroundStyle(Theme.text).multilineTextAlignment(.leading)
+        }
         if case .group(_, _, let count) = item {
           Text("\(count)").font(.caption2.monospacedDigit()).foregroundStyle(Theme.muted)
         }
       }
       .padding(.horizontal, 10)
-      .frame(maxWidth: 230, minHeight: 36, alignment: .leading)
+      .padding(.vertical, 4)
+      .frame(minHeight: 36, alignment: .leading)
       .background(Theme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
       .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line, lineWidth: 0.5) }
     }
     .buttonStyle(.plain)
+  }
+}
+
+/// Its content at its natural width, up to `width`, and as tall as it then is: text wraps at the cap, and is measured
+/// wrapped, even where it's offered any width (a horizontal scroll view's content is; a frame's maxWidth would measure
+/// it on one line, then draw it wrapped, cut off at the top and bottom).
+struct Capped: Layout {
+  let width: CGFloat
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+    guard let content = subviews.first else { return .zero }
+    return content.sizeThatFits(capped(content, proposal))
+  }
+
+  func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+    guard let content = subviews.first else { return }
+    content.place(at: bounds.origin, proposal: capped(content, proposal))
+  }
+
+  private func capped(_ content: LayoutSubview, _ proposal: ProposedViewSize) -> ProposedViewSize {
+    let natural = content.sizeThatFits(.unspecified).width
+    return ProposedViewSize(width: min(natural, width, proposal.width ?? .infinity), height: nil)
   }
 }
 

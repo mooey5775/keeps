@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Policy, type BotPlayer } from '@keeps/learn';
-import type { Command, GameState, ReplayLog, TraceEvent } from '@keeps/engine';
+import { replay, viewFor, type Command, type GameState, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
 import type { Hint, ServerMessage } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type BotDeps, type BotTurn, type PlayedMove, type RoomDeps, type RoomMember, type Send } from '../src/room.ts';
@@ -42,7 +42,7 @@ function botRoom(overrides: Partial<RoomDeps> = {}, bot: Partial<BotDeps> = {}) 
     return true;
   };
   const waiting = () => pending.filter((t) => !t.cancelled).length;
-  return { room, runBot, waiting, saved };
+  return { room, runBot, waiting, saved, deps };
 }
 
 class Client {
@@ -323,6 +323,96 @@ describe('the bot in a room', () => {
       console.error = errors;
     }
     expect(human.errors()).toEqual([]);
+  });
+
+  it('takes a saved game up again where it was: the bot, and training mode at your seat, as if it never stopped', async () => {
+    const tick = () => new Promise((r) => setTimeout(r, 0));
+    /**
+     * What a bot knew at each decision (by the game's events so far): its own log (what the search samples worlds
+     * from) and its belief (what the network reads), for the bot's decisions and training mode's at yours.
+     */
+    type Seen = Map<string, { log: unknown; belief: unknown }>;
+    const knows = (bot: BotPlayer) => {
+      const inside = bot as unknown as { log: TraceEvent[]; belief: { clone(): unknown } };
+      return { log: structuredClone(inside.log), belief: inside.belief.clone() };
+    };
+    // The bot plays `next()`'s command if it gives one (the saved game's), else its own; either way it works its own out.
+    const deps = (seen: Seen, next: () => Command | undefined): Partial<BotDeps> => ({
+      choose: async (turn) => {
+        const own = turn.bot.choose(turn.state, turn.events);
+        seen.set(`bot ${turn.events.length}`, knows(turn.bot));
+        return { command: next() ?? own };
+      },
+      advise: async (turn) => {
+        const hints = turn.bot.suggest(turn.state, turn.events);
+        seen.set(`you ${turn.events.length}`, knows(turn.bot));
+        return hints;
+      },
+    });
+
+    for (const seed of ['restore-1', 'restore-2', 'restore-3']) {
+      // The game, played through: your moves at random (seeded), training mode on.
+      const seen: Seen = new Map();
+      const { room, runBot, saved } = botRoom({ seed: () => seed }, deps(seen, () => undefined));
+      const human = join(room, 'Ana');
+      room.handle(human.id, { t: 'settings', settings: { marksToWin: 2, firstPlayer: 'random' } });
+      room.handle(human.id, { t: 'add-bot' });
+      room.handle(human.id, { t: 'start' });
+      room.handle(human.id, { t: 'training', on: true });
+      let x = seed.length;
+      const pick = (n: number) => (x = (Math.imul(x, 48271) + 11) >>> 0) % n;
+      for (let step = 0; human.last('game').view.phase !== 'game-over'; step++) {
+        expect(step).toBeLessThan(5000);
+        const legal = human.last('game').view.legal.filter((c) => c.type !== 'reveal-duplicity');
+        if (human.last('game').view.prompts.some((p) => p.mine) || legal.some((c) => c.type === 'next-round')) {
+          room.handle(human.id, { t: 'command', command: legal[pick(legal.length)]! });
+        } else {
+          expect(runBot()).toBe(true);
+        }
+        // (The bot's move, and training mode's advice, come once worked out.)
+        await tick();
+        expect(human.errors()).toEqual([]);
+      }
+      const log = saved.at(-1)!;
+      const seat = human.last('game').view.viewer as Seat;
+      const botSeat = log.commands.find((c) => c.seat !== seat)!.seat;
+      // What the room saves is the game as played, its people in their seats.
+      expect(room.saved()).toEqual({
+        log,
+        startedAt: 1000,
+        settings: { marksToWin: 2 },
+        seats: expect.arrayContaining([{ seat, name: 'Ana', training: true }, { seat: botSeat, name: 'Bot', bot: true }]),
+      });
+
+      // Taken up again after k commands, and played on as it was: each bot knowing at each decision what it knew.
+      for (let k = 0; k < log.commands.length; k += 9) {
+        const again: Seen = new Map();
+        let at = k;
+        const rest = botRoom({ seed: () => seed }, deps(again, () => log.commands[at]!.command));
+        const { room: restored, tokens } = Room.restore('BOTS', rest.deps, {
+          log: { options: log.options, commands: log.commands.slice(0, k) },
+          startedAt: 1000,
+          settings: { marksToWin: 2 },
+          seats: [
+            { seat, name: 'Ana', training: true },
+            { seat: botSeat, name: 'Bot', bot: true },
+          ],
+        });
+        const you = new Client();
+        you.id = restored.resume(tokens.get(seat)!, you.send)!.id;
+        expect(you.last('game').view).toEqual(viewFor(replay({ options: log.options, commands: log.commands.slice(0, k) }).state, seat));
+        for (; at < log.commands.length; at++) {
+          await tick();
+          const { seat: mover, command } = log.commands[at]!;
+          if (mover === seat) restored.handle(you.id, { t: 'command', command });
+          else expect(rest.runBot(), `game ${seed}, from ${k}: the bot's move ${at}`).toBe(true);
+          expect(you.errors()).toEqual([]);
+        }
+        await tick();
+        expect(again.size).toBeGreaterThan(0);
+        for (const [moment, knew] of again) expect(knew, `game ${seed}, from ${k}: ${moment}`).toEqual(seen.get(moment));
+      }
+    }
   });
 
   it('drops a move worked out after the room closed, and schedules nothing more', async () => {

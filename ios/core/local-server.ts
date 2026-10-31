@@ -2,7 +2,7 @@
 // same protocol as the website's server (packages/server/src/server.ts handles a WebSocket the same way). Offline
 // games against Midstrike run on it; the app talks to it exactly as a browser talks to the site.
 import type { ClientMessage, ServerMessage } from '../../packages/protocol/src/index.ts';
-import { Room, type RoomDeps } from '../../packages/server/src/room.ts';
+import { Room, type RoomDeps, type SavedGame } from '../../packages/server/src/room.ts';
 
 // Unambiguous letters for room codes (no I, O, L), as the website's.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
@@ -13,6 +13,21 @@ export class LocalServer {
 
   constructor(deps: RoomDeps) {
     this.deps = deps;
+  }
+
+  /** The game running in room `code`, saved to be taken up again (and whether it's over); null if none. */
+  saved(code: string): (SavedGame & { over: boolean }) | null {
+    const room = this.rooms.get(code);
+    const saved = room?.saved();
+    return saved ? { ...saved, over: room!.runningGame!.state.phase === 'game-over' } : null;
+  }
+
+  /** Room `code` rebuilt with its saved game (Room.restore); returns each person's token, by seat, to resume with. */
+  restore(code: string, saved: SavedGame): Map<number, string> {
+    this.rooms.get(code)?.close();
+    const { room, tokens } = Room.restore(code, this.deps, saved);
+    this.rooms.set(code, room);
+    return tokens;
   }
 
   /** A connection: messages from its client go to receive(); the server's go to `send`. */

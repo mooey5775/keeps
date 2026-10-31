@@ -124,6 +124,10 @@ struct TableView: View {
         }
         Divider()
         Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }
+        // (For tests: the core's process ended, as iOS may end it.)
+        if ProcessInfo.processInfo.environment["KEEPS_TEST_HOOKS"] != nil {
+          Button("End the core's process") { game.core.endProcessForTest() }
+        }
       } label: {
         Image(systemName: "ellipsis.circle").font(.title2).foregroundStyle(Theme.gold)
       }
@@ -229,7 +233,9 @@ struct TableCard: View {
       .transition(.asymmetric(insertion: .opacity, removal: .identity))
       .modifier(DropZoneIf(ref: placed ? ref : nil))
       // A touch chooses it; a hold shows it until the finger lifts (and does nothing else); a carry takes it where it goes.
-      .onTapGesture { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
+      // (Listened for only while touching it does something: otherwise the touch is for what holds it, as on the
+      // website. A card in a full keep, when the keep is the target.)
+      .gesture(TapGesture().onEnded { if let ref { game.touch(ref) } }, isEnabled: touch != .none)
       .previewable(id, in: game)
       // Only a card that can be picked up listens for a carry: on the others (those shown for a choice, in a row that
       // scrolls), a swipe has to reach the scrolling.

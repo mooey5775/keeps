@@ -2,8 +2,9 @@
 // message sent with what the web client works out for itself (web/src/game/options.ts, log.ts). The app's core
 // (main.ts) wires it to the web view's message handler; tools/swift-types/goldens.ts drives it from Node, recording
 // what the app would get.
-import { CARD_IDS, CARDS, coinsLabel, type CardId, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
-import type { ClientMessage, ServerMessage } from '../../packages/protocol/src/index.ts';
+import { CARD_IDS, CARDS, coinsLabel, formatReplayLog, parseReplayLog, type CardId, type ReplayLog, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
+import { replayFileName, type ClientMessage, type ServerMessage, type Settings } from '../../packages/protocol/src/index.ts';
+import type { SavedGame } from '../../packages/server/src/room.ts';
 import { hintChance, hintLabel } from '../../packages/web/src/game/hints.ts';
 import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
 import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/web/src/game/options.ts';
@@ -18,8 +19,22 @@ export type FromApp =
    * How long Midstrike waits before each move, so a person can follow it (0 for tests); and, for tests, a seed that
    * makes every game the same (the deal, the seating, Midstrike's draws from its network).
    */
-  | { t: 'config'; botDelayMs: number; seed?: string };
+  | { t: 'config'; botDelayMs: number; seed?: string }
+  /**
+   * A game the app kept (`saved`), taken up again where it was: its room rebuilt from `game` and its replay log, and
+   * connection `id` (new) in your seat, as if you'd come back to it.
+   */
+  | { t: 'restore'; id: number; game: GameRecord; replay: string };
 
+/** What taking a game up again takes, besides its replay log (the server's SavedGame); and whether it's over. */
+export interface GameRecord {
+  code: string;
+  startedAt: number;
+  settings: Omit<Settings, 'firstPlayer'>;
+  seats: SavedGame['seats'];
+  /** Over: nothing to take up. */
+  over: boolean;
+}
 /** A card as the app shows it: its name, its text, and its picture (a file in the app's cards folder). */
 export interface CardInfo {
   id: CardId;
@@ -52,11 +67,22 @@ export interface TableText {
 export type ToApp =
   | { t: 'ready'; workers: number; network: string; cards: CardInfo[] }
   | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText }
-  /** A game's replay log so far (engine/src/replay.ts, as the website's server keeps it), after each move: the app keeps it as `file`. */
-  | { t: 'saved'; file: string; text: string }
+  /**
+   * A game's replay log so far (engine/src/replay.ts, as the website's server keeps it), after each move: the app keeps
+   * it as `file`; and with it, what taking the game up again takes (`restore`).
+   */
+  | { t: 'saved'; file: string; text: string; game: GameRecord }
   /** Each of Midstrike's searches, as it finishes. */
   | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
   | { t: 'failed'; message: string };
+
+/** A game's replay so far (RoomDeps.saveReplay's), as the app keeps it: with what taking the game up again takes. */
+export function savedMessage(server: LocalServer, code: string, startedAt: number, log: ReplayLog): ToApp {
+  const saved = server.saved(code);
+  if (!saved) throw new Error(`room ${code} has no game to keep`);
+  const { log: _, ...game } = saved;
+  return { t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log), game: { code, ...game } };
+}
 
 /** Each connection's game log so far, for the log's lines (they're worked out from the whole log, as the web client does). */
 type Connection = { receive(m: ClientMessage): void; close(): void; events: TraceEvent[] };
@@ -87,6 +113,15 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
       else if (m.t === 'close') {
         connections.get(m.id)?.close();
         connections.delete(m.id);
+      } else if (m.t === 'restore') {
+        const { code, startedAt, settings, seats } = m.game;
+        const tokens = server.restore(code, { log: parseReplayLog(m.replay), startedAt, settings, seats });
+        const you = seats.find((s) => !s.bot);
+        const token = you && tokens.get(you.seat);
+        if (!token) throw new Error(`the kept game ${code} has no one to take it up`);
+        const connection = { ...server.connect((message) => deliver(m.id, message)), events: [] };
+        connections.set(m.id, connection);
+        connection.receive({ t: 'resume', code, token });
       }
     } catch (error) {
       post({ t: 'failed', message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) });

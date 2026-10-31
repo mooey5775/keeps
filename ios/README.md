@@ -17,7 +17,7 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
   - Use `APP_ID=online.playkeeps.KeepsSpike` until the developer account has a profile for the app's own id.
 - `SIM='iPhone 17' ios/sync.sh --no-run` builds for the Mac's simulator instead (no signing).
 - `ios/tools/screenshot.sh out.png 20 KEEPS_PLAY=easy:3:12` takes a screenshot on the simulator: a game against Easy, with your first 12 moves made at random.
-- `GOLDENS_HOST=gpu03 ios/test.sh` runs the tests:
+- `GOLDENS_HOST=gpu03 ios/test.sh` runs the tests (on this tree's core, built by `ios/tools/build-core.sh`, as `sync.sh`'s is):
   - the generated types checked against the TypeScript;
   - the golden messages of whole games, recorded on gpu03;
   - the Swift tests on the simulator: the protocol round trips, choosing, and the table's UI tests (touching, holding, carrying).
@@ -30,10 +30,19 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
 - `ios/tools/pull-games.sh` fetches the games the app kept: each one's replay log, in `Documents/games`.
 - `python3 ios/tools/make-icon.py` draws the icon.
 
+## A game kept through the app closing
+
+The core sends each game's replay after every move (`saved`), with what taking it up again takes: the room's code, its
+start, its settings, who sits where. The app keeps both (`Documents/games`, and `Documents/playing.json` for the game in
+progress). Opened again, the lobby offers to continue it: the core rebuilds its room (`Room.restore`, the server's own),
+every move replayed as it was played, so Midstrike and training mode know what they knew, and the app resumes its seat.
+When iOS ends the core's process (it may, in the background, to free memory), the core starts again and the game is
+taken up the same way.
+
 ## TODO
 
-- **Next:** keeping a game through the app closing (rebuilt from its kept replay) and the app's lifecycle; joining games on
-  playkeeps.online (the core opening a WebSocket to the website's server, its messages through the same bridge).
+- **Next:** joining games on playkeeps.online (the core opening a WebSocket to the website's server, its messages through
+  the same bridge).
 - **Analytics:** collect game traces (each game's replay log, already kept on the phone and on the website's server),
   opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
   With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's

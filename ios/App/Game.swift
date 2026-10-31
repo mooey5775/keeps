@@ -26,6 +26,8 @@ final class Game {
   let book: CardBook
   /// Where the app is: choosing a game, setting it up with the core, or at the table.
   private(set) var screen: Screen = .lobby
+  /// What's said while starting: a game being dealt, or taken up again.
+  private(set) var starting = "Dealing…"
   enum Screen { case lobby, starting, table }
 
   private(set) var room: RoomSummary?
@@ -89,6 +91,9 @@ final class Game {
   /// The card shown large while a finger holds it (a long press; letting go only puts it away).
   var preview: CardId?
 
+  /// The game the app kept unfinished when it last closed: the lobby offers to take it up again.
+  private(set) var unfinished: Core.Kept?
+
   private var connection: Int?
   private var setup = Setup()
   /// Sent `start` for this setup (the room's messages that follow mustn't start it again).
@@ -101,6 +106,32 @@ final class Game {
     self.book = book
     core.onSearch = { [weak self] search in self?.lastSearch = search }
     core.onFailure = { [weak self] message in self?.problem = message }
+    core.onEnded = { [weak self] in self?.coreEnded() }
+    core.onRestarted = { [weak self] in self?.coreRestarted() }
+    unfinished = core.kept()?.kept
+  }
+
+  /// The core's process ended, taking the room with it: the table waits for the game to be taken up again.
+  private func coreEnded() {
+    connection = nil
+    dragging = nil
+    picked = []
+    if screen == .table {
+      starting = "Taking up your game…"
+      screen = .starting
+    }
+  }
+
+  /// The core started again (its process ended, taking the room with it): the game in progress taken up again from
+  /// what was kept; with nothing kept (a game not yet dealt, or over), back to the lobby.
+  private func coreRestarted() {
+    connection = nil
+    guard screen != .lobby else { return unfinished = core.kept()?.kept }
+    if core.kept() != nil {
+      resume()
+    } else {
+      leave(forgetting: false)
+    }
   }
 
   // MARK: Starting and leaving
@@ -108,14 +139,30 @@ final class Game {
   /// A new room with Midstrike, set up as `setup`, and its game started.
   func play(_ setup: Setup, autoplay: Int = 0) {
     leave()
+    // (This game is the one kept from now on.)
+    unfinished = nil
     feed = []
     self.setup = setup
     self.autoplay = autoplay
     started = false
+    starting = "Dealing…"
     screen = .starting
     let id = core.connect { [weak self] server in self?.received(server) }
     connection = id
     core.send(id, .create(ClientMessageCreate(name: setup.name, bot: true)))
+  }
+
+  /// The game kept unfinished, taken up where it was: the table as it was, Midstrike knowing what it knew.
+  func resume() {
+    guard let found = core.kept() else { return unfinished = nil }
+    leave(forgetting: false)
+    let record = found.kept.game
+    let you = record.seats.first { $0.bot != true }
+    setup = Setup(name: you?.name ?? "Player", level: record.settings.botLevel ?? .hard, marks: Int(record.settings.marksToWin))
+    started = true
+    starting = "Taking up your game…"
+    screen = .starting
+    connection = core.restore(found.kept, replay: found.replay) { [weak self] server in self?.received(server) }
   }
 
   /// The same game again, in the same room.
@@ -125,12 +172,17 @@ final class Game {
     lines = []
     feed = []
     started = false
+    starting = "Dealing…"
     screen = .starting
     core.send(connection, .backToLobby)
   }
 
-  /// Back to the lobby; the room goes.
-  func leave() {
+  /// Back to the lobby; the room goes (and, `forgetting`, the game kept to take up again: it was left).
+  func leave(forgetting: Bool = true) {
+    if forgetting, game != nil {
+      core.forgetKept()
+      unfinished = nil
+    }
     if let connection { core.close(connection) }
     connection = nil
     room = nil

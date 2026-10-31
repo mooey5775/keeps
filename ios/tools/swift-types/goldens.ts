@@ -22,7 +22,7 @@ const { setSearchLog, setSearchMode, setWorlds } = await import('../../../packag
 const { RolloutPool } = await import('../../../packages/learn/demo/rollout-pool.ts');
 const { reviewRunner } = await import('../../../packages/learn/demo/review-jobs.ts');
 const { LocalServer } = await import('../../core/local-server.ts');
-const { coreBridge } = await import('../../core/bridge.ts');
+const { coreBridge, savedMessage } = await import('../../core/bridge.ts');
 const { capped } = await import('../../core/search-pool.ts');
 const { composeHooks } = await import('../../../packages/learn/demo/host.ts');
 const { seeded } = await import('../../../packages/learn/demo/random.ts');
@@ -34,8 +34,7 @@ type FromApp = import('../../core/bridge.ts').FromApp;
 type ToApp = import('../../core/bridge.ts').ToApp;
 type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
-const { apply, formatReplayLog } = await import('../../../packages/engine/src/index.ts');
-const { replayFileName } = await import('../../../packages/protocol/src/index.ts');
+const { apply } = await import('../../../packages/engine/src/index.ts');
 const { click, clickable, panelItems } = await import('../../../packages/web/src/game/options.ts');
 type Option = import('../../../packages/web/src/game/options.ts').Option;
 type Ref = import('../../../packages/web/src/game/options.ts').Ref;
@@ -163,7 +162,9 @@ const server = new LocalServer({
   now: Date.now,
   // The app keeps each game's replay: the core sends it after every move (recorded in the scripted games).
   saveReplay: (code: string, startedAt: number, log: import('../../../packages/engine/src/index.ts').ReplayLog) => {
-    if (recordAll) toApp.push(JSON.stringify({ t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log) } satisfies ToApp));
+    const saved = savedMessage(server, code, startedAt, log);
+    if (recordAll) toApp.push(JSON.stringify(saved));
+    for (const l of listeners) l(saved);
   },
   bot: {
     policy,
@@ -230,7 +231,9 @@ async function game(level: string, marks: number, extras: boolean, training = tr
   const answered = new Set<string>();
   let over = false;
   let moves = 0;
+  let kept: Extract<ToApp, { t: 'saved' }> | null = null;
   const listener = (m: ToApp) => {
+    if (m.t === 'saved') kept = m;
     if (m.t !== 'server' || m.id !== id) return;
     const message = m.message;
     if (message.t === 'welcome') {
@@ -290,6 +293,7 @@ async function game(level: string, marks: number, extras: boolean, training = tr
     send({ t: 'client', id, message: { t: 'create', name: 'Golden', bot: true } });
   }
   let sentExtras = !extras;
+  let restored = false;
   for (let wait = 0; !over && wait < 6000; wait++) {
     await settle();
     if (!sentExtras && moves >= 6) {
@@ -313,9 +317,19 @@ async function game(level: string, marks: number, extras: boolean, training = tr
       send({ t: 'close', id: lost });
       answered.clear();
     }
+    if (extras && moves >= 12 && kept && !restored) {
+      // The app closed and opened again: the game taken up from what it kept, on a new connection.
+      restored = true;
+      await settle();
+      const back = nextId++;
+      send({ t: 'restore', id: back, game: kept.game, replay: kept.text });
+      id = back;
+      answered.clear();
+    }
   }
   if (!over) throw new Error(`the ${level} game didn't end`);
   if (!sentExtras) throw new Error(`the ${level} game ended before the rarer messages were sent`);
+  if (extras && !restored) throw new Error(`the ${level} game ended before it was taken up again`);
   // The last round's review: its jobs run here, after the game.
   for (let wait = 0; queue.length && wait < 3000; wait++) await settle();
   await settle();
@@ -350,7 +364,8 @@ const decisions = toApp
   .map((line) => JSON.parse(line) as { t: string; options?: Option[] })
   .filter((m) => m.t === 'server' && (m.options?.length ?? 0) > 1)
   .map((m) => m.options!);
-for (const options of decisions) {
+// (Rounds of fresh touches on the same decisions until there are enough: as many whatever length the games came out.)
+for (let round = 0; round < 20 && choosing.length < 400; round++) for (const options of decisions) {
   const all = [...new Set(options.flatMap((o) => o.refs))];
   let picked: Ref[] = [];
   for (let step = 0; step < 4 && all.length; step++) {

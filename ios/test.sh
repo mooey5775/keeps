@@ -4,6 +4,7 @@
 # (ios/Tests) run on the Mac's iOS simulator with them.
 #   ios/test.sh
 #   GOLDENS_HOST=gpu03 ios/test.sh   the games recorded there (a copy of this tree in ~/src/keeps-work), not here
+# The app tested is this tree's: its core is built here too (ios/tools/build-core.sh), not whatever sync.sh last sent.
 set -euo pipefail
 MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale (MAC=edwardli@10.16.19.95 on the local network)
 SIMULATOR=${SIMULATOR:-iPhone 17}
@@ -27,9 +28,10 @@ else
   node ios/tools/swift-types/goldens.ts ios/build/goldens
 fi
 
+ios/tools/build-core.sh > /dev/null
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build'
 rsync -a --delete ios/App ios/Shared ios/Spike ios/Tests ios/UITests ios/project.yml "$MAC:src/keeps/ios/"
-rsync -a --delete ios/build/goldens "$MAC:src/keeps/ios/build/"
+rsync -a --delete ios/build/goldens ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
 ssh "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" <<'REMOTE'
 set -euo pipefail
 eval "$(/opt/homebrew/bin/brew shellenv)"

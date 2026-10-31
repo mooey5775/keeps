@@ -1216,6 +1216,7 @@ public enum FromApp: Codable, Equatable, Sendable {
   case close(FromAppClose)
   case config(FromAppConfig)
   case connect(FromAppConnect)
+  case restore(FromAppRestore)
 
   private enum Tag: String, CodingKey { case tag = "t" }
 
@@ -1226,6 +1227,7 @@ public enum FromApp: Codable, Equatable, Sendable {
     case "close": self = .close(try FromAppClose(from: decoder))
     case "config": self = .config(try FromAppConfig(from: decoder))
     case "connect": self = .connect(try FromAppConnect(from: decoder))
+    case "restore": self = .restore(try FromAppRestore(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "FromApp: no case \(other)")
     }
   }
@@ -1245,6 +1247,9 @@ public enum FromApp: Codable, Equatable, Sendable {
     case .connect(let value):
       try container.encode("connect", forKey: .tag)
       try value.encode(to: encoder)
+    case .restore(let value):
+      try container.encode("restore", forKey: .tag)
+      try value.encode(to: encoder)
     }
   }
 
@@ -1255,6 +1260,7 @@ public enum FromApp: Codable, Equatable, Sendable {
     case .close: return "close"
     case .config: return "config"
     case .connect: return "connect"
+    case .restore: return "restore"
     }
   }
 }
@@ -1354,6 +1360,144 @@ public struct FromAppConnect: Codable, Equatable, Sendable {
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(id, forKey: .id)
+  }
+}
+
+public struct FromAppRestore: Codable, Equatable, Sendable {
+  public var id: Double
+  public var game: GameRecord
+  public var replay: String
+
+  public init(id: Double, game: GameRecord, replay: String) {
+    self.id = id
+    self.game = game
+    self.replay = replay
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case game
+    case replay
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(Double.self, forKey: .id)
+    game = try container.decode(GameRecord.self, forKey: .game)
+    replay = try container.decode(String.self, forKey: .replay)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(id, forKey: .id)
+    try container.encode(game, forKey: .game)
+    try container.encode(replay, forKey: .replay)
+  }
+}
+
+public struct GameRecord: Codable, Equatable, Sendable {
+  public var code: String
+  public var startedAt: Double
+  public var settings: GameRecordSettings
+  public var seats: [GameRecordSeatsElement]
+  public var over: Bool
+
+  public init(code: String, startedAt: Double, settings: GameRecordSettings, seats: [GameRecordSeatsElement], over: Bool) {
+    self.code = code
+    self.startedAt = startedAt
+    self.settings = settings
+    self.seats = seats
+    self.over = over
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case code
+    case startedAt
+    case settings
+    case seats
+    case over
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    code = try container.decode(String.self, forKey: .code)
+    startedAt = try container.decode(Double.self, forKey: .startedAt)
+    settings = try container.decode(GameRecordSettings.self, forKey: .settings)
+    seats = try container.decode([GameRecordSeatsElement].self, forKey: .seats)
+    over = try container.decode(Bool.self, forKey: .over)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(code, forKey: .code)
+    try container.encode(startedAt, forKey: .startedAt)
+    try container.encode(settings, forKey: .settings)
+    try container.encode(seats, forKey: .seats)
+    try container.encode(over, forKey: .over)
+  }
+}
+
+public struct GameRecordSeatsElement: Codable, Equatable, Sendable {
+  public var seat: Int
+  public var name: String
+  public var bot: Bool?
+  public var training: Bool?
+
+  public init(seat: Int, name: String, bot: Bool? = nil, training: Bool? = nil) {
+    self.seat = seat
+    self.name = name
+    self.bot = bot
+    self.training = training
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case seat
+    case name
+    case bot
+    case training
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    seat = try container.decode(Int.self, forKey: .seat)
+    name = try container.decode(String.self, forKey: .name)
+    bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
+    training = try container.decodeIfPresent(Bool.self, forKey: .training)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(seat, forKey: .seat)
+    try container.encode(name, forKey: .name)
+    try container.encodeIfPresent(bot, forKey: .bot)
+    try container.encodeIfPresent(training, forKey: .training)
+  }
+}
+
+public struct GameRecordSettings: Codable, Equatable, Sendable {
+  public var marksToWin: Double
+  public var botLevel: BotLevel?
+
+  public init(marksToWin: Double, botLevel: BotLevel? = nil) {
+    self.marksToWin = marksToWin
+    self.botLevel = botLevel
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case marksToWin
+    case botLevel
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    marksToWin = try container.decode(Double.self, forKey: .marksToWin)
+    botLevel = try container.decodeIfPresent(BotLevel.self, forKey: .botLevel)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(marksToWin, forKey: .marksToWin)
+    try container.encodeIfPresent(botLevel, forKey: .botLevel)
   }
 }
 
@@ -3783,27 +3927,32 @@ public struct ToAppReady: Codable, Equatable, Sendable {
 public struct ToAppSaved: Codable, Equatable, Sendable {
   public var file: String
   public var text: String
+  public var game: GameRecord
 
-  public init(file: String, text: String) {
+  public init(file: String, text: String, game: GameRecord) {
     self.file = file
     self.text = text
+    self.game = game
   }
 
   private enum CodingKeys: String, CodingKey {
     case file
     case text
+    case game
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
     file = try container.decode(String.self, forKey: .file)
     text = try container.decode(String.self, forKey: .text)
+    game = try container.decode(GameRecord.self, forKey: .game)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
     try container.encode(file, forKey: .file)
     try container.encode(text, forKey: .text)
+    try container.encode(game, forKey: .game)
   }
 }
 

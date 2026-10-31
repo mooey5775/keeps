@@ -138,6 +138,19 @@ export interface BotDeps {
   advise?(turn: BotTurn): Promise<Hint[]>;
 }
 
+/**
+ * A game in the middle, saved to be taken up again (when the server or app that held its room closed): its replay log,
+ * when it started, the room's settings, and who sat where. The people resume their seats with the tokens
+ * Room.restore returns.
+ */
+export interface SavedGame {
+  log: ReplayLog;
+  startedAt: number;
+  /** (The first player for the next game is chosen again: it's a player, and the players are new.) */
+  settings: Omit<Settings, 'firstPlayer'>;
+  seats: { seat: Seat; name: string; bot?: boolean; training?: boolean }[];
+}
+
 /** Analytics id for the bot's own events (one person for every bot game). */
 const BOT_ANALYTICS_ID = 'keeps-bot';
 
@@ -224,6 +237,44 @@ export class Room {
     this.lastActivity = this.createdAt;
   }
 
+  /**
+   * The room of a saved game, as it was: the people and the bot in their seats, every command applied as it was
+   * played. The bot observes its view before each of its own commands (as working one out does) and training mode's
+   * shadow bots follow each person's decisions, so their beliefs are the ones they had. (Save one: a move of the bot's
+   * worked out, then dropped because the game moved on meanwhile, observed a position the log doesn't hold.) Nothing
+   * is sent, saved or tracked, and hooks hear nothing of it; once rebuilt, the bot is scheduled if it's to move.
+   * Returns each person's token, by seat, to resume with. Throws if the log doesn't replay.
+   */
+  static restore(code: string, deps: RoomDeps, saved: SavedGame): { room: Room; tokens: Map<Seat, string> } {
+    const room = new Room(code, deps);
+    room.settings = { ...saved.settings, firstPlayer: 'random' };
+    const tokens = new Map<Seat, string>();
+    for (const { seat, name, bot = false, training = false } of saved.seats) {
+      if (bot && !deps.bot) throw new Error(`room ${code}: the saved game has the bot, and this server doesn't`);
+      const host = !bot && !room.players.some((p) => p.host);
+      const player: Player = { id: deps.id(), name, token: deps.token(), host, seat, send: null, ip: null, client: null, joinedAt: deps.now(), bot, training };
+      room.players.push(player);
+      if (!bot) tokens.set(seat, player.token);
+    }
+    const { state, events } = newGame(saved.log.options);
+    const seats = playerSeats(state);
+    if (seats.length !== saved.seats.length || !seats.every((s) => saved.seats.some((p) => p.seat === s))) {
+      throw new Error(`room ${code}: the saved game's seats (${saved.seats.map((p) => p.seat)}) aren't its game's (${seats})`);
+    }
+    const game = room.newGameOf(state, events, saved.log.options, saved.startedAt);
+    room.game = game;
+    room.followHumans();
+    for (const [index, { seat, command }] of saved.log.commands.entries()) {
+      game.bots.find((b) => b.seat === seat)?.observe(game.state, game.events);
+      const result = apply(game.state, seat, command);
+      if (!result.ok) throw new Error(`room ${code}: the saved game's command ${index} doesn't replay (${result.error.message})`);
+      room.record(game, seat, command, result.state, result.events);
+      room.followHumans();
+    }
+    room.scheduleBot();
+    return { room, tokens };
+  }
+
   get connectedCount(): number {
     return this.players.filter((p) => p.send).length;
   }
@@ -235,6 +286,15 @@ export class Room {
   /** When the running game started (it names the game's replay file), or null. */
   get gameStartedAt(): number | null {
     return this.game?.startedAt ?? null;
+  }
+
+  /** The running game, saved to be taken up again (Room.restore), or null. */
+  saved(): SavedGame | null {
+    const game = this.game;
+    if (!game) return null;
+    const { firstPlayer: _, ...settings } = this.settings;
+    const seats = this.players.flatMap((p) => (p.seat === null ? [] : [{ seat: p.seat, name: p.name, ...(p.bot ? { bot: true } : {}), ...(p.training ? { training: true } : {}) }]));
+    return { log: structuredClone(game.log), startedAt: game.startedAt, settings, seats };
   }
 
   /** The running game, or null (for hooks: the same object as long as the game lasts). */
@@ -445,11 +505,7 @@ export class Room {
     };
     const { state, events } = chosen ? newGame(options) : preview;
     const startedAt = this.deps.now();
-    const bots = this.players.filter((p) => p.bot).map((p) => new BotPlayer(this.deps.bot!.policy, p.seat!, this.deps.random));
-    const advisors: Game['advisors'] = new Map(
-      bots.length ? this.players.filter((p) => !p.bot && p.seat !== null).map((p) => [p.seat!, { bot: new BotPlayer(this.deps.bot!.policy, p.seat!), advice: null }]) : [],
-    );
-    this.game = { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors };
+    this.game = this.newGameOf(state, events, options, startedAt);
     this.followHumans();
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
     const seated = this.seatedPlayers();
@@ -468,6 +524,15 @@ export class Room {
     return null;
   }
 
+  /** A game just dealt, its players seated: the bot at its seat, and (against the bot) a shadow bot at each person's. */
+  private newGameOf(state: GameState, events: TraceEvent[], options: ReplayLog['options'], startedAt: number): Game {
+    const bots = this.players.filter((p) => p.bot).map((p) => new BotPlayer(this.deps.bot!.policy, p.seat!, this.deps.random));
+    const advisors: Game['advisors'] = new Map(
+      bots.length ? this.players.filter((p) => !p.bot && p.seat !== null).map((p) => [p.seat!, { bot: new BotPlayer(this.deps.bot!.policy, p.seat!), advice: null }]) : [],
+    );
+    return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors };
+  }
+
   private command(player: Player, command: Command): string | null {
     const game = this.game;
     if (!game) return 'The game has not started.';
@@ -476,13 +541,7 @@ export class Room {
     if (!result.ok) return result.error.message;
 
     const before = game.state;
-    const newRound = result.state.round !== before.round;
-    game.history = newRound ? [] : [...game.history, { state: before, events: game.events.length }];
-    game.state = result.state;
-    game.events = [...game.events, ...result.events];
-    game.log.commands.push({ seat: player.seat, command });
-    game.undo = null;
-    if (newRound) game.roundStartedAt = this.deps.now();
+    this.record(game, player.seat, command, result.state, result.events);
     this.deps.saveReplay?.(this.code, game.startedAt, game.log);
     this.trackCommand(game, before, result.events);
     this.followHumans();
@@ -490,6 +549,18 @@ export class Room {
     this.scheduleBot();
     this.deps.hooks?.commanded?.(this, { seat: player.seat, command, before, after: result.state, newEvents: result.events, events: game.events });
     return null;
+  }
+
+  /** The game after a command: its state, events and log, and what undo would restore. */
+  private record(game: Game, seat: Seat, command: Command, state: GameState, events: TraceEvent[]): void {
+    const before = game.state;
+    const newRound = state.round !== before.round;
+    game.history = newRound ? [] : [...game.history, { state: before, events: game.events.length }];
+    game.state = state;
+    game.events = [...game.events, ...events];
+    game.log.commands.push({ seat, command });
+    game.undo = null;
+    if (newRound) game.roundStartedAt = this.deps.now();
   }
 
   // -- The bot ---------------------------------------------------------------

@@ -8,10 +8,13 @@ final class TableUITests: XCTestCase {
   /// Fixed deals, so each test plays the same game every time (whichever seat you get):
   /// - ui-7: your first three draws aren't HOT, and are played on their own (Epiphany, Prayer, Providence; or
   ///   Requisition, Legerdemain, Scepter);
-  /// - ui-keep-3: your first draw is a Keep card, played into a keep (Retribution; or Scepter).
+  /// - ui-keep-3: your first draw is a Keep card, played into a keep (Retribution; or Scepter);
+  /// - ui-hot-43: your first draw is HOT, and so is your second (Acquisition), with the first in your keep (found by
+  ///   drawing every move in the core's server, as the app runs it, over seeds).
   private enum Deal: String {
     case alone = "ui-7"
     case keep = "ui-keep-3"
+    case hotTwice = "ui-hot-43"
   }
 
   override func setUp() {
@@ -41,10 +44,14 @@ final class TableUITests: XCTestCase {
     return XCTWaiter().wait(for: [expectation], timeout: seconds) == .completed
   }
 
+  /// The panel's move putting a HOT card into your keep (its label also names the card pictured on it).
+  private var putIntoYourKeep: XCUIElement {
+    app.buttons.matching(NSPredicate(format: "label CONTAINS 'Put ' AND label CONTAINS 'into your keep'")).firstMatch
+  }
+
   /// Answers a HOT card's prompt, if one is open (the card drawn may be HOT): into your keep.
   private func placeHot() {
-    let put = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Put ' AND label ENDSWITH 'into your keep'")).firstMatch
-    if put.waitForExistence(timeout: 1) { put.tap() }
+    if putIntoYourKeep.waitForExistence(timeout: 1) { putIntoYourKeep.tap() }
   }
 
   /// Waits for your turn (the panel offers to draw), up to `seconds`.
@@ -170,6 +177,78 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(eventually(8) { handCards.count > before }, "the move wasn't made")
     XCTAssertFalse(app.alerts["Something went wrong"].waitForExistence(timeout: 2), "the move was sent twice")
     XCTAssertEqual(handCards.count, before + 1, "the move was made twice")
+  }
+
+  /// The cards in your keep.
+  private var yourKeepCards: [XCUIElement] {
+    element("Your keep").descendants(matching: .any).matching(NSPredicate(format: "identifier BEGINSWITH 'keepcard:'")).allElementsBoundByIndex
+  }
+
+  func testTouchingACardInYourKeepChoosesYourKeep() throws {
+    launch(.hotTwice)
+    // Drawing: the first HOT card goes into your keep from the panel; the second goes there by touching the card in it
+    // (a full keep is all cards: the touch is for the keep).
+    let put = putIntoYourKeep
+    for _ in 0..<8 {
+      XCTAssertTrue(eventually(40) { put.exists || self.app.buttons["Draw from your pile"].exists })
+      guard put.exists else {
+        yourPile.tap()
+        _ = put.waitForExistence(timeout: 3)
+        continue
+      }
+      let before = yourKeepCards.count
+      guard before > 0 else {
+        put.tap()
+        continue
+      }
+      yourKeepCards.first!.tap()
+      XCTAssertTrue(eventually(5) { yourKeepCards.count == before + 1 }, "touching a card in your keep didn't put the HOT card there")
+      return
+    }
+    XCTFail("no HOT card came with a card in your keep")
+  }
+
+  func testAGameIsTakenUpAgainAfterTheAppCloses() throws {
+    launch()
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    placeHot()
+    XCTAssertTrue(yourTurn(40))
+    yourPile.tap()
+    placeHot()
+    XCTAssertTrue(eventually(5) { !handCards.isEmpty })
+    let hand = handCards.map(\.identifier).sorted()
+    // Closed, opened again (not straight into a game): the lobby offers the game, and it's as it was.
+    app.terminate()
+    app.launchEnvironment["KEEPS_PLAY"] = nil
+    app.launch()
+    let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue'")).firstMatch
+    XCTAssertTrue(resume.waitForExistence(timeout: 30), "the lobby doesn't offer the game")
+    resume.tap()
+    XCTAssertTrue(eventually(10) { handCards.map(\.identifier).sorted() == hand }, "the hand isn't as it was")
+    // And it plays on.
+    XCTAssertTrue(yourTurn(40) || app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Play '")).firstMatch.exists)
+  }
+
+  func testAGameGoesOnWhenTheCoresProcessEnds() throws {
+    app = XCUIApplication()
+    app.launchEnvironment["KEEPS_PLAY"] = "easy:5"
+    app.launchEnvironment["KEEPS_SEED"] = Deal.alone.rawValue
+    app.launchEnvironment["KEEPS_TEST_HOOKS"] = "1"
+    app.launch()
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    placeHot()
+    XCTAssertTrue(eventually(5) { !handCards.isEmpty })
+    let hand = handCards.map(\.identifier).sorted()
+    // The core's process ended (as iOS ends it, to free memory): the core starts again, and the game with it.
+    app.buttons["Game menu"].tap()
+    app.buttons["End the core's process"].tap()
+    XCTAssertTrue(eventually(10) { handCards.isEmpty }, "the table stayed as if the game were still there")
+    XCTAssertTrue(eventually(30) { handCards.map(\.identifier).sorted() == hand && self.app.buttons["Draw from your pile"].exists }, "the game didn't come back as it was")
+    XCTAssertFalse(app.alerts["Something went wrong"].exists)
+    yourPile.tap()
+    XCTAssertTrue(eventually(5) { handCards.count > hand.count }, "the game doesn't go on")
   }
 
   func testYourPileCarriedToYourHandDraws() throws {
