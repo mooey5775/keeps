@@ -10,6 +10,8 @@ import SwiftUI
 final class Game {
   /// How to start: Midstrike's level, the marks to win, who plays first.
   struct Setup: Equatable {
+    /// Your name, as the log writes it ("Eddie draws a card…"; the table says "you").
+    var name = "Player"
     var level: BotLevel = .hard
     var marks = 3
     var first: First = .random
@@ -38,6 +40,18 @@ final class Game {
   /// Moves you've made, and moves of Midstrike's seen (for the haptics: each change is a tap).
   private(set) var movesMade = 0
   private(set) var botMoves = 0
+  /// What just happened that you didn't do (Midstrike's moves, mostly): the log's newest lines, each shown a few
+  /// seconds as it rises and fades over the table.
+  private(set) var feed: [FeedLine] = []
+  private var feedCount = 0
+  /// A move of yours was sent: the log lines that come back with it are yours, not news.
+  private var awaitingMine = false
+
+  struct FeedLine: Identifiable, Equatable {
+    let id: Int
+    let text: String
+    let heading: Bool
+  }
   /// Midstrike's last search: how many deals it played out, and how long it took.
   private(set) var lastSearch: ToAppSearch?
   /// Something went wrong (shown until dismissed).
@@ -68,7 +82,7 @@ final class Game {
     screen = .starting
     let id = core.connect { [weak self] server in self?.received(server) }
     connection = id
-    core.send(id, .create(ClientMessageCreate(name: "You", bot: true)))
+    core.send(id, .create(ClientMessageCreate(name: setup.name, bot: true)))
   }
 
   /// The same game again, in the same room.
@@ -115,26 +129,50 @@ final class Game {
 
   // MARK: Dragging
 
-  /// A card picked up from the table: where it can go (the elements that make a move with it), and whether dropping
-  /// it in the middle of the table makes a move on its own ("Play Hocus Pocus").
+  /// A card picked up from the table: where it can go (the elements that make a move with it), and whether letting it
+  /// go in `aloneZone` makes a move on its own: a card from your hand in the middle of the table ("Play Hocus Pocus"),
+  /// an ability card from your keep there too (to use it), your pile's top in your hand (to draw).
   struct Drag: Equatable {
     let ref: String
     let card: CardId?
     var location: CGPoint
     let targets: Set<String>
     let alone: Command?
+    let aloneZone: String
+    /// What letting it go in `aloneZone` does, in a few words.
+    let aloneWords: String
   }
 
-  /// Whether the card at `ref` can be picked up: it starts a move (a drag starts afresh, whatever was touched).
-  func canDrag(_ ref: String) -> Bool { Choosing.touchable(options, []).contains(ref) }
+  /// Whether `ref` can be picked up: a card that starts a move (from your hand, or your keep), or your pile, to draw
+  /// from it. (A drag starts afresh, whatever was touched.)
+  func canDrag(_ ref: String) -> Bool {
+    if ref.hasPrefix("pile:") { return ref == "pile:\(me)" && drawCommand != nil }
+    return (ref.hasPrefix("hand:") || ref.hasPrefix("keepcard:")) && Choosing.touchable(options, []).contains(ref)
+  }
+
+  /// Drawing from your pile, when it's a move now.
+  private var drawCommand: Command? {
+    options.first { option in
+      guard option.refs == ["pile:\(me)"], case .answer(let answer) = option.command, case .action(let action) = answer.answer,
+        case .draw = action.choice
+      else { return false }
+      return true
+    }?.command
+  }
 
   func startDrag(_ ref: String, card: CardId?, at location: CGPoint) {
-    let moves = Choosing.narrow(options, [ref])
     picked = []
+    if ref.hasPrefix("pile:") {
+      dragging = Drag(ref: ref, card: nil, location: location, targets: [], alone: drawCommand, aloneZone: "hand", aloneWords: "Let go to draw")
+      return
+    }
+    let moves = Choosing.narrow(options, [ref])
     dragging = Drag(
       ref: ref, card: card, location: location,
       targets: Set(moves.flatMap(\.refs)).subtracting([ref]),
-      alone: moves.first(where: { $0.refs == [ref] })?.command)
+      alone: moves.first(where: { $0.refs == [ref] })?.command,
+      aloneZone: "middle",
+      aloneWords: ref.hasPrefix("keepcard:") ? "Let go here to use it" : "Let go here to play it")
   }
 
   func moveDrag(to location: CGPoint) { dragging?.location = location }
@@ -146,7 +184,7 @@ final class Game {
   func endDrag(on target: String?) -> Bool {
     guard let drag = dragging else { return false }
     dragging = nil
-    if target == "middle", let alone = drag.alone {
+    if target == drag.aloneZone, let alone = drag.alone {
       send(alone)
       return true
     }
@@ -181,6 +219,7 @@ final class Game {
     picked = []
     guard let connection else { return }
     movesMade += 1
+    awaitingMine = true
     core.send(connection, .command(ClientMessageCommand(command: command)))
   }
 
@@ -208,6 +247,10 @@ final class Game {
       if let bot = botSeat, message.log.contains(where: { if case .action(let a) = $0.payload { return a.seat == bot } else { return false } }) {
         botMoves += 1
       }
+      // What happened, unless it was your own move.
+      let all = server.lines ?? []
+      let fresh = all.count >= lines.count && game != nil ? Array(all.dropFirst(lines.count)) : []
+      if awaitingMine, !fresh.isEmpty { awaitingMine = false } else { tell(fresh) }
       // The table moves to the new position with its cards gliding to their new places.
       withAnimation(.snappy(duration: 0.35)) {
         // A new decision clears a half-made selection (and a card still being dragged).
@@ -228,6 +271,22 @@ final class Game {
       leave()
     case .welcome, .review:
       break
+    }
+  }
+
+  /// Shows `lines` in the feed (the last few, if many came at once), each for a few seconds.
+  private func tell(_ lines: [LogLine]) {
+    for line in lines.suffix(4) {
+      feedCount += 1
+      let item = FeedLine(id: feedCount, text: line.text, heading: line.heading)
+      withAnimation(.snappy(duration: 0.3)) {
+        feed.append(item)
+        if feed.count > 4 { feed.removeFirst(feed.count - 4) }
+      }
+      Task { @MainActor [weak self] in
+        try? await Task.sleep(for: .seconds(5))
+        withAnimation(.easeOut(duration: 0.6)) { self?.feed.removeAll { $0.id == item.id } }
+      }
     }
   }
 

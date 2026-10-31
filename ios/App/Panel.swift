@@ -1,13 +1,14 @@
 import SwiftUI
 
 /// Under the table: what's happening (what you decide, or whom everyone waits on), the cards on display for your
-/// decision, training mode's hints, and your moves as buttons, folded into groups when there are many. At the end
-/// of the game: play again, or leave.
+/// decision, training mode's hints, and your moves: one row of small buttons (folded into groups when there are many),
+/// all of them in a list a touch away, so the panel never covers the table. At the end of the game: play again, or leave.
 struct DecisionPanel: View {
   let game: Game
   let view: PlayerView
   let table: TableText
   let leave: () -> Void
+  @State private var allMoves = false
 
   var body: some View {
     VStack(alignment: .leading, spacing: 10) {
@@ -51,26 +52,99 @@ struct DecisionPanel: View {
     }
   }
 
+  /// Your moves, in one row (the table is where they're mostly made: touched, or carried), and all of them a touch away.
   @ViewBuilder
   private var options: some View {
     let remaining = game.remaining
     if !remaining.isEmpty {
       let items = Choosing.panelItems(remaining, game.picked)
+      HStack(spacing: 8) {
+        if !game.picked.isEmpty {
+          Button { game.clearPicked() } label: {
+            Image(systemName: "arrow.uturn.backward").font(.body.weight(.semibold)).foregroundStyle(Theme.gold).frame(width: 36, height: 36)
+          }
+          .accessibilityLabel("Cancel selection")
+        }
+        ScrollView(.horizontal) {
+          HStack(spacing: 6) {
+            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+              OptionChip(game: game, item: item, remaining: remaining)
+            }
+          }
+        }
+        .scrollIndicators(.hidden)
+        if items.count > 2 || remaining.count > 2 {
+          Button { allMoves = true } label: {
+            Image(systemName: "list.bullet").font(.body.weight(.semibold)).foregroundStyle(Theme.gold).frame(width: 36, height: 36)
+              .background(Theme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+          }
+          .accessibilityLabel("All moves")
+        }
+      }
+      .sheet(isPresented: $allMoves) { AllMovesSheet(game: game) }
+    }
+  }
+}
+
+/// One of your moves (or a group of them), small, for the panel's row.
+struct OptionChip: View {
+  let game: Game
+  let item: Choosing.PanelItem
+  let remaining: [Option]
+
+  var body: some View {
+    Button {
+      game.choose(item)
+    } label: {
+      HStack(spacing: 6) {
+        ForEach(Array(OptionButton.cards(item, remaining).prefix(2).enumerated()), id: \.offset) { _, card in
+          CardView(book: game.book, id: card, width: 18)
+        }
+        Text(OptionButton.label(item)).font(Theme.text(.footnote)).foregroundStyle(Theme.text).lineLimit(2).multilineTextAlignment(.leading)
+        if case .group(_, _, let count) = item {
+          Text("\(count)").font(.caption2.monospacedDigit()).foregroundStyle(Theme.muted)
+        }
+      }
+      .padding(.horizontal, 10)
+      .frame(maxWidth: 230, minHeight: 36, alignment: .leading)
+      .background(Theme.panel.opacity(0.85), in: RoundedRectangle(cornerRadius: 10))
+      .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line, lineWidth: 0.5) }
+    }
+    .buttonStyle(.plain)
+  }
+}
+
+/// Every move left, one per row (a group opens to its moves; a move closes the list).
+struct AllMovesSheet: View {
+  let game: Game
+  @Environment(\.dismiss) private var dismiss
+
+  var body: some View {
+    let remaining = game.remaining
+    let items = Choosing.panelItems(remaining, game.picked)
+    NavigationStack {
       ScrollView {
         VStack(spacing: 6) {
           ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-            OptionButton(game: game, item: item, remaining: remaining)
+            OptionButton(game: game, item: item, remaining: remaining) {
+              if case .option = item { dismiss() }
+            }
           }
         }
+        .padding()
       }
-      .scrollBounceBehavior(.basedOnSize)
-      .frame(maxHeight: 210)
-      .fixedSize(horizontal: false, vertical: items.count <= 4)
-      if !game.picked.isEmpty {
-        Button("Cancel selection", systemImage: "arrow.uturn.backward") { game.clearPicked() }
-          .font(Theme.text(.footnote)).foregroundStyle(Theme.gold)
+      .background(Theme.background)
+      .navigationTitle(game.picked.isEmpty ? "Your moves" : "Your moves (\(remaining.count))")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        if !game.picked.isEmpty {
+          ToolbarItem(placement: .cancellationAction) { Button("Back") { game.clearPicked() } }
+        }
       }
     }
+    .presentationDetents([.medium, .large])
+    .environment(\.colorScheme, .dark)
+    .onChange(of: remaining.isEmpty) { _, empty in if empty { dismiss() } }
   }
 }
 
@@ -79,10 +153,14 @@ struct OptionButton: View {
   let game: Game
   let item: Choosing.PanelItem
   let remaining: [Option]
+  var chosen: () -> Void = {}
 
   var body: some View {
+    let label = Self.label(item)
+    let cards = Self.cards(item, remaining)
     Button {
       game.choose(item)
+      chosen()
     } label: {
       HStack(spacing: 8) {
         ForEach(Array(cards.enumerated()), id: \.offset) { _, card in
@@ -104,14 +182,15 @@ struct OptionButton: View {
     .buttonStyle(.plain)
   }
 
-  private var label: String {
+  static func label(_ item: Choosing.PanelItem) -> String {
     switch item {
     case .option(let option): option.label
     case .group(_, let label, _): label
     }
   }
 
-  private var cards: [CardId] {
+  /// The cards it's about (a group: those all its moves share).
+  static func cards(_ item: Choosing.PanelItem, _ remaining: [Option]) -> [CardId] {
     switch item {
     case .option(let option): option.cards
     case .group(let ref, _, _): Choosing.groupCards(remaining, ref)

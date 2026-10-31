@@ -3,6 +3,7 @@ import SwiftUI
 /// Where a game starts: Midstrike's level, the marks to win, and who plays first.
 struct LobbyView: View {
   let game: Game
+  @AppStorage("name") private var name = ""
   @AppStorage("level") private var level = BotLevel.hard.rawValue
   @AppStorage("marks") private var marks = 3
   @AppStorage("first") private var first = Game.Setup.First.random.rawValue
@@ -17,6 +18,13 @@ struct LobbyView: View {
           Text("against Midstrike").font(Theme.text(.title3)).italic().foregroundStyle(Theme.muted)
         }
         VStack(alignment: .leading, spacing: 18) {
+          row("Your name") {
+            TextField("Your name", text: $name, prompt: Text("For the game's log").foregroundStyle(Theme.muted))
+              .font(Theme.text(.body))
+              .textContentType(.givenName)
+              .submitLabel(.done)
+              .onChange(of: name) { _, new in if new.count > 20 { name = String(new.prefix(20)) } }  // the server's NAME_MAX
+          }
           row("Midstrike plays") {
             Picker("Level", selection: $level) {
               Text("Easy").tag(BotLevel.easy.rawValue)
@@ -42,7 +50,8 @@ struct LobbyView: View {
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
         .environment(\.colorScheme, .dark)
         Button {
-          game.play(Game.Setup(level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))
+          let trimmed = name.trimmingCharacters(in: .whitespaces)
+          game.play(Game.Setup(name: trimmed.isEmpty ? "Player" : trimmed, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))
         } label: {
           Text("Play").font(Theme.heading(30)).frame(maxWidth: .infinity).padding(.vertical, 6)
         }

@@ -37,6 +37,8 @@ struct TableView: View {
         // Your hand and your choices stay in view, whatever the table above them needs.
         .safeAreaInset(edge: .bottom, spacing: 0) {
           VStack(spacing: 0) {
+            // What Midstrike just did, rising from above your hand and fading.
+            Feed(lines: game.feed) { showLog = true }.padding(.horizontal, 16)
             hand(view, width: large).padding(.horizontal, 16).padding(.bottom, 6)
             DecisionPanel(game: game, view: view, table: table, leave: { confirmLeave = true })
           }
@@ -107,7 +109,7 @@ struct TableView: View {
   /// The ghosts' piles either side of the discard: the middle of the table, where a card that makes a move on its own
   /// is let go to play it.
   private func center(_ view: PlayerView, _ table: TableText, width: CGFloat) -> some View {
-    let open = game.dragging?.alone != nil
+    let open = game.dragging.map { $0.alone != nil && $0.aloneZone == "middle" } ?? false
     return HStack(alignment: .top) {
       PileStack(game: game, view: view, seat: game.seat(at: 1), width: width, caption: table.names[game.seat(at: 1)])
       Spacer()
@@ -134,16 +136,18 @@ struct TableView: View {
         .overlay { RoundedRectangle(cornerRadius: 14).strokeBorder(open ? Theme.gold : .clear, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])) }
     }
     .overlay(alignment: .bottom) {
-      if open { Text("Let go here to play it").font(Theme.text(.caption)).foregroundStyle(Theme.goldBright).offset(y: 14) }
+      if open, let words = game.dragging?.aloneWords { Text(words).font(Theme.text(.caption)).foregroundStyle(Theme.goldBright).offset(y: 14) }
     }
     .dropZone("middle")
     .accessibilityIdentifier("middle")
   }
 
+  /// Your hand: also where your pile's top is let go, to draw it.
   private func hand(_ view: PlayerView, width: CGFloat) -> some View {
     let cards = view.hands[game.me].cards ?? []
+    let open = game.dragging.map { $0.alone != nil && $0.aloneZone == "hand" } ?? false
     return VStack(alignment: .leading, spacing: 0) {
-      Text("Your hand").font(Theme.text(.caption)).foregroundStyle(Theme.muted)
+      Text(open ? (game.dragging?.aloneWords ?? "") : "Your hand").font(Theme.text(.caption)).foregroundStyle(open ? Theme.goldBright : Theme.muted)
       Fan(spacing: 8) {
         ForEach(cards, id: \.self) { card in
           TableCard(game: game, id: card, ref: "hand:\(card.rawValue)", width: width)
@@ -153,6 +157,13 @@ struct TableView: View {
       .padding(.top, width * 0.14)  // room for a touched card to lift
       .frame(maxWidth: .infinity, alignment: .leading)
     }
+    .background {
+      RoundedRectangle(cornerRadius: 12)
+        .fill(open ? Theme.gold.opacity(0.1) : .clear)
+        .overlay { RoundedRectangle(cornerRadius: 12).strokeBorder(open ? Theme.gold : .clear, style: StrokeStyle(lineWidth: 1.5, dash: [6, 4])) }
+        .padding(-4)
+    }
+    .dropZone("hand")
   }
 }
 
@@ -216,7 +227,7 @@ struct TableCard: View {
       }
       .onEnded { drag in
         guard let carried = game.dragging else { return }
-        let target = zones.element(at: drag.location, among: carried.targets.union(["middle"]))
+        let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
         withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
       }
   }
@@ -387,5 +398,39 @@ struct EmptySlot: View {
       .strokeBorder(touch == .none ? Theme.line : Theme.gold, style: StrokeStyle(lineWidth: touch == .none ? 1 : 2, dash: [4, 3]))
       .frame(width: width, height: width * 1.4)
       .overlay { Text(text).font(Theme.text(.caption)).italic().foregroundStyle(Theme.muted) }
+  }
+}
+
+/// What just happened that you didn't do: the newest log lines, each rising from above your hand as the next comes and
+/// fading after a few seconds. Touching them opens the whole log.
+struct Feed: View {
+  let lines: [Game.FeedLine]
+  let open: () -> Void
+
+  var body: some View {
+    // No height of its own: the lines rise over the table above.
+    Color.clear.frame(height: 0).overlay(alignment: .bottomLeading) {
+      VStack(alignment: .leading, spacing: 4) {
+        ForEach(lines) { line in
+          Text(line.text)
+            .font(line.heading ? Theme.heading(17, relativeTo: .headline) : Theme.text(.footnote))
+            .foregroundStyle(line.heading ? Theme.goldBright : Theme.text)
+            .lineLimit(2)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 9))
+            .environment(\.colorScheme, .dark)
+            .transition(.asymmetric(insertion: .move(edge: .bottom).combined(with: .opacity), removal: .opacity.combined(with: .offset(y: -16))))
+        }
+      }
+      .padding(.bottom, 6)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .contentShape(Rectangle())
+      .onTapGesture(perform: open)
+      .allowsHitTesting(!lines.isEmpty)
+      .accessibilityElement(children: .combine)
+      .accessibilityAddTraits(.updatesFrequently)
+      .accessibilityHint("Opens the game log")
+    }
   }
 }
