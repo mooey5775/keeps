@@ -34,6 +34,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.Keeps
         GENERATE_INFOPLIST_FILE: YES
+        # App/Assets.xcassets (ios/tools/make-icon.py draws it).
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Keeps
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         # The table is laid out for a phone held upright (the wide layout comes later); an iPad turns any way.
