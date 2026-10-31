@@ -53,7 +53,9 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     webView.load(URLRequest(url: URL(string: "keeps://app/index.html")!))
   }
 
-  /// For tests (KEEPS_TEST_HOOKS): ends the core's process, as iOS might (WebKit's own, unpublished, way).
+  #if DEBUG
+  /// For tests (KEEPS_TEST_HOOKS): ends the core's process, as iOS might (WebKit's own, unpublished, way: in Debug
+  /// builds only, which the UI tests run, so that no build sent to Apple names it).
   func endProcessForTest() {
     let end = NSSelectorFromString("_killWebContentProcess")
     guard webView.responds(to: end) else {
@@ -62,6 +64,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
     webView.perform(end)
   }
+  #endif
 
   /// Loads the core and waits until it's ready: its network loaded, its search workers started. Returns what it said.
   func start() async throws -> ToAppReady {

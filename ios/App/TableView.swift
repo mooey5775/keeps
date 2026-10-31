@@ -125,10 +125,12 @@ struct TableView: View {
         }
         Divider()
         Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }
+        #if DEBUG
         // (For tests: the core's process ended, as iOS may end it.)
         if ProcessInfo.processInfo.environment["KEEPS_TEST_HOOKS"] != nil {
           Button("End the core's process") { game.core.endProcessForTest() }
         }
+        #endif
       } label: {
         Image(systemName: "ellipsis.circle").font(.title2).foregroundStyle(Theme.gold)
       }
