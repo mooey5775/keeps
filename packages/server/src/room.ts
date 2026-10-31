@@ -570,7 +570,7 @@ export class Room {
       },
       (error: unknown) => {
         if (!settle()) return this.scheduleBot();
-        this.playNetworkMove(game, bot, player, `its search failed (${String(error instanceof Error ? error.stack : error)})`);
+        this.playNetworkMove(game, bot, player, `its search failed (${described(error)})`);
       },
     );
   }
@@ -582,7 +582,7 @@ export class Room {
     try {
       error = this.command(player, bot.choose(game.state, game.events));
     } catch (thrown) {
-      error = String(thrown instanceof Error ? thrown.stack : thrown);
+      error = described(thrown);
     }
     if (error === null) return;
     // Never leave the game stuck on the bot: log it and play any legal move.
@@ -920,4 +920,10 @@ export class Room {
 /** A browser's anonymous id: short, plain text only. */
 function validClient(client: unknown): string | null {
   return typeof client === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(client) ? client : null;
+}
+
+/** An error for the log: its message and where it came from (WebKit's stack leaves the message out; Node's starts with it). */
+function described(error: unknown): string {
+  if (!(error instanceof Error)) return String(error);
+  return error.stack?.includes(error.message) ? error.stack : `${error.message}\n${error.stack ?? ''}`;
 }

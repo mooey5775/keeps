@@ -65,6 +65,10 @@ export function apply(state: GameState, seat: Seat, command: Command, { trusted 
   if (!trusted) {
     const rejection = validate(state, seat, command);
     if (rejection) return { ok: false, error: rejection };
+    // The command as the engine writes it, if it lists it: a client may order its keys otherwise (the app's Swift
+    // does), and events copy parts of it (an action's choice), so the log would depend on who sent the move.
+    const wanted = canonical(command);
+    command = legalCommands(state, seat).find((c) => canonical(c) === wanted) ?? command;
   }
 
   const draft = clone(state);

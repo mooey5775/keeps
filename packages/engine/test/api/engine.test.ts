@@ -23,6 +23,21 @@ describe('apply', () => {
     expect(apply(start, seat, command)).toEqual(apply(start, seat, command));
   });
 
+  it("writes a command into its events as the engine lists it, however the client ordered the command's keys", () => {
+    // The app's Swift encodes an action's choice with its card before its action: the log must not depend on that
+    // (the bot's world sampler replays the log and compares events as written).
+    const start = buildPosition({ hands: { 0: ['chalice'] }, piles: { 0: ['dagger'] }, turn: 0 });
+    const legal = legalCommands(start, 0).find((c) => c.type === 'answer' && c.answer.kind === 'action' && c.answer.choice.action === 'play')!;
+    expect(legal).toBeDefined();
+    const reordered = JSON.parse(JSON.stringify(legal), (_key, v: unknown) =>
+      v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).reverse()) : v,
+    ) as Command;
+    expect(JSON.stringify(reordered)).not.toBe(JSON.stringify(legal));
+    const [a, b] = [apply(start, 0, legal), apply(start, 0, reordered)];
+    if (!a.ok || !b.ok) throw new Error('rejected');
+    expect(JSON.stringify(b.events)).toBe(JSON.stringify(a.events));
+  });
+
   it('rejects an unknown prompt id', () => {
     const start = buildPosition({ piles: { 0: ['chalice'] }, turn: 0 });
     const command: Command = { type: 'answer', promptId: 'p999', answer: { kind: 'action', choice: { action: 'draw' } } };
