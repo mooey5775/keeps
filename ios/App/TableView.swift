@@ -182,8 +182,8 @@ struct TableView: View {
 }
 
 /// A card on the table that's part of moves. A finger on it does one of three things, told apart by what it does
-/// first: lifted at once, it touches the card (choosing it); moved, it carries the card to where it goes (when it
-/// starts a move); held still a moment, it shows the card large until lifted, and nothing else (no move, no carry).
+/// first: held still a moment (three tenths of a second), it shows the card large until lifted, and nothing else (no move,
+/// no carry); moved, it carries the card to where it goes (when it starts a move); lifted at once, it touches the card.
 /// The card glides when it moves to another place on the table.
 struct TableCard: View {
   let game: Game
@@ -196,14 +196,8 @@ struct TableCard: View {
   var placed = true
   @Environment(\.dropZones) private var zones
   @Environment(\.cardSpace) private var space
-  @State private var press = Press.idle
-  @State private var holding: Task<Void, Never>?
-
-  /// What a finger on the card is doing.
-  private enum Press { case idle, down, previewing, carrying, slid }
-
   /// How long a finger stays still before the card is shown large, and how far it may wander meanwhile.
-  private static let hold = Duration.milliseconds(320)
+  private static let hold = 0.3
   private static let slack: CGFloat = 8
 
   var body: some View {
@@ -220,50 +214,39 @@ struct TableCard: View {
       .accessibilityAction(named: "Show the card") { if let id { game.preview = id } }
   }
 
-  private var finger: some Gesture {
-    DragGesture(minimumDistance: 0, coordinateSpace: .named(DropZones.space))
+  /// The finger, as the system's own recognisers tell it: held still, then the card is shown until lifted (and does
+  /// nothing else); else moved, then carried; else lifted at once, a touch.
+  private var finger: AnyGesture<Void> {
+    let shown = LongPressGesture(minimumDuration: Self.hold, maximumDistance: Self.slack)
+      .sequenced(before: DragGesture(minimumDistance: 0))
+      .onChanged { value in
+        guard case .second(true, _) = value, game.preview == nil, let id else { return }
+        game.preview = id
+      }
+      .onEnded { _ in
+        withAnimation(.easeOut(duration: 0.15)) { game.preview = nil }
+      }
+    let carried = DragGesture(minimumDistance: Self.slack, coordinateSpace: .named(DropZones.space))
       .onChanged { drag in
-        switch press {
-        case .idle:
-          press = .down
-          holding = Task { @MainActor in
-            try? await Task.sleep(for: Self.hold)
-            guard !Task.isCancelled, press == .down, let id else { return }
-            press = .previewing
-            game.preview = id
-          }
-        case .down:
-          guard hypot(drag.translation.width, drag.translation.height) > Self.slack else { return }
-          holding?.cancel()
-          if let ref, game.canDrag(ref) {
-            press = .carrying
-            game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
-          } else {
-            press = .slid
-          }
-        case .carrying:
+        guard let ref, game.canDrag(ref) else { return }
+        if game.dragging == nil {
+          game.startDrag(ref, card: faceDown ? nil : id, at: drag.location)
+        } else {
           game.moveDrag(to: drag.location)
-        case .previewing, .slid:
-          break
         }
       }
       .onEnded { drag in
-        holding?.cancel()
-        switch press {
-        case .down:
-          if let ref, game.touchability(ref) != .none { game.touch(ref) }
-        case .carrying:
-          if let carried = game.dragging {
-            let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
-            withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
-          }
-        case .previewing:
-          withAnimation(.easeOut(duration: 0.15)) { game.preview = nil }
-        case .idle, .slid:
-          break
-        }
-        press = .idle
+        guard let carried = game.dragging, carried.ref == ref else { return }
+        let target = zones.element(at: drag.location, among: carried.targets.union([carried.aloneZone]))
+        withAnimation(.snappy(duration: 0.3)) { _ = game.endDrag(on: target) }
       }
+    let touched = TapGesture().onEnded { if let ref, game.touchability(ref) != .none { game.touch(ref) } }
+    // Only a card that can be picked up listens for a carry: on the others (those shown for a choice, in a row that
+    // scrolls), a swipe has to reach the scrolling.
+    if let ref, game.canDrag(ref) {
+      return AnyGesture(shown.exclusively(before: carried).exclusively(before: touched).map { _ in () })
+    }
+    return AnyGesture(shown.exclusively(before: touched).map { _ in () })
   }
 }
 

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""The app's icon: the Keeps mark (keepsgame.com's four ovals, as on the card back) in glassy gold on dark, in the
-manner of the system's own icons: translucent material lit from above (a gloss on top, a bright rim where the light
-catches, a glow where it comes through at the bottom), no texture, and no border (the system's rounded shape frames
-it; a line of another radius would compete with it). Drawn here
+"""The app's icon: the Keeps mark (keepsgame.com's four ovals, as on the card back) as flat panes of frosted gold
+glass on dark, in the manner of the system's own icons: translucent, evenly lit (a little lighter at the top), a fine
+bright edge where the light catches, a hairline of shade at the bottom; no texture, no dome, and no border (the
+system's rounded shape frames it; a line of another radius would compete with it). Drawn here
 at three times the size and scaled down, so it's the same every time and needs no image editor. Writes the asset catalogue's icons (light, dark, tinted).
 
     python3 ios/tools/make-icon.py
@@ -69,37 +69,31 @@ def main():
         v = (y - (cy + oy * SCALE)) / (ry * SCALE)
         mark = np.maximum(mark, (u * u + v * v <= 1).astype(np.float32))
     # A soft shadow below, then a warm glow around: the glass sits a little above the dark.
-    shadow = np.roll(blurred(mark, N * 0.02), int(N * 0.018), axis=0)
-    img = img * (1 - 0.55 * shadow)[..., None]
+    shadow = np.roll(blurred(mark, N * 0.025), int(N * 0.014), axis=0)
+    img = img * (1 - 0.45 * shadow)[..., None]
     glow = blurred(mark, N * 0.045)
-    img = img + glow[..., None] * np.array([120, 84, 26]) * 0.45
+    img = img + glow[..., None] * np.array([120, 84, 26]) * 0.35
 
-    # The ovals: translucent gold, lighter at the top, deeper at the bottom; a gloss over the upper part; a bright rim
-    # where the light catches the top-left edge; a warm glow inside the bottom edge, where light comes through.
-    top, bottom = np.array([255, 222, 140]), np.array([200, 138, 42])
+    # The ovals: flat panes of frosted gold glass. Translucent (the glow behind shows a little through), a gentle
+    # gradient from top to bottom, a fine bright edge strongest at the top, a hairline of shade along the bottom.
+    top, bottom = np.array([246, 210, 122]), np.array([214, 166, 74])
     for ox, oy, rx, ry in OVALS:
         u = (x - (cx + ox * SCALE)) / (rx * SCALE)
         v = (y - (cy + oy * SCALE)) / (ry * SCALE)
         d = np.sqrt(u * u + v * v)
         inside = d <= 1
         f = np.clip((v + 1) / 2, 0, 1)[..., None]
-        colour = top * (1 - f) + bottom * f
-        # Translucent: a little of what's behind shows through.
-        colour = 0.88 * colour + 0.12 * img
-        # The glow inside the bottom edge.
-        caustic = np.clip((d - 0.62) / 0.38, 0, 1) ** 2 * np.clip(v, 0, 1)
-        colour = colour + caustic[..., None] * np.array([255, 214, 120]) * 0.35
-        # The gloss: a soft lens of light over the upper part.
-        gu, gv = u / 0.72, (v + 0.42) / 0.36
-        gloss = np.clip(1 - (gu * gu + gv * gv), 0, 1) ** 1.5
-        colour = colour * (1 - 0.32 * gloss[..., None]) + np.array([255, 250, 232]) * (0.32 * gloss[..., None])
-        # The rim: a thin bright line, strongest where the edge faces the top left, gone at the bottom right.
-        facing = np.clip(-(0.55 * u + 0.83 * v) / np.maximum(d, 1e-6), 0, 1)
-        rim = np.clip(1 - np.abs(d - 0.965) / 0.03, 0, 1) * facing
-        colour = colour * (1 - 0.75 * rim[..., None]) + np.array([255, 252, 238]) * (0.75 * rim[..., None])
-        # The edge: slightly darker, so the shape reads against the glow.
-        edge = np.clip((d - 0.985) / 0.015, 0, 1) * (1 - facing)
-        colour = colour * (1 - 0.25 * edge[..., None])
+        pane = top * (1 - f) + bottom * f
+        colour = 0.86 * pane + 0.14 * (img + np.array([40, 30, 10]))
+        # The edge, measured in pixels from the outline so it's even all round.
+        px = (1 - d) * min(rx, ry) * SCALE
+        band = np.clip(1 - px / (0.012 * N), 0, 1)
+        up = np.clip(-v / np.maximum(d, 1e-6), 0, 1)  # 1 at the top of the oval, 0 from its middle down
+        down = np.clip(v / np.maximum(d, 1e-6), 0, 1)
+        light = band * (0.25 + 0.6 * up)
+        colour = colour * (1 - light[..., None]) + np.array([255, 248, 226]) * light[..., None]
+        shade = np.clip(1 - px / (0.006 * N), 0, 1) * down
+        colour = colour * (1 - 0.22 * shade[..., None])
         img[inside] = colour[inside]
 
     light_icon = Image.fromarray(img.clip(0, 255).astype(np.uint8)).resize((SIZE, SIZE), Image.LANCZOS)
