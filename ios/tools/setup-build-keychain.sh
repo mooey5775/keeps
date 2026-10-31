@@ -6,15 +6,17 @@
 #
 # Run it yourself, in a terminal (it asks for your login password, to export the identity):
 #   ssh -t edwardli@100.90.147.75 bash src/keeps/ios/tools/setup-build-keychain.sh
-# If macOS won't export the identity over ssh, export it from Keychain Access instead (My Certificates, the
-# "Apple Development" certificate, File > Export Items, as .p12) and give the file:
+# macOS usually won't export the identity over ssh ("User interaction is not allowed"): export it from Keychain
+# Access on the Mac instead (My Certificates, the "Apple Development" certificate, File > Export Items, as .p12,
+# with a password of your choice) and give the file:
 #   ssh -t edwardli@100.90.147.75 bash src/keeps/ios/tools/setup-build-keychain.sh ~/Desktop/Certificates.p12
 set -euo pipefail
 umask 077
 NAME=keeps-build.keychain
 PASSFILE=$HOME/.keeps-build-keychain
-[ -f "$PASSFILE" ] || openssl rand -base64 24 > "$PASSFILE"
-PASS=$(cat "$PASSFILE")
+# The keychain's password: the one already kept, if a keychain was made with it, else a new one (kept below, once
+# the keychain exists).
+if [ -f "$PASSFILE" ]; then PASS=$(cat "$PASSFILE"); else PASS=$(openssl rand -base64 24); fi
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -30,9 +32,10 @@ else
   security export -k login.keychain -t identities -f pkcs12 -P "$P12PASS" -o "$P12"
 fi
 
-if ! security show-keychain-info "$NAME" >/dev/null 2>&1; then
+if [ ! -f "$HOME/Library/Keychains/$NAME-db" ]; then
   security create-keychain -p "$PASS" "$NAME"
 fi
+echo "$PASS" > "$PASSFILE"
 security set-keychain-settings "$NAME"  # no lock after a timeout
 security unlock-keychain -p "$PASS" "$NAME"
 security import "$P12" -k "$NAME" -P "$P12PASS" -T /usr/bin/codesign -T /usr/bin/security

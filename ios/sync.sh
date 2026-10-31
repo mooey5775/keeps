@@ -62,7 +62,7 @@ cd ios
 # Each target's resources must exist for the project to generate (the other target's may not be built).
 mkdir -p build/web build/core build/cards build/fonts
 # Signing: the build keychain (ios/tools/setup-build-keychain.sh) if it's set up, else whatever this session has.
-if [ -f ~/.keeps-build-keychain ]; then
+if [ -f ~/.keeps-build-keychain ] && [ -f ~/Library/Keychains/keeps-build.keychain-db ]; then
   security unlock-keychain -p "$(cat ~/.keeps-build-keychain)" keeps-build.keychain
   SIGN=(OTHER_CODE_SIGN_FLAGS=--keychain="$HOME/Library/Keychains/keeps-build.keychain-db")
 else
