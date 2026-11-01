@@ -409,6 +409,8 @@ reviewPool?.close();
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
+// An analytics event, as the app's core sends each of the phone's games' (the recording's server has no tracker).
+toApp.push(JSON.stringify({ t: 'analytics', event: 'game_started', client: 'install-golden', name: 'Golden', properties: JSON.stringify({ room: 'GOLD', players: 2, vs_bot: true }) }));
 // A notice, as the website's server sends while Midstrike's search machine is away (which never happens here).
 toApp.push(JSON.stringify({ t: 'server', id: 1, message: { t: 'notice', message: "Midstrike's search machine is unavailable right now." } }));
 

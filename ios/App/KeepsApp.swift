@@ -90,6 +90,9 @@ struct RootView: View {
     }
     // The card being held, shown over everything: the table, and any sheet over it.
     .background(PreviewWindow(game: game))
+    // Shaking the phone reports a problem (the screen taken as it was).
+    .onReceive(NotificationCenter.default.publisher(for: .shaken)) { _ in if game.report == nil { game.report = .now() } }
+    .sheet(item: $game.report) { ReportView(game: game, report: $0) }
     .alert(game.notice ?? "", isPresented: Binding(get: { game.notice != nil && game.problem == nil }, set: { if !$0 { game.notice = nil } })) {
       Button("OK") { game.notice = nil }
     }

@@ -1,11 +1,11 @@
 import { randomBytes, randomInt } from 'node:crypto';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { Policy } from '@keeps/bot';
 import type { ClientMessage, ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
+import { authorized, serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
 import { buildDispute, RateLimiter } from './dispute.ts';
 import { replayFileName, ReplayStore, type DiskSpace } from './replays.ts';
@@ -147,6 +147,7 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       return;
     }
     if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
+    if (path.startsWith('/admin/reports/')) return serveReport(req, res, path.slice('/admin/reports/'.length));
     if (path === '/dispute' && req.method === 'POST') {
       void readJson(req, 512 * 1024).then((body) => {
         const reply = (status: number, data: object) =>
@@ -156,7 +157,15 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
         if (body === undefined) return reply(400, { error: 'Malformed report.' });
         const result = buildDispute(body, (code, token) => rooms.get(code)?.disputeInfo(token) ?? null);
         if (!result.ok) return reply(400, { error: result.error });
-        tracker.capture('rules_dispute', { ...result.who, ip }, result.properties);
+        // A screenshot (the app's) is kept here, on the data volume, and the event links to it (behind the admin password).
+        let screenshot: Record<string, string> = {};
+        if (result.screenshot && options.dataDir) {
+          const name = `${new Date().toISOString().replace(/[:.]/g, '-')}-${randomBytes(4).toString('hex')}.jpg`;
+          mkdirSync(join(options.dataDir, 'reports'), { recursive: true });
+          writeFileSync(join(options.dataDir, 'reports', name), result.screenshot);
+          screenshot = { screenshot: new URL(`/admin/reports/${name}`, options.siteUrl ?? `https://${req.headers.host ?? 'localhost'}`).href };
+        }
+        tracker.capture('rules_dispute', { ...result.who, ip }, { ...result.properties, ...screenshot });
         // A backup in the server log, in case analytics is off or delayed.
         console.log(`[dispute] ${result.who.name} (${ip}) ${String(result.properties.mode)}: ${String(result.properties.text).slice(0, 300).replace(/\s+/g, ' ')}`);
         reply(200, { ok: true });
@@ -174,6 +183,24 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     }
     serveStatic(req, res, options);
   }
+  /** A report's screenshot, kept on the data volume: for the admin only. */
+  function serveReport(req: IncomingMessage, res: ServerResponse, name: string): void {
+    if (!options.adminToken || !options.dataDir || !/^[\w-]+\.jpg$/.test(name)) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    if (!authorized(req, options.adminToken)) {
+      res.writeHead(401, { 'www-authenticate': 'Basic realm="Keeps admin"', 'content-type': 'text/plain' }).end('Unauthorized');
+      return;
+    }
+    const file = join(options.dataDir, 'reports', name);
+    if (!existsSync(file)) {
+      res.writeHead(404).end('Not found');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'image/jpeg', 'cache-control': 'private, no-store' }).end(readFileSync(file));
+  }
+
   // Client messages are small (the largest is a command); refuse anything bigger.
   const wss = new WebSocketServer({ server: http, path: '/ws', maxPayload: 64 * 1024 });
 

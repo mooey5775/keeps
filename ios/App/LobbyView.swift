@@ -25,6 +25,8 @@ struct LobbyView: View {
   @AppStorage("level") private var level = BotLevel.hard.rawValue
   @AppStorage("marks") private var marks = 3
   @AppStorage("first") private var first = Game.Setup.First.random.rawValue
+  /// Sharing the games on the phone (Analytics): off unless the person turns it on.
+  @AppStorage(Analytics.sharingKey) private var sharing = false
   @FocusState private var naming: Bool
 
   var body: some View {
@@ -81,6 +83,7 @@ struct LobbyView: View {
         .environment(\.colorScheme, .dark)
         if place == .online { onlineButtons } else { phoneButtons }
         Spacer()
+        footer
       }
       .padding(.horizontal, 24)
       .frame(maxWidth: 520)
@@ -94,6 +97,20 @@ struct LobbyView: View {
         }
       }
     }
+  }
+
+  /// Sharing the phone's games, and reporting a problem: small, at the bottom.
+  private var footer: some View {
+    VStack(spacing: 8) {
+      if place == .phone {
+        Toggle(isOn: $sharing) {
+          Text("Share my games on this phone (anonymous statistics, to improve Midstrike)").font(Theme.text(.footnote)).foregroundStyle(Theme.muted)
+        }
+        .tint(Theme.gold)
+      }
+      Button("Report a problem") { game.report = .now() }.font(Theme.text(.footnote)).tint(Theme.muted)
+    }
+    .padding(.bottom, 8)
   }
 
   // MARK: On this phone

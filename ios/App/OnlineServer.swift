@@ -14,6 +14,14 @@ struct OnlineServer: Codable, Equatable, Hashable, Identifiable {
   /// The link that invites someone to room `code`, in a browser.
   func invite(_ code: String) -> URL? { site?.appendingPathComponent("r").appendingPathComponent(code) }
 
+  /// Where reports go (POST /dispute): the same server, over HTTP.
+  var reports: URL {
+    var parts = URLComponents(url: socket, resolvingAgainstBaseURL: false)!
+    parts.scheme = parts.scheme == "wss" ? "https" : "http"
+    parts.path = "/dispute"
+    return parts.url!
+  }
+
   static let playkeeps = OnlineServer(
     name: "playkeeps.online", socket: URL(string: "wss://playkeeps.online/ws")!, site: URL(string: "https://playkeeps.online")!)
 

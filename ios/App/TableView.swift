@@ -160,6 +160,7 @@ struct TableView: View {
         if game.game?.undo.available == true {
           Button { game.proposeUndo() } label: { Label("Ask to undo the last move", systemImage: "arrow.uturn.backward") }
         }
+        Button { game.report = .now() } label: { Label("Report a problem", systemImage: "exclamationmark.bubble") }
         Divider()
         // (The host, online: everyone back to the room. On the phone, leaving is the way out.)
         if game.online != nil, game.hosting, view.phase != .gameOver {

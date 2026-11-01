@@ -5,6 +5,7 @@ import { GameTable } from '../game/GameTable.tsx';
 import { RoundReviewView } from '../game/RoundReview.tsx';
 import { leaving, makeNames, natoSpelling } from '@keeps/table';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
+import { capture } from '../analytics.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';
 
@@ -418,7 +419,10 @@ function OnlineGame({
               key={r.round}
               type="button"
               className={roundOver && r.round === game.view.round ? 'primary' : ''}
-              onClick={() => setReviewing(r.round)}
+              onClick={() => {
+                setReviewing(r.round);
+                capture('round_review_opened', { room: room.code, round: r.round, complete: r.pending === 0, moves: r.moves.length });
+              }}
             >
               Round {r.round} review{r.pending > 0 ? ' (filling in…)' : ''}
             </button>

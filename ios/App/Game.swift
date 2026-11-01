@@ -115,6 +115,19 @@ final class Game {
   var problem: String?
   /// Something the room tells the table that isn't wrong at all (someone ended the game; you're the host now).
   var notice: String?
+  /// A bug report being written (shaking the phone starts one).
+  var report: Report?
+
+  /// The game a report is about, as /dispute takes it: an online room's (by your seat there), the phone's (its replay),
+  /// or none (the lobby).
+  func reportContext() -> [String: Any] {
+    if online != nil, let seat = onlineSeat { return ["mode": "online", "room": seat.code, "token": seat.token] }
+    guard online == nil, screen == .table, let replay = core.kept()?.replay else { return ["mode": "phone"] }
+    // (The replay log's lines: its options, then each command.)
+    let lines = replay.split(separator: "\n").compactMap { try? JSONSerialization.jsonObject(with: Data($0.utf8)) as? [String: Any] }
+    guard let options = lines.first?["options"] else { return ["mode": "phone"] }
+    return ["mode": "phone", "replay": ["options": options, "commands": Array(lines.dropFirst())]]
+  }
   /// The card shown large while a finger holds it (a long press; letting go only puts it away).
   var preview: CardId?
 
@@ -133,6 +146,7 @@ final class Game {
     self.book = book
     core.onSearch = { [weak self] search in self?.lastSearch = search }
     core.onFailure = { [weak self] message in self?.problem = message }
+    core.onAnalytics = { Analytics.shared.record($0) }
     core.onEnded = { [weak self] in self?.coreEnded() }
     core.onRestarted = { [weak self] in self?.coreRestarted() }
     unfinished = core.kept()?.kept
@@ -193,7 +207,7 @@ final class Game {
     screen = .starting
     let id = core.connect { [weak self] server in self?.received(server) }
     connection = id
-    core.send(id, .create(ClientMessageCreate(name: setup.name, bot: true)))
+    core.send(id, .create(ClientMessageCreate(name: setup.name, client: Analytics.shared.installId, bot: true)))
   }
 
   /// The game kept unfinished, taken up where it was: the table as it was, Midstrike knowing what it knew.
@@ -214,19 +228,19 @@ final class Game {
 
   /// A new room on `server`, yours to set up and start (others join it by its code).
   func host(on server: OnlineServer, name: String) {
-    goOnline(server, name: name, .create(ClientMessageCreate(name: name)), saying: "Making a room…")
+    goOnline(server, name: name, .create(ClientMessageCreate(name: name, client: Analytics.shared.installId)), saying: "Making a room…")
   }
 
   /// The room `code` on `server`, joined.
   func join(on server: OnlineServer, code: String, name: String) {
     let code = code.trimmingCharacters(in: .whitespaces).uppercased()
-    goOnline(server, name: name, .join(ClientMessageJoin(code: code, name: name)), saying: "Joining \(code)…")
+    goOnline(server, name: name, .join(ClientMessageJoin(code: code, name: name, client: Analytics.shared.installId)), saying: "Joining \(code)…")
   }
 
   /// The seat online kept from before, taken again.
   func rejoin() {
     guard let seat = onlineSeat else { return }
-    goOnline(seat.server, name: seat.name, .resume(ClientMessageResume(code: seat.code, token: seat.token)), saying: "Back to \(seat.code)…")
+    goOnline(seat.server, name: seat.name, .resume(ClientMessageResume(code: seat.code, token: seat.token, client: Analytics.shared.installId)), saying: "Back to \(seat.code)…")
   }
 
   private func goOnline(_ server: OnlineServer, name: String, _ hello: ClientMessage, saying: String) {

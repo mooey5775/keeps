@@ -236,6 +236,9 @@ interface Game {
   advisors: Map<Seat, { bot: BotPlayer; advice: { state: GameState; hints: Hint[] } | null }>;
   /** Who sat where when it was dealt (null: a ghost seat): the log and the end keep naming a player who has left. */
   names: (string | null)[];
+  /** For analytics: whether anyone had training mode on during it, and how long each of the bot's searched moves took. */
+  trainingUsed: boolean;
+  botMoveMs: number[];
 }
 
 export class Room {
@@ -250,6 +253,8 @@ export class Room {
   private closed = false;
   readonly createdAt: number;
   lastActivity: number;
+  /** Games started in the room (for analytics, as it closes). */
+  private gamesStarted = 0;
 
   constructor(code: string, deps: RoomDeps) {
     this.code = code;
@@ -423,6 +428,17 @@ export class Room {
 
   /** Ends the room: tells everyone still connected it's gone. */
   close(): void {
+    const who = this.players.find((p) => p.host) ?? this.players.find((p) => !p.bot);
+    if (who) {
+      this.track('room_closed', who, {
+        lifetime_ms: this.deps.now() - this.createdAt,
+        idle_ms: this.deps.now() - this.lastActivity,
+        phase: this.game ? this.game.state.phase : 'lobby',
+        people: this.players.filter((p) => !p.bot).length,
+        games_started: this.gamesStarted,
+        had_bot: this.players.some((p) => p.bot),
+      });
+    }
     this.tell('closing', this);
     this.closed = true;
     this.cancelBot();
@@ -490,7 +506,11 @@ export class Room {
         player.training = message.on === true;
         player.send?.({ t: 'room', room: this.summary(player) });
         if (this.game) this.sendGame(player, false);
-        if (player.training !== was) this.tell('trainingChanged', this, this.member(player));
+        if (player.training !== was) {
+          if (this.game && player.training && player.seat !== null) this.game.trainingUsed = true;
+          this.track('training_toggled', player, { on: player.training, in_game: this.game !== null, ...(this.game ? { round: this.game.state.round } : {}), ...this.botProperties() });
+          this.tell('trainingChanged', this, this.member(player));
+        }
         return null;
       }
       // The host takes everyone back to the lobby: after the game, or ending it first (no one wins).
@@ -579,6 +599,7 @@ export class Room {
     const { state, events } = chosen ? newGame(options) : preview;
     const startedAt = this.deps.now();
     this.game = this.newGameOf(state, events, options, startedAt);
+    this.gamesStarted++;
     this.followHumans();
     this.deps.saveReplay?.(this.code, startedAt, this.game.log);
     const seated = this.seatedPlayers();
@@ -605,7 +626,8 @@ export class Room {
       bots.length ? this.players.filter((p) => !p.bot && p.seat !== null).map((p) => [p.seat!, { bot: new BotPlayer(this.deps.bot!.policy, p.seat!), advice: null }]) : [],
     );
     const names = [0, 1, 2, 3].map((s) => this.playerAt(s as Seat)?.name ?? null);
-    return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors, names };
+    const trainingUsed = this.players.some((p) => p.training && p.seat !== null);
+    return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors, names, trainingUsed, botMoveMs: [] };
   }
 
   private command(player: Player, sent: Command): string | null {
@@ -706,9 +728,11 @@ export class Room {
       return !cancelled && this.game === game && game.state === state;
     };
     const wanted = () => !cancelled && this.game === game && game.state === state;
+    const asked = this.deps.now();
     choose({ room: this, bot, state, events: game.events, level: this.settings.botLevel ?? 'hard', wanted }).then(
       (choice) => {
         if (!settle()) return this.scheduleBot();
+        if ('command' in choice) game.botMoveMs.push(this.deps.now() - asked);
         if ('retryAfter' in choice) {
           this.botTimer = this.deps.bot!.schedule(() => {
             this.botTimer = null;
@@ -768,6 +792,7 @@ export class Room {
       const actor = this.playerAt(payload.seat);
       if (actor) {
         this.track('card_played', actor, {
+          ...(actor.bot ? { by_bot: true } : {}),
           card: payload.card,
           hot: payload.hot,
           ...(payload.copy ? { copied: payload.copy } : {}),
@@ -778,13 +803,24 @@ export class Room {
     const state = game.state;
     const roundWasLive = before.phase === 'playing' || before.phase === 'post-round';
     const roundOver = state.phase === 'round-over' || state.phase === 'game-over';
-    if (!roundWasLive || !roundOver || state.lastRoundWinner === null) return;
-    const winner = this.playerAt(state.lastRoundWinner);
-    if (!winner) return;
-    const values = scores(state);
+    if (!roundWasLive || !roundOver) return;
+    // (Someone who left the game is still in the room as it ends: their own command ended it.)
     const seated = this.seatedPlayers();
-    this.track('round_ended', winner, {
+    const winner = state.lastRoundWinner === null ? null : (this.playerAt(state.lastRoundWinner) ?? null);
+    const leaver = state.roundEnd?.kind === 'left' ? (this.playerAt(state.roundEnd.seat) ?? null) : null;
+    const bot = seated.find((p) => p.bot);
+    // Credited, against the bot, to the person (with how it went for them: the bot is no person to count); otherwise
+    // to the round's winner, or with none (someone left), to whoever left.
+    const credited = bot ? seated.find((p) => !p.bot) : (winner ?? leaver);
+    if (!credited) return;
+    const outcome = {
+      winner: winner?.name ?? null,
+      ...(bot ? { result: winner === credited ? 'won' : winner === bot ? 'lost' : 'none' } : {}),
+    };
+    const values = scores(state);
+    this.track('round_ended', credited, {
       ...this.botProperties(),
+      ...outcome,
       round: state.round,
       reason: state.roundEnd?.kind ?? null,
       players: seated.length,
@@ -792,16 +828,34 @@ export class Room {
       duration_ms: now - game.roundStartedAt,
     });
     if (state.phase === 'game-over') {
-      this.track('game_finished', winner, {
+      const moves = [...game.botMoveMs].sort((a, b) => a - b);
+      this.track('game_finished', credited, {
         ...this.botProperties(),
+        ...outcome,
+        end_reason: state.roundEnd?.kind === 'left' ? 'left' : 'marks',
         rounds: state.round,
         players: seated.length,
         player_names: seated.map((p) => p.name),
         marks: Object.fromEntries(seated.map((p) => [p.name, state.marks[p.seat!]])),
         commands: game.log.commands.length,
         duration_ms: now - game.startedAt,
+        ...(bot
+          ? {
+              training_used: game.trainingUsed,
+              ...(moves.length ? { bot_move_ms_p50: moves[Math.floor(moves.length / 2)], bot_move_ms_max: moves.at(-1) } : {}),
+            }
+          : {}),
       });
     }
+  }
+
+  /**
+   * An event about the room, from what its server adds to it (Midstrike's host): credited to the player at `seat`, or
+   * with none, to the host.
+   */
+  analytics(event: string, seat: Seat | null, properties: Record<string, unknown> = {}): void {
+    const who = (seat !== null ? this.playerAt(seat) : undefined) ?? this.players.find((p) => p.host);
+    if (who) this.track(event, who, { ...this.botProperties(), ...properties });
   }
 
   // -- Undo ------------------------------------------------------------------
@@ -876,11 +930,27 @@ export class Room {
    */
   private leave(player: Player): void {
     const game = this.game;
-    if (game && player.seat !== null && game.state.phase !== 'game-over' && game.state.config.seats[player.seat] === 'player') {
+    const inGame = game !== null && player.seat !== null && game.state.phase !== 'game-over' && game.state.config.seats[player.seat] === 'player';
+    const phase = game ? game.state.phase : 'lobby';
+    const bot = this.botProperties();
+    if (inGame) {
       const error = this.command(player, { type: 'leave' });
       if (error !== null) throw new Error(`room ${this.code}: ${player.name} couldn't leave the game: ${error}`);
     }
+    const wasHost = player.host;
     this.remove(player);
+    const host = wasHost ? this.players.find((p) => p.host) : undefined;
+    this.track('player_left', player, {
+      ...bot,
+      in_game: inGame,
+      phase,
+      ...(game ? { round: game.state.round } : {}),
+      watching: player.watching,
+      players_remaining: this.playing.filter((p) => !p.bot).length,
+      was_host: wasHost,
+      ...(host ? { host_passed_to: host.name } : {}),
+      seconds_in_room: Math.round((this.deps.now() - player.joinedAt) / 1000),
+    });
     // A bot doesn't stay in a room without people.
     if (this.players.every((p) => p.bot)) {
       this.cancelBot();

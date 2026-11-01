@@ -1,4 +1,6 @@
 import { legalCommands, newGame, puzzleById, puzzleState, YOU, type Command, type ReplayLog, type Seat } from '@keeps/engine';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
@@ -94,6 +96,56 @@ describe('buildDispute', () => {
     if (!result.ok) return;
     expect(result.properties.replay_problem).toBeUndefined();
     expect(String(result.properties.replay).trim().split('\n')).toHaveLength(2);
+  });
+});
+
+describe("the app's reports", () => {
+  const app = { version: '0.1', build: '219', device: 'iPhone17,1' };
+  const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]).toString('base64');
+
+  it("carries the app's version and device, the phone's game if there is one, and a screenshot", () => {
+    const options = { players: 2 as const, seed: 'phone', marksToWin: 3 };
+    const log: ReplayLog = { options, commands: [] };
+    const result = buildDispute({ text: 'the card flew wrong', client: 'install-1234', app, screenshot: jpeg, context: { mode: 'phone', replay: log } }, noRoom);
+    expect(result).toMatchObject({ ok: true, who: { id: 'install-1234' }, properties: { mode: 'phone', app_version: '0.1', app_build: '219', device: 'iPhone17,1', round: 1 } });
+    if (!result.ok) return;
+    expect(result.screenshot?.subarray(0, 3)).toEqual(Buffer.from([0xff, 0xd8, 0xff]));
+    expect(result.properties.screenshot).toBeUndefined(); // (kept by the server, not sent to analytics)
+  });
+
+  it('takes a report from the lobby (no game), and refuses a screenshot that is no JPEG or too large', () => {
+    expect(buildDispute({ text: 'hi', app, context: { mode: 'phone' } }, noRoom)).toMatchObject({ ok: true, properties: { phase: 'lobby' } });
+    expect(buildDispute({ text: 'hi', screenshot: Buffer.from('png?').toString('base64'), context: { mode: 'phone' } }, noRoom)).toEqual({ ok: false, error: 'Malformed report.' });
+    const huge = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff]), Buffer.alloc(300 * 1024)]).toString('base64');
+    expect(buildDispute({ text: 'hi', screenshot: huge, context: { mode: 'phone' } }, noRoom)).toEqual({ ok: false, error: 'Malformed report.' });
+  });
+});
+
+describe("POST /dispute: the app's screenshot", () => {
+  it('is kept on the data volume, linked from the event, and shown only to the admin', async () => {
+    const captured: Record<string, unknown>[] = [];
+    const tracker: Tracker = { capture: (_e, _w, properties = {}) => void captured.push(properties), shutdown: async () => {} };
+    const dataDir = mkdtempSync(join(tmpdir(), 'keeps-reports-'));
+    const server = await createKeepsServer({ port: 0, cardsDir: join(import.meta.dirname, '../../../cards'), tracker, dataDir, adminToken: 'sesame', siteUrl: 'https://keeps.example' });
+    try {
+      const address = server.http.address();
+      if (!address || typeof address === 'string') throw new Error('no port');
+      const at = `http://localhost:${address.port}`;
+      const jpeg = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 9, 9, 9]);
+      const sent = await fetch(`${at}/dispute`, { method: 'POST', body: JSON.stringify({ text: 'hi', screenshot: jpeg.toString('base64'), context: { mode: 'phone' } }) });
+      expect(sent.status).toBe(200);
+      const link = String(captured[0]!.screenshot);
+      expect(link).toMatch(/^https:\/\/keeps\.example\/admin\/reports\/[\w-]+\.jpg$/);
+      const path = new URL(link).pathname;
+      expect((await fetch(at + path)).status).toBe(401);
+      const shown = await fetch(at + path, { headers: { authorization: `Basic ${btoa('admin:sesame')}` } });
+      expect(shown.headers.get('content-type')).toBe('image/jpeg');
+      expect(Buffer.from(await shown.arrayBuffer())).toEqual(jpeg);
+      expect((await fetch(`${at}/admin/reports/..%2Fsecret.jpg`, { headers: { authorization: `Basic ${btoa('admin:sesame')}` } })).status).toBe(404);
+    } finally {
+      await server.close();
+      rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 });
 

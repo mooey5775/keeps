@@ -146,6 +146,7 @@ struct OptionChip: View {
       .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line, lineWidth: 0.5) }
     }
     .buttonStyle(.plain)
+    .accessibilityIdentifier("move")
   }
 }
 
@@ -237,6 +238,8 @@ struct OptionButton: View {
       .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.line, lineWidth: 0.5) }
     }
     .buttonStyle(.plain)
+    // (For the UI tests: any of your moves, whatever its words.)
+    .accessibilityIdentifier("move")
   }
 
   static func label(_ item: Choosing.PanelItem) -> String {

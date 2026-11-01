@@ -92,6 +92,11 @@ export type ToApp =
   | { t: 'saved'; file: string; text: string; game: GameRecord }
   /** A connection to a server elsewhere: connecting, open, dropped and coming back, or closed for good. */
   | { t: 'link'; id: number; state: LinkState }
+  /**
+   * An analytics event of a game on the phone (as the website's server would send it to PostHog): `client`, who it's
+   * about (the app's install id, or Midstrike's); `properties`, a JSON object. The app sends it on if allowed.
+   */
+  | { t: 'analytics'; event: string; client: string; name: string; properties: string }
   /** Each of Midstrike's searches, as it finishes. */
   | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
   | { t: 'failed'; message: string };

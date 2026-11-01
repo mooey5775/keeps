@@ -312,16 +312,20 @@ final class TableUITests: XCTestCase {
   func testAnOnlineSeatIsTakenBackAfterTheAppCloses() throws {
     launchOnline()
     let code = startOnlineGameAgainstMidstrike()
-    // Drawing until a card stays in your hand (a HOT one goes into your keep; the deal online is the server's).
-    for _ in 0..<8 where handCards.isEmpty {
-      XCTAssertTrue(eventually(60) { self.app.buttons["Draw from your pile"].exists || self.putIntoYourKeep.exists }, "no draw came")
-      if putIntoYourKeep.exists {
+    // Drawing until a card stays in your hand (a HOT one goes into your keep, and may ask more of you: the deal online
+    // is the server's, so any other decision is answered with its first move).
+    let move = app.buttons.matching(identifier: "move").firstMatch
+    for _ in 0..<12 where handCards.isEmpty {
+      XCTAssertTrue(eventually(60) { self.app.buttons["Draw from your pile"].exists || move.exists }, "no decision came")
+      if app.buttons["Draw from your pile"].exists {
+        yourPile.tap()
+        placeHot()
+        _ = eventually(3) { !self.handCards.isEmpty }
+      } else if putIntoYourKeep.exists {
         putIntoYourKeep.tap()
-        continue
+      } else {
+        move.tap()
       }
-      yourPile.tap()
-      placeHot()
-      _ = eventually(3) { !self.handCards.isEmpty }
     }
     XCTAssertFalse(handCards.isEmpty, "no card stayed in your hand")
     let hand = handCards.map(\.identifier).sorted()
@@ -434,6 +438,25 @@ final class TableUITests: XCTestCase {
     app.buttons["Leave"].tap()
     XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10))
     XCTAssertFalse(resume.exists, "a game left is still offered")
+  }
+
+  func testAProblemIsReportedFromTheMenu() throws {
+    launch()
+    XCTAssertTrue(yourTurn())
+    app.buttons["Game menu"].tap()
+    app.buttons["Report a problem"].tap()
+    let text = app.textFields["report text"]
+    XCTAssertTrue(text.waitForExistence(timeout: 5), "no report to write")
+    // With the screen as it was, to send or not.
+    XCTAssertTrue(app.switches["Include a screenshot"].exists, "no screenshot offered")
+    XCTAssertFalse(app.buttons["Send"].isEnabled, "an empty report can be sent")
+    text.tap()
+    text.typeText("The card flew to the wrong keep.")
+    XCTAssertTrue(app.buttons["Send"].isEnabled)
+    // (Not sent: the tests have no server for it.)
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(eventually(5) { !text.exists }, "the report didn't close")
+    XCTAssertTrue(yourPile.exists, "the table isn't back")
   }
 
   func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }

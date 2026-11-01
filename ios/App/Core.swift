@@ -20,6 +20,8 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   var onSearch: ((ToAppSearch) -> Void)?
   /// Something in the core failed (its message).
   var onFailure: ((String) -> Void)?
+  /// Each analytics event of the phone's own games (Analytics sends it on, if the person shares their games).
+  var onAnalytics: ((ToAppAnalytics) -> Void)?
   /// The core's process ended, and every room and connection with it: it's starting again (onRestarted follows).
   var onEnded: (() -> Void)?
   /// The core started again after its process ended (iOS ends a web view's process to free memory, mostly while the
@@ -250,6 +252,8 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
       links[Int(link.id)]?(link.state)
     case .search(let search):
       onSearch?(search)
+    case .analytics(let event):
+      onAnalytics?(event)
     case .saved(let saved):
       keep(saved)
     }

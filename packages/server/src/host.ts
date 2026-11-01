@@ -44,11 +44,19 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
   // The live game's searches, by the position they searched (the bot's own moves, training mode's advice): the round
   // review reuses them rather than search again.
   const liveSearches = new WeakMap<GameState, Promise<SearchReport | null>>();
+  // (Each round's review counted once, when it's complete.)
+  const reviewsReady = new WeakMap<ReviewedGame, Set<number>>();
   const reviewer = options.reviews
     ? new Reviewer(options.reviews, (game, review) => {
         const room = roomOfGame.get(game);
         if (room?.runningGame !== game) return;
         for (const p of room.members) if (!p.bot && p.seat === review.seat) p.send({ t: 'review', review });
+        const ready = reviewsReady.get(game) ?? new Set<number>();
+        reviewsReady.set(game, ready);
+        if (review.pending === 0 && !ready.has(review.round)) {
+          ready.add(review.round);
+          room.analytics('round_review_ready', review.seat, { round: review.round, moves: review.moves.length });
+        }
       })
     : null;
   function liveSearch(state: GameState, seat: Seat): (report: SearchReport | null) => void {
@@ -67,6 +75,7 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
     if (now - (toldAt.get(room) ?? 0) < 60_000) return;
     toldAt.set(room, now);
     console.error(`room ${room.code}: the search machine is unavailable`);
+    room.analytics('bot_unavailable', seat ?? null, { kind: 'away', during: seat === undefined ? 'move' : 'hint' });
     room.notify(`${options.name}'s search machine is unavailable right now. ${seat === undefined ? 'It will move as soon as it is back.' : 'No hint until it is back.'}`, seat);
   }
 

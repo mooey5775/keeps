@@ -16,11 +16,15 @@ import type { Who } from './analytics.ts';
 // Rule disputes: a player thinks the engine got a rule wrong. A report never
 // touches the game it's about; it goes to the site's maintainer (as a PostHog
 // event) with enough of the game attached to reproduce it and fix the engine.
+// The iOS app sends its bug reports here too (shake to report): with the app's
+// version and device, and a screenshot, which the server keeps (not PostHog).
 
 export const DISPUTE_TEXT_MAX = 4000;
 export const DISPUTE_CONTACT_MAX = 200;
 const COMMANDS_MAX = 2000;
 const TRACE_LINES = 80;
+/** The largest screenshot kept (a JPEG, the app's, scaled down: well under this; base64, it fits the request's 512 KB). */
+export const SCREENSHOT_MAX = 300 * 1024;
 
 /** What the browser sends to POST /dispute. */
 export interface DisputeRequest {
@@ -30,10 +34,16 @@ export interface DisputeRequest {
   name?: string;
   /** The browser's anonymous id, to link the report to its session recording. */
   client?: string;
+  /** From the iOS app: its version, build and device. */
+  app?: { version: string; build: string; device: string };
+  /** From the iOS app: the screen as it was (a JPEG, base64). */
+  screenshot?: string;
   context:
     | { mode: 'online'; room: string; token: string }
     | { mode: 'puzzle'; puzzle: string; commands: { seat: Seat; command: Command }[] }
-    | { mode: 'hotseat'; replay: ReplayLog };
+    | { mode: 'hotseat'; replay: ReplayLog }
+    /** The app's own game (against Midstrike, on the phone), if one is open. */
+    | { mode: 'phone'; replay?: ReplayLog };
 }
 
 /** What an online room tells us about the reporter and their game. */
@@ -44,7 +54,10 @@ export interface OnlineDisputeInfo {
   game: { round: number; phase: string; log: ReplayLog; events: TraceEvent[] } | null;
 }
 
-export type DisputeResult = { ok: true; who: Omit<Who, 'ip'>; properties: Record<string, unknown> } | { ok: false; error: string };
+/** A report, ready to send: `screenshot`, the JPEG to keep (the server stores it and links it from the event). */
+export type DisputeResult =
+  | { ok: true; who: Omit<Who, 'ip'>; properties: Record<string, unknown>; screenshot?: Buffer }
+  | { ok: false; error: string };
 
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const clientId = (v: unknown) => (typeof v === 'string' && /^[A-Za-z0-9_-]{8,64}$/.test(v) ? v : null);
@@ -65,8 +78,53 @@ export function buildDispute(
   const contact = typeof body.contact === 'string' ? body.contact.trim().slice(0, DISPUTE_CONTACT_MAX) : '';
   const context = body.context;
   if (!isObject(context)) return { ok: false, error: 'Malformed report.' };
-  const base = { text, contact: contact || null, mode: context.mode };
+  const app = appDetails(body.app);
+  const base = { text, contact: contact || null, mode: context.mode, ...app };
+  let screenshot: Buffer | undefined;
+  if (body.screenshot !== undefined) {
+    const decoded = typeof body.screenshot === 'string' && /^[A-Za-z0-9+/=]+$/.test(body.screenshot) ? Buffer.from(body.screenshot, 'base64') : null;
+    // (A JPEG's first bytes: FF D8 FF.)
+    if (!decoded || decoded.length > SCREENSHOT_MAX || decoded[0] !== 0xff || decoded[1] !== 0xd8 || decoded[2] !== 0xff) {
+      return { ok: false, error: 'Malformed report.' };
+    }
+    screenshot = decoded;
+  }
+  const result = gather(body, context, base, findOnline);
+  return result.ok && screenshot ? { ...result, screenshot } : result;
+}
 
+/** The app's version, build and device, as event properties (none if they're not all short strings). */
+function appDetails(app: unknown): Record<string, string> {
+  if (!isObject(app)) return {};
+  const field = (v: unknown) => (typeof v === 'string' && v.length > 0 && v.length <= 40 ? v : null);
+  const [version, build, device] = [field(app.version), field(app.build), field(app.device)];
+  return version && build && device ? { app_version: version, app_build: build, device } : {};
+}
+
+/** A game's replay log, checked and replayed: its round, its phase and the end of its trace (null: malformed). */
+function replayed(log: unknown): Record<string, unknown> | null {
+  if (!isObject(log) || !isObject(log.options) || !Array.isArray(log.commands) || log.commands.length > COMMANDS_MAX) return null;
+  let result;
+  try {
+    result = replay(log as unknown as ReplayLog);
+  } catch {
+    return null;
+  }
+  return {
+    round: result.state.round,
+    phase: result.state.phase,
+    replay: formatReplayLog(log as unknown as ReplayLog),
+    trace_tail: tail(result.events),
+    ...(result.failure ? { replay_problem: `move ${result.failure.index + 1} was rejected: ${result.failure.error.message}` } : {}),
+  };
+}
+
+function gather(
+  body: Record<string, unknown>,
+  context: Record<string, unknown>,
+  base: Record<string, unknown>,
+  findOnline: (room: string, token: string) => OnlineDisputeInfo | null,
+): DisputeResult {
   switch (context.mode) {
     case 'online': {
       const info = typeof context.room === 'string' && typeof context.token === 'string' ? findOnline(context.room.toUpperCase(), context.token) : null;
@@ -118,28 +176,15 @@ export function buildDispute(
       };
     }
     case 'hotseat': {
-      const log = context.replay;
-      if (!isObject(log) || !isObject(log.options) || !Array.isArray(log.commands) || log.commands.length > COMMANDS_MAX) {
-        return { ok: false, error: 'Malformed report.' };
-      }
-      let result;
-      try {
-        result = replay(log as unknown as ReplayLog);
-      } catch {
-        return { ok: false, error: 'Malformed report.' };
-      }
-      return {
-        ok: true,
-        who: { id: clientId(body.client) ?? 'hotseat-player', name: playerName(body.name) },
-        properties: {
-          ...base,
-          round: result.state.round,
-          phase: result.state.phase,
-          replay: formatReplayLog(log as unknown as ReplayLog),
-          trace_tail: tail(result.events),
-          ...(result.failure ? { replay_problem: `move ${result.failure.index + 1} was rejected: ${result.failure.error.message}` } : {}),
-        },
-      };
+      const game = replayed(context.replay);
+      if (!game) return { ok: false, error: 'Malformed report.' };
+      return { ok: true, who: { id: clientId(body.client) ?? 'hotseat-player', name: playerName(body.name) }, properties: { ...base, ...game } };
+    }
+    case 'phone': {
+      // (In the lobby, no game: the report alone.)
+      const game = context.replay === undefined ? { phase: 'lobby' } : replayed(context.replay);
+      if (!game) return { ok: false, error: 'Malformed report.' };
+      return { ok: true, who: { id: clientId(body.client) ?? 'phone-player', name: playerName(body.name) }, properties: { ...base, ...game } };
     }
     default:
       return { ok: false, error: 'Malformed report.' };

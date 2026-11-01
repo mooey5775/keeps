@@ -632,6 +632,21 @@ describe('analytics events', () => {
     expect(finished!.props.marks).toEqual(expect.objectContaining({ [finished!.who.name]: 2 }));
   });
 
+  it('records a player leaving (with the host role passed on), training mode, and the room closing', () => {
+    const { room, join, events } = tracked();
+    const ada = join('Ada', '203.0.113.7');
+    const bo = join('Bo', '198.51.100.2');
+    join('Cy', '198.51.100.3');
+    room.handle(ada.id, { t: 'start' });
+    room.handle(ada.id, { t: 'leave' });
+    expect(events('player_left')[0]!.props).toMatchObject({ in_game: true, phase: 'playing', was_host: true, host_passed_to: 'Bo', players_remaining: 2 });
+    // (Two left playing: the round ended with no winner, credited to who left.)
+    expect(events('round_ended')[0]).toMatchObject({ who: { name: 'Ada' }, props: { reason: 'left', winner: null } });
+    room.close();
+    expect(events('room_closed')[0]).toMatchObject({ who: { name: 'Bo' }, props: { phase: 'round-over', people: 2, games_started: 1, had_bot: false } });
+    void bo;
+  });
+
   it('records an undo that went through, against who asked for it', () => {
     const { room, join, events } = tracked();
     const ada = join('Ada', '203.0.113.7');

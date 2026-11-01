@@ -380,6 +380,24 @@ describe('the bot in a room', () => {
     expect(saved.at(-1)!.commands.at(-1)!.command).toEqual({ type: 'leave' });
   });
 
+  it("counts a game against the bot as the person's: who won, how, and whether training was on", () => {
+    const captured: { event: string; who: string; props: Record<string, unknown> }[] = [];
+    const tracker = { capture: (event: string, who: { name: string }, props: Record<string, unknown> = {}) => void captured.push({ event, who: who.name, props }), shutdown: async () => {} };
+    const { room, runBot } = botRoom({ tracker });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    room.handle(human.id, { t: 'training', on: true });
+    while (!human.last('game').view.prompts.some((p) => p.mine)) expect(runBot()).toBe(true);
+    room.handle(human.id, { t: 'leave' });
+    const of = (event: string) => captured.filter((c) => c.event === event);
+    expect(of('training_toggled')[0]).toMatchObject({ who: 'Ana', props: { on: true, in_game: true, vs_bot: true } });
+    expect(of('game_finished')).toHaveLength(1);
+    expect(of('game_finished')[0]).toMatchObject({ who: 'Ana', props: { vs_bot: true, result: 'lost', winner: 'Bot', end_reason: 'left', training_used: true } });
+    expect(of('round_ended')[0]).toMatchObject({ who: 'Ana', props: { result: 'lost', reason: 'left' } });
+    for (const play of of('card_played')) expect(play.props.by_bot === true).toBe(play.who === 'Bot');
+  });
+
   it('takes no leaving as a move: a client leaves the game by leaving the room', () => {
     const { room, saved } = botRoom();
     const human = join(room, 'Ana');

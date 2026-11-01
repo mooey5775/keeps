@@ -74,6 +74,12 @@ async function boot(): Promise<void> {
       ...host.bot,
     },
     hooks: host.hooks,
+    // The phone's own games' events (the website's server's, the same), for the app: it sends them on only if the
+    // person has chosen to share them.
+    tracker: {
+      capture: (event, who, properties = {}) => post({ t: 'analytics', event, client: who.id, name: who.name, properties: JSON.stringify(properties) }),
+      shutdown: async () => {},
+    },
   });
 
   (window as unknown as { keepsCore: { receive(json: string): void } }).keepsCore = {

@@ -112,6 +112,7 @@ export function midstrike(
   const failures = { counts: { search: 0, move: 0, advice: 0 } as Record<BotFailure, number>, latest: [] as object[] };
   const failed: RoomHooks = {
     botFailed(room, what, error) {
+      room.analytics('bot_unavailable', null, { kind: 'failed', during: what });
       failures.counts[what]++;
       failures.latest.push({ at: new Date().toISOString(), room: room.code, what, error });
       if (failures.latest.length > FAILURES_KEPT) failures.latest.shift();

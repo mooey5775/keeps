@@ -3933,6 +3933,7 @@ public struct TableTextShown: Codable, Equatable, Sendable {
 }
 
 public enum ToApp: Codable, Equatable, Sendable {
+  case analytics(ToAppAnalytics)
   case failed(ToAppFailed)
   case link(ToAppLink)
   case ready(ToAppReady)
@@ -3945,6 +3946,7 @@ public enum ToApp: Codable, Equatable, Sendable {
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: Tag.self)
     switch try container.decode(String.self, forKey: .tag) {
+    case "analytics": self = .analytics(try ToAppAnalytics(from: decoder))
     case "failed": self = .failed(try ToAppFailed(from: decoder))
     case "link": self = .link(try ToAppLink(from: decoder))
     case "ready": self = .ready(try ToAppReady(from: decoder))
@@ -3958,6 +3960,9 @@ public enum ToApp: Codable, Equatable, Sendable {
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: Tag.self)
     switch self {
+    case .analytics(let value):
+      try container.encode("analytics", forKey: .tag)
+      try value.encode(to: encoder)
     case .failed(let value):
       try container.encode("failed", forKey: .tag)
       try value.encode(to: encoder)
@@ -3982,6 +3987,7 @@ public enum ToApp: Codable, Equatable, Sendable {
   /** The case's "t", as the JSON has it. */
   public var caseTag: String {
     switch self {
+    case .analytics: return "analytics"
     case .failed: return "failed"
     case .link: return "link"
     case .ready: return "ready"
@@ -3989,6 +3995,43 @@ public enum ToApp: Codable, Equatable, Sendable {
     case .search: return "search"
     case .server: return "server"
     }
+  }
+}
+
+public struct ToAppAnalytics: Codable, Equatable, Sendable {
+  public var event: String
+  public var client: String
+  public var name: String
+  public var properties: String
+
+  public init(event: String, client: String, name: String, properties: String) {
+    self.event = event
+    self.client = client
+    self.name = name
+    self.properties = properties
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case event
+    case client
+    case name
+    case properties
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.event = try container.decode(String.self, forKey: .event)
+    self.client = try container.decode(String.self, forKey: .client)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.properties = try container.decode(String.self, forKey: .properties)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.event, forKey: .event)
+    try container.encode(self.client, forKey: .client)
+    try container.encode(self.name, forKey: .name)
+    try container.encode(self.properties, forKey: .properties)
   }
 }
 
