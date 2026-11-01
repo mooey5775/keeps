@@ -15,7 +15,7 @@ if (!existsSync(webDir)) {
   console.error('Build the web client first: pnpm --filter @keeps/web build');
   process.exit(2);
 }
-const { SCENARIOS } = await import('../../web/src/game/scenarios.ts');
+const { SCENARIOS } = await import('@keeps/table');
 
 const server = await createKeepsServer({ port: 0, webDir, cardsDir: join(root, 'cards') });
 const base = `http://localhost:${(server.http.address() as { port: number }).port}`;

@@ -21,6 +21,7 @@ COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/server/package.json packages/server/
+COPY packages/table/package.json packages/table/
 COPY packages/web/package.json packages/web/
 RUN pnpm install --frozen-lockfile
 COPY packages ./packages
@@ -34,6 +35,7 @@ COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
 COPY packages/server/package.json packages/server/
+COPY packages/table/package.json packages/table/
 COPY packages/web/package.json packages/web/
 # The server and its dependencies, and the web package's: the demo server reuses the web client's
 # log and move-label code (packages/web/src/game) for its bot pages.
@@ -44,6 +46,7 @@ COPY packages/learn/demo/*.ts packages/learn/demo/*.html packages/learn/demo/
 COPY packages/learn/demo/weights/midstrike.bin packages/learn/demo/weights/midstrike.bin
 COPY packages/protocol/src packages/protocol/src
 COPY packages/server/src packages/server/src
+COPY packages/table/src packages/table/src
 COPY packages/web/src packages/web/src
 COPY --from=build /app/packages/web/dist packages/web/dist
 

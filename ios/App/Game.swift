@@ -377,7 +377,7 @@ final class Game {
   // MARK: Dragging
 
   /// Something picked up from the table, and the moves letting it go makes: by where (an element, or "table" for the
-  /// table's middle, "hand" for your hand), as the options declare their drags (web/src/game/options.ts): the app
+  /// table's middle, "hand" for your hand), as the options declare their drags (packages/table/src/options.ts): the app
   /// knows nothing of what any card does.
   struct Drag: Equatable {
     let ref: String

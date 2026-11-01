@@ -1,8 +1,8 @@
 import { apply, buildPosition, PUZZLES, puzzleState, viewFor, YOU, type PlayerView } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
-import { humanize, logLines } from '../src/game/log.ts';
-import { click, clickable, describeOptions, GROUP_ABOVE, makeNames, narrow, panelItems, shownCards, type Ref } from '../src/game/options.ts';
-import { SCENARIOS, scenarioState } from '../src/game/scenarios.ts';
+import { humanize, logLines } from '../src/log.ts';
+import { click, clickable, describeOptions, GROUP_ABOVE, makeNames, narrow, panelItems, shownCards, type Ref } from '../src/options.ts';
+import { SCENARIOS, scenarioState } from '../src/scenarios.ts';
 
 const names = makeNames(['Ada', 'Bo', 'Cy', 'Di'], 0);
 const optionsOf = (view: PlayerView) => describeOptions(view, names);

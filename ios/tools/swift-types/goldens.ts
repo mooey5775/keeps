@@ -35,9 +35,9 @@ type ToApp = import('../../core/bridge.ts').ToApp;
 type ReviewJobs = import('../../../packages/learn/demo/review.ts').ReviewJobs;
 type Command = import('../../../packages/engine/src/index.ts').Command;
 const { apply } = await import('../../../packages/engine/src/index.ts');
-const { click, clickable, panelItems } = await import('../../../packages/web/src/game/options.ts');
-type Option = import('../../../packages/web/src/game/options.ts').Option;
-type Ref = import('../../../packages/web/src/game/options.ts').Ref;
+const { click, clickable, panelItems } = await import('../../../packages/table/src/options.ts');
+type Option = import('../../../packages/table/src/options.ts').Option;
+type Ref = import('../../../packages/table/src/options.ts').Ref;
 
 // Anything the server or the bot reports as gone wrong (a search or training mode's advice that failed and fell back to
 // the network, a review job the sampler gave up on) is logged and play goes on, as on the site; here it fails the run.
@@ -364,7 +364,7 @@ mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
 writeFileSync(join(out, 'to-app.jsonl'), toApp.join('\n') + '\n');
 
-// Choosing a move by touching the table (web/src/game/options.ts), as the TypeScript answers it, for the app's port
+// Choosing a move by touching the table (packages/table/src/options.ts), as the TypeScript answers it, for the app's port
 // (ios/Shared/Choosing.swift; ChoosingTests): on the recorded options, touches drawn mostly among the elements worth
 // touching (sometimes any element at all), each with what it does, what lights up before it, and the panel's buttons.
 const choosing: string[] = [];

@@ -1,6 +1,6 @@
 import Foundation
 
-/// Choosing a move by touching the table: web/src/game/options.ts's narrow, click, clickable and panelItems, in Swift
+/// Choosing a move by touching the table: packages/table/src/options.ts's narrow, click, clickable and panelItems, in Swift
 /// (ChoosingTests holds them to the TypeScript's own answers, recorded by ios/tools/swift-types/goldens.ts).
 ///
 /// Every option lists the table elements it involves (its refs: "hand:dagger", "pile:2", "keep:0", "keepcard:0:1",

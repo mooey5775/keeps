@@ -1,7 +1,7 @@
 import XCTest
 
 /// Choosing a move by touching the table (ios/Shared/Choosing.swift) against the TypeScript it ports
-/// (web/src/game/options.ts): on the options of whole games, touches with what each did there, what was worth
+/// (packages/table/src/options.ts): on the options of whole games, touches with what each did there, what was worth
 /// touching before it, and the panel's buttons (ios/tools/swift-types/goldens.ts recorded them). Swift must answer
 /// every one the same.
 final class ChoosingTests: XCTestCase {

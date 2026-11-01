@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
 import { RoundReviewView } from '../game/RoundReview.tsx';
-import { natoSpelling } from '../game/nato.ts';
+import { natoSpelling } from '@keeps/table';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';

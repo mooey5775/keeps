@@ -2,10 +2,10 @@ import { CARDS, coinsLabel, type CardId, type Command, type PlayerView, type Pro
 import type { Hint } from '@keeps/protocol';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from './Card.tsx';
-import { hintChance, hintLabel } from './hints.ts';
-import { logLines } from './log.ts';
-import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from './options.ts';
-import { capital, headline, promptText } from './status.ts';
+import { hintChance, hintLabel } from '@keeps/table';
+import { logLines } from '@keeps/table';
+import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from '@keeps/table';
+import { capital, headline, promptText } from '@keeps/table';
 
 // The game table: four seats around the center, your hand at the bottom,
 // and a side panel with what to do, the options, and the log. It only needs

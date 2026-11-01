@@ -1,7 +1,7 @@
 import { apply, eventsFor, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { useMemo, useState } from 'react';
 import { GameTable } from '../game/GameTable.tsx';
-import { SANDBOX_NAMES, SCENARIOS, scenarioState, type Scenario } from '../game/scenarios.ts';
+import { SANDBOX_NAMES, SCENARIOS, scenarioState, type Scenario } from '@keeps/table';
 import { navigate } from '../router.ts';
 
 // Unlisted: fixed positions for looking at (and screenshotting) each kind of

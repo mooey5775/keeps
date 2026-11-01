@@ -1,6 +1,6 @@
 import { apply, newGame, viewFor, type Command, type PlayerView, type Seat } from '@keeps/engine';
 import { describe, expect, it } from 'vitest';
-import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from '../src/game/options.ts';
+import { click, clickable, describeOptions, makeNames, narrow, panelItems, shownCards, type Option, type Ref } from '../src/options.ts';
 
 // The UI's picture of the possible moves must match the engine's. Over many
 // random games, at every decision, every legal command:

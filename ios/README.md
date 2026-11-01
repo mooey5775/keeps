@@ -6,7 +6,7 @@ The game against Midstrike, offline, on the phone.
 - **The core** (`core/`, bundled by `sync.sh`) is the website's TypeScript running in a hidden WKWebView: the engine, the game server, Midstrike's host and its search in Web Workers. WebKit's JIT is what makes the search fast enough.
 - **The network** runs in Core ML on the Neural Engine, served to the core through the `keeps://` scheme (`Shared/SchemeHandler.swift`, `Shared/Inference.swift`).
 - **Swift talks to the core** in the website's own protocol, with Swift types generated from the TypeScript ones (`Shared/Protocol.swift`, from `tools/swift-types/generate.ts`).
-- **No rules or wording in Swift.** With each game message the core sends what the web client works out: the options (every legal move, with the table elements it involves, and how it's dragged), the log's lines and the table's words. Choosing by touch is `web/src/game/options.ts`'s logic, in `Shared/Choosing.swift`, held to it by `ChoosingTests`.
+- **No rules or wording in Swift.** With each game message the core sends what the web client works out: the options (every legal move, with the table elements it involves, and how it's dragged), the log's lines and the table's words. Choosing by touch is `packages/table/src/options.ts`'s logic, in `Shared/Choosing.swift`, held to it by `ChoosingTests`.
 
 ## Building, testing, looking
 

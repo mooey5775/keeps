@@ -39,9 +39,9 @@ setSearchMode(process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped');
 setWorlds(Number(process.env.SEARCH_WORLDS ?? 128));
 // The search's reasoning shows the bot's hand: it goes to a file, not the player's screen.
 setSearchLog((line) => appendFileSync(join(import.meta.dirname, 'data', 'cli-search.log'), line + '\n'));
-import { logLines } from '../../web/src/game/log.ts';
-import { describeOptions, makeNames, shownCards } from '../../web/src/game/options.ts';
-import { promptText } from '../../web/src/game/status.ts';
+import { logLines } from '@keeps/table';
+import { describeOptions, makeNames, shownCards } from '@keeps/table';
+import { promptText } from '@keeps/table';
 
 const DIR = join(import.meta.dirname, 'data', 'cli-games');
 const WEIGHTS = join(import.meta.dirname, 'weights', `${process.env.BOT ?? 'vrpo1'}.bin`);

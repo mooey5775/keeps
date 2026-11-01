@@ -5,7 +5,7 @@
 // The app (Swift) talks to it in JSON strings: it calls keepsCore.receive(json) and gets messages back through the
 // `core` message handler. A connection speaks the website's own protocol (packages/protocol), so the app is a client
 // like a browser; each game message comes with what the web client works out for itself: the options (every legal
-// move, with what it involves on the table: web/src/game/options.ts) and the log's lines (web/src/game/log.ts).
+// move, with what it involves on the table: packages/table/src/options.ts) and the log's lines (packages/table/src/log.ts).
 import { Policy } from '../../packages/learn/src/policy.ts';
 import { midstrikeHost } from '../../packages/learn/demo/host.ts';
 import { seeded } from '../../packages/learn/demo/random.ts';

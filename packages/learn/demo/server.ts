@@ -9,8 +9,8 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 import { CARDS, viewFor } from '../../engine/src/index.ts';
-import { logLines } from '../../web/src/game/log.ts';
-import { describeOptions, makeNames } from '../../web/src/game/options.ts';
+import { logLines } from '@keeps/table';
+import { describeOptions, makeNames } from '@keeps/table';
 import { BotPlayer } from '../src/bot.ts';
 import { Policy } from '../src/policy.ts';
 import type { Room, RoomHooks } from '../../server/src/room.ts';

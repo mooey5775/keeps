@@ -1,15 +1,15 @@
 // The core's side of its bridge to the app: a connection per client of the core's local server, and each game
-// message sent with what the web client works out for itself (web/src/game/options.ts, log.ts). The app's core
+// message sent with what the web client works out for itself (packages/table/src/options.ts, log.ts). The app's core
 // (main.ts) wires it to the web view's message handler; tools/swift-types/goldens.ts drives it from Node, recording
 // what the app would get.
 import { CARD_IDS, CARDS, coinsLabel, formatReplayLog, parseReplayLog, type CardId, type ReplayLog, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
 import { replayFileName, type ClientMessage, type ServerMessage, type Settings } from '../../packages/protocol/src/index.ts';
 import type { SavedGame } from '../../packages/server/src/room.ts';
-import { hintChance, hintLabel } from '../../packages/web/src/game/hints.ts';
-import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
-import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/web/src/game/options.ts';
-import { natoSpelling } from '../../packages/web/src/game/nato.ts';
-import { capital, headline, promptText } from '../../packages/web/src/game/status.ts';
+import { hintChance, hintLabel } from '../../packages/table/src/hints.ts';
+import { logLines, type LogLine } from '../../packages/table/src/log.ts';
+import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/table/src/options.ts';
+import { natoSpelling } from '../../packages/table/src/nato.ts';
+import { capital, headline, promptText } from '../../packages/table/src/status.ts';
 import type { LocalServer } from './local-server.ts';
 import { remoteConnection, type LinkState } from './remote.ts';
 
@@ -50,7 +50,7 @@ export interface CardInfo {
 export const cardCatalog = (): CardInfo[] =>
   CARD_IDS.map((id) => ({ id, name: CARDS[id].name, text: CARDS[id].text, image: CARDS[id].image.replace(/\.png$/, '.webp') }));
 
-/** What the web client's table says about a game message, worked out as it does (web/src/game/status.ts, options.ts, hints.ts). */
+/** What the web client's table says about a game message, worked out as it does (packages/table/src/status.ts, options.ts, hints.ts). */
 export interface TableText {
   /** Each seat's name as the table shows it ("You", "Midstrike", "Left ghost"), and its possessive ("Your", "Midstrike's"). */
   names: string[];

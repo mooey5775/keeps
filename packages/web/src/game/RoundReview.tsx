@@ -1,8 +1,8 @@
 import { coinsLabel, type Seat } from '@keeps/engine';
 import type { RoundReview } from '@keeps/protocol';
 import { useMemo, useState } from 'react';
-import { logLines } from './log.ts';
-import { makeNames, type Names } from './options.ts';
+import { logLines } from '@keeps/table';
+import { makeNames, type Names } from '@keeps/table';
 
 // After a round against the bot: your chance of winning it after every move (as it really was, as you
 // could tell, as the bot could tell), and every decision of the round ranked by the bot, as training

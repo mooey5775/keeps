@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { natoSpelling, natoWords } from '../src/game/nato.ts';
+import { natoSpelling, natoWords } from '../src/nato.ts';
 
 describe('NATO spelling of room codes', () => {
   it('spells a room code letter by letter', () => {
