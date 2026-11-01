@@ -60,6 +60,18 @@ final class Game {
   private(set) var options: [Option] = []
   private(set) var lines: [LogLine] = []
   private(set) var table: TableText?
+
+  /// A round's review (a game against Midstrike: each move's chances, each decision's options), as it fills in, with
+  /// each move's log lines.
+  struct Review: Identifiable, Equatable {
+    let review: RoundReview
+    let lines: [[LogLine]]
+    var id: Int { Int(review.round) }
+  }
+  /// The game's round reviews so far, in round order.
+  private(set) var reviews: [Review] = []
+  /// The round whose review is open.
+  var reviewing: Int?
   /// The table elements touched so far for the move being made.
   private(set) var picked: [String] = []
   /// The card being dragged, if one is.
@@ -378,6 +390,8 @@ final class Game {
     table = nil
     picked = []
     answering = []
+    reviews = []
+    reviewing = nil
     dragging = nil
     flights = []
     travelling = []
@@ -660,8 +674,13 @@ final class Game {
     case .replaced:
       if online != nil { problem = "Your seat was taken on another device." }
       closeTable()
-    case .review:
-      break
+    case .review(let message):
+      let review = message.review
+      // (A review of another game starts the set over; a round's comes again as it fills in.)
+      if reviews.first?.review.game != review.game { reviews = [] }
+      let entry = Review(review: review, lines: server.moveLines ?? [])
+      if let at = reviews.firstIndex(where: { $0.id == entry.id }) { reviews[at] = entry } else { reviews.append(entry) }
+      reviews.sort { $0.id < $1.id }
     }
   }
 

@@ -50,8 +50,8 @@ export function worldGames(job: WorldsJob, policy: Policy, sampled: boolean): Ge
 export const LIVE = 256;
 
 /** Each game's result, the games advanced in lockstep: one batch of observations per step and group. */
-export async function drive(games: Generator<Ask, number, Float32Array>[], logits: Logits, actions: number, groups = 2, live = LIVE): Promise<number[]> {
-  const results = new Array<number>(games.length);
+export async function drive<T>(games: Generator<Ask, T, Float32Array>[], logits: Logits, actions: number, groups = 2, live = LIVE): Promise<T[]> {
+  const results = new Array<T>(games.length);
   const asks: (Ask | null)[] = new Array(games.length).fill(null);
   let started = 0;
   /** Starts the next game that has a decision to make (finishing any that end without one); -1 if none are left. */

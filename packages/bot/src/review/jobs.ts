@@ -4,12 +4,13 @@
 //   worlds  n worlds drawn from what `me` knows (each with its history: the opponent reads their own log
 //           of it), each played on once, or once per given first move (the same worlds for every move):
 //           `me`'s result per world and move, 1 won, 0 not.
-// Run anywhere: review-worker.ts runs them in Node processes; the app, in Web Workers.
-import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
-import { Decision, NUM_ACTIONS } from '../actions.ts';
+// Run anywhere, as playouts (reviewGames): the website's review workers one observation at a time (reviewRunner), the
+// app's Web Workers in lockstep, the network on the Neural Engine.
+import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Belief, noteObservation } from '../belief.ts';
-import { encodeObservation2 } from '../observation2.ts';
-import { sample, type Policy } from '../policy.ts';
+import type { Policy } from '../policy.ts';
+import { seeded } from '../random.ts';
+import { playOut, roundPlayout, sampledPick, type Ask } from '../search/playout.ts';
 import { sampleHistory, worldModel } from '../worlds.ts';
 
 export type ReviewJob =
@@ -17,71 +18,51 @@ export type ReviewJob =
   | { kind: 'worlds'; state: GameState; me: Seat; myLog: TraceEvent[]; commands: Command[] | null; n: number };
 export type ReviewResult = { wins: Partial<Record<Seat, number>>; n: number } | { rows: number[][] };
 
-/** Runs review jobs with `policy`, drawing chance from `random`. */
+/**
+ * A job's playouts, for a driver to run (one observation at a time, playOut; or in lockstep on a GPU or the Neural
+ * Engine, lockstep.ts's drive), and `finish`, its result from their winners in order. Each playout draws from its
+ * own stream (seeded from `random`), so the result doesn't depend on how the playouts are run.
+ */
+export function reviewGames(job: ReviewJob, policy: Policy, random: () => number): { games: Generator<Ask, Seat | null, Float32Array>[]; finish: (winners: (Seat | null)[]) => ReviewResult } {
+  const seed = Math.floor(random() * 2 ** 32);
+  const pick = (i: number) => sampledPick(policy, seeded(seed, i + 1));
+  if (job.kind === 'truth') {
+    const games = Array.from({ length: job.n }, (_, i) => roundPlayout(job.state, job.logs, job.first, pick(i)));
+    return {
+      games,
+      finish: (winners) => {
+        const wins: Partial<Record<Seat, number>> = {};
+        for (const w of winners) if (w !== null) wins[w] = (wins[w] ?? 0) + 1;
+        return { wins, n: job.n };
+      },
+    };
+  }
+  const { state, me } = job;
+  const commands = job.commands ?? [null];
+  const belief = new Belief(me, { sound: true });
+  const view = viewFor(state, me);
+  // The player's log notes what they saw at their decisions; this view too (what they see now).
+  const myLog = noteObservation([...job.myLog], view, me);
+  belief.update(myLog);
+  const model = worldModel(state, me, belief, view, myLog);
+  const opponent = ((me + 2) % 4) as Seat;
+  const worlds = Array.from({ length: job.n }, () => sampleHistory(model, random));
+  const games = worlds.flatMap((h, w) =>
+    commands.map((command, k) =>
+      roundPlayout(h.world, [[me, myLog], [opponent, h.logs[opponent]!]], command ? { seat: me, command } : null, pick(w * commands.length + k)),
+    ),
+  );
+  return {
+    games,
+    // One row per world: 1 where `me` won after that move, 0 where not.
+    finish: (winners) => ({ rows: worlds.map((_, w) => commands.map((_, k) => (winners[w * commands.length + k] === me ? 1 : 0))) }),
+  };
+}
+
+/** Runs review jobs with `policy` here, one observation at a time, drawing chance from `random`. */
 export function reviewRunner(policy: Policy, random: () => number): (job: ReviewJob) => ReviewResult {
-  /** The network's move for `seat`, sampled id by id, as the bot plays. */
-  function move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[]): Command {
-    const view = viewFor(state, seat);
-    // As BotPlayer does: the view noted in the player's own log, and learned from there.
-    belief.update(noteObservation(log, view, seat));
-    const decision = new Decision(view, legalCommands(state, seat));
-    const prefix: number[] = [];
-    for (;;) {
-      const ids = decision.next(prefix);
-      const mask = new Uint8Array(NUM_ACTIONS);
-      for (const id of ids) mask[id] = 1;
-      prefix.push(sample(policy.probabilities(encodeObservation2(view, belief, prefix, ids), mask), random));
-      const command = decision.complete(prefix);
-      if (command) return command;
-    }
-  }
-
-  /** Plays `state` to the end of the round (after `first`, if given); logs: what each seat has seen. The winner, or null. */
-  function playout(state: GameState, logs: [Seat, TraceEvent[]][], first: { seat: Seat; command: Command } | null): Seat | null {
-    const players = new Map(logs.map(([s, log]) => [s, { belief: new Belief(s, { sound: true }), log: [...log] }]));
-    let next = first;
-    for (let step = 0; ; step++) {
-      if (step > 3000) throw new Error('a playout did not end');
-      if (state.phase !== 'playing' && state.phase !== 'post-round') return state.lastRoundWinner;
-      const seat = next?.seat ?? state.prompts[0]!.seat;
-      const p = players.get(seat)!;
-      const command = next?.command ?? move(state, seat, p.belief, p.log);
-      next = null;
-      const r = apply(state, seat, command, { trusted: true });
-      if (!r.ok) throw new Error(r.error.message);
-      state = r.state;
-      for (const [s, q] of players) q.log.push(...eventsFor(r.events, s));
-    }
-  }
-
-  function run(job: ReviewJob): ReviewResult {
-    if (job.kind === 'truth') {
-      const wins: Partial<Record<Seat, number>> = {};
-      for (let i = 0; i < job.n; i++) {
-        const winner = playout(job.state, job.logs, job.first);
-        if (winner !== null) wins[winner] = (wins[winner] ?? 0) + 1;
-      }
-      return { wins, n: job.n };
-    }
-    const { state, me, commands } = job;
-    const belief = new Belief(me, { sound: true });
-    const view = viewFor(state, me);
-    // The player's log notes what they saw at their decisions; this view too (what they see now).
-    const myLog = noteObservation([...job.myLog], view, me);
-    belief.update(myLog);
-    const model = worldModel(state, me, belief, view, myLog);
-    const opponent = ((me + 2) % 4) as Seat;
-    const rows: number[][] = [];
-    for (let i = 0; i < job.n; i++) {
-      const h = sampleHistory(model, random);
-      const logs: [Seat, TraceEvent[]][] = [
-        [me, myLog],
-        [opponent, h.logs[opponent]!],
-      ];
-      rows.push((commands ?? [null]).map((command) => (playout(h.world, logs, command ? { seat: me, command } : null) === me ? 1 : 0)));
-    }
-    return { rows };
-  }
-
-  return run;
+  return (job) => {
+    const { games, finish } = reviewGames(job, policy, random);
+    return finish(games.map((game) => playOut(game, policy)));
+  };
 }

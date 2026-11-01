@@ -5,7 +5,7 @@
 // runs in Node or in a browser alike.
 import type { GameState, Seat } from '@keeps/engine';
 import type { BotDeps, BotTurn, Room, RoomHooks, RoomMember, RunningGame } from './room.ts';
-import { Reviewer, type ReviewedGame, type ReviewJobs } from '@keeps/bot/review/review.ts';
+import { Reviewer, type ReviewedGame, type ReviewJobs, type Sizes } from '@keeps/bot/review/review.ts';
 import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
 
 /** `pool`, its searches dropped once `wanted` says their position has passed (rather than played out for nothing). */
@@ -19,6 +19,8 @@ export interface MidstrikeOptions {
   search?: { medium: Evaluator; hard: Evaluator };
   /** What runs the round reviews' jobs; without it, no reviews. */
   reviews?: ReviewJobs;
+  /** The reviews' sample sizes (review.ts's SIZES unless given: the phone's are smaller). */
+  reviewSizes?: Sizes;
   /**
    * Whether a search that failed with `error` failed because its machine is away (remote.ts's RemoteAway): the bot
    * then waits and tries again, and the table is told. Any other failure is a bug: the network's move is played.
@@ -57,7 +59,7 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
           ready.add(review.round);
           room.analytics('round_review_ready', review.seat, { round: review.round, moves: review.moves.length });
         }
-      })
+      }, options.reviewSizes)
     : null;
   function liveSearch(state: GameState, seat: Seat): (report: SearchReport | null) => void {
     let resolve!: (report: SearchReport | null) => void;

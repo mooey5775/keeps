@@ -10,6 +10,7 @@ import { Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { OBSERVATION2_SIZE } from '../src/observation2.ts';
 import { encodeRequest, LocalInference, SocketInference } from '../src/search/inference.ts';
 import { drive, playWorlds, worldGames, type WorldsJob } from '../src/search/lockstep.ts';
+import { reviewGames, reviewRunner, type ReviewJob } from '../src/review/jobs.ts';
 import { playOut } from '../src/search/playout.ts';
 import { seeded } from '../src/random.ts';
 import { randomPolicy } from './support/random-policy.ts';
@@ -37,6 +38,29 @@ function position(seed: string, moves = 0): Omit<WorldsJob, 'n' | 'seed'> {
     events = [...events, ...r.events];
   }
 }
+
+describe("the round review's jobs, batched (the app runs them so, the network on the Neural Engine)", () => {
+  it('give the same result as one playout at a time, truth and worlds alike', async () => {
+    // A game's first decision, with each player's own log of it (what the review's truth jobs play from).
+    const { state, events } = newGame({ players: 2, seed: 'review-lockstep', marksToWin: 3 });
+    const me = state.prompts[0]!.seat as Seat;
+    const opponent = ((me + 2) % 4) as Seat;
+    const [myLog, theirLog] = [eventsFor(events, me), eventsFor(events, opponent)];
+    const commands = legalCommands(state, me).filter((c) => c.type !== 'reveal-duplicity');
+    const jobs: ReviewJob[] = [
+      { kind: 'truth', state, logs: [[me, myLog], [opponent, theirLog]], first: { seat: me, command: commands[0]! }, n: 5 },
+      { kind: 'truth', state, logs: [[me, myLog], [opponent, theirLog]], first: null, n: 4 },
+      { kind: 'worlds', state, me, myLog, commands: commands.slice(0, 2), n: 3 },
+      { kind: 'worlds', state, me, myLog, commands: null, n: 3 },
+    ];
+    for (const job of jobs) {
+      const oneAtATime = reviewRunner(policy, seeded(9, 1))(job);
+      const { games, finish } = reviewGames(job, policy, seeded(9, 1));
+      const batched = finish(await drive(games, (rows) => local.logits(rows), NUM_ACTIONS, 2, 3));
+      expect(batched, job.kind).toEqual(oneAtATime);
+    }
+  });
+});
 
 describe('the batched search', () => {
   it('plays each playout exactly as one at a time would', async () => {

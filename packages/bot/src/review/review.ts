@@ -20,7 +20,7 @@ import type { ReviewJob, ReviewResult } from './jobs.ts';
 import type { SearchReport } from '../search/search.ts';
 import { noteObservation } from '../belief.ts';
 
-/** Sample sizes (REVIEW_SCALE scales them all, for tests). */
+/** Sample sizes (REVIEW_SCALE scales them all, for tests; a Reviewer may take its own scale too: the phone's is smaller). */
 const SCALE = Number((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.REVIEW_SCALE ?? 1);
 const at = (n: number) => Math.max(1, Math.round(n * SCALE));
 export const SIZES = {
@@ -35,6 +35,11 @@ export const SIZES = {
   /** More worlds for the best option and the one played, when a mistake isn't clear yet. */
   recheck: at(384),
 };
+export type Sizes = typeof SIZES;
+
+/** SIZES, scaled by `scale`. */
+export const scaledSizes = (scale: number): Sizes =>
+  Object.fromEntries(Object.entries(SIZES).map(([k, n]) => [k, Math.max(1, Math.round(n * scale))])) as Sizes;
 /** Playouts per job: small, so dropped work stops soon. */
 export const CHUNK = 24;
 
@@ -133,10 +138,13 @@ export class Reviewer {
   private readonly pool: ReviewJobs;
   /** Sends a review to the person. */
   private readonly send: (game: ReviewedGame, review: RoundReview) => void;
+  /** Its sample sizes. */
+  private readonly sizes: Sizes;
 
-  constructor(pool: ReviewJobs, send: (game: ReviewedGame, review: RoundReview) => void) {
+  constructor(pool: ReviewJobs, send: (game: ReviewedGame, review: RoundReview) => void, sizes: Sizes = SIZES) {
     this.pool = pool;
     this.send = send;
+    this.sizes = sizes;
   }
 
   /**
@@ -158,7 +166,7 @@ export class Reviewer {
     report
       .catch(() => null)
       .then((r) => {
-        if (!r?.outcomes || !r.moves.length || r.worlds < SIZES.worlds || this.games.get(g.game) !== g) return;
+        if (!r?.outcomes || !r.moves.length || r.worlds < this.sizes.worlds || this.games.get(g.game) !== g) return;
         const t = round.moves[index]?.info.get(seat);
         if (!t) return;
         const total = r.moves.reduce((a, m) => a + m.policy, 0);
@@ -279,7 +287,7 @@ export class Reviewer {
       const myLog = logs.before.get(seat)!;
       const both: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, logs.before.get(s)!]);
       const search = () =>
-        this.worlds(g, round, before, seat, myLog, legal, SIZES.optionWorlds, (rows) => {
+        this.worlds(g, round, before, seat, myLog, legal, this.sizes.optionWorlds, (rows) => {
           decision.rows.push(...rows);
           this.judge(g, round, decision, before, myLog);
         });
@@ -292,7 +300,7 @@ export class Reviewer {
             round.pending--;
             if (this.games.get(game) !== g) return;
             const out = report?.outcomes;
-            if (!out || out.rows.length < SIZES.optionWorlds) return search();
+            if (!out || out.rows.length < this.sizes.optionWorlds) return search();
             const at = legal.map((c) => out.commands.findIndex((o) => same(o, c)));
             decision.rows = out.rows.map((row) => at.map((j) => (j < 0 ? null : row[j]! > 0 ? 1 : 0)));
             const pick = report.moves.find((m) => m.chosen);
@@ -303,7 +311,7 @@ export class Reviewer {
           });
       } else search();
       legal.forEach((c, k) =>
-        this.chunks(g, round, SIZES.optionTruth, (n) => ({ kind: 'truth', state: before, logs: both, first: { seat, command: c }, n }), (r) => {
+        this.chunks(g, round, this.sizes.optionTruth, (n) => ({ kind: 'truth', state: before, logs: both, first: { seat, command: c }, n }), (r) => {
           if ('wins' in r) {
             decision.truth[k]!.wins += r.wins[seat] ?? 0;
             decision.truth[k]!.n += r.n;
@@ -316,7 +324,7 @@ export class Reviewer {
     // The position after it.
     if (live) {
       const both: [Seat, TraceEvent[]][] = [g.person, g.bot].map((s) => [s, logs.after.get(s)!]);
-      this.chunks(g, round, SIZES.truth, (n) => ({ kind: 'truth', state: after, logs: both, first: null, n }), (r) => {
+      this.chunks(g, round, this.sizes.truth, (n) => ({ kind: 'truth', state: after, logs: both, first: null, n }), (r) => {
         if ('wins' in r) {
           move.truth.wins += r.wins[g.person] ?? 0;
           move.truth.n += r.n;
@@ -332,7 +340,7 @@ export class Reviewer {
           s,
           logs.after.get(s)!,
           null,
-          SIZES.worlds,
+          this.sizes.worlds,
           (rows) => {
             const t = move.info.get(s)!;
             if (t.fixed) return;
@@ -434,12 +442,12 @@ export class Reviewer {
   /** The person's decisions: when one looks like a mistake that isn't clear yet, more worlds for the best option and the one played. */
   private judge(g: GameData, round: RoundData, d: DecisionData, before: GameState, myLog: TraceEvent[]): void {
     if (d.seat !== g.person || d.rechecked) return;
-    if (d.chosen === null && d.rows.length < SIZES.optionWorlds) return;
+    if (d.chosen === null && d.rows.length < this.sizes.optionWorlds) return;
     const v = verdictOf(d);
     if (v.unclear) {
       d.rechecked = true;
       const pair = [v.best, d.played];
-      this.worlds(g, round, before, d.seat, myLog, pair.map((k) => d.commands[k]!), SIZES.recheck, (rows) => {
+      this.worlds(g, round, before, d.seat, myLog, pair.map((k) => d.commands[k]!), this.sizes.recheck, (rows) => {
         d.rows.push(...rows.map((r) => d.commands.map((_, k) => (k === pair[0] ? r[0]! : k === pair[1] ? r[1]! : null))));
       });
     }

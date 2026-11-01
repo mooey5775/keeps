@@ -1,13 +1,19 @@
-// One of the app's search workers (search-pool.ts): its chunks of a search's worlds, played out in lockstep
-// (packages/bot/src/search/lockstep.ts), each step's observations sent to the app's Core ML host (keeps://app/nn/forward).
+// One of the app's search workers (search-pool.ts): its chunks of a search's worlds, and the round review's jobs, played
+// out in lockstep (packages/bot/src/search/lockstep.ts), each step's observations sent to the app's Core ML host
+// (keeps://app/nn/forward).
 import { Policy } from '@keeps/bot/policy.ts';
-import { playWorlds, type WorldsJob } from '@keeps/bot/search/lockstep.ts';
+import { reviewGames, type ReviewJob, type ReviewResult } from '@keeps/bot/review/jobs.ts';
+import { drive, playWorlds, type WorldsJob } from '@keeps/bot/search/lockstep.ts';
 import { encodeRequest } from '@keeps/bot/search/request.ts';
 
-export type SearchWorkerMessage = { t: 'init'; weights: ArrayBuffer } | { t: 'search'; id: number; job: WorldsJob };
+export type SearchWorkerMessage =
+  | { t: 'init'; weights: ArrayBuffer }
+  | { t: 'search'; id: number; job: WorldsJob }
+  | { t: 'review'; id: number; job: ReviewJob };
 export type SearchWorkerReply =
   | { t: 'ready' }
   | { t: 'search'; id: number; rows: number[][] }
+  | { t: 'review'; id: number; result: ReviewResult }
   | { t: 'error'; id?: number; message: string };
 
 let policy: Policy | null = null;
@@ -31,11 +37,14 @@ onmessage = async (e: MessageEvent<SearchWorkerMessage>) => {
     if (m.t === 'init') {
       policy = Policy.load(new Uint8Array(m.weights));
       post({ t: 'ready' });
-    } else {
+    } else if (m.t === 'search') {
       // Sampled rollouts, as Midstrike plays (the policy sampled on both sides).
       post({ t: 'search', id: m.id, rows: await playWorlds(m.job, policy!, true, logits) });
+    } else {
+      const { games, finish } = reviewGames(m.job, policy!, Math.random);
+      post({ t: 'review', id: m.id, result: finish(await drive(games, logits, policy!.info.numActions)) });
     }
   } catch (error) {
-    post({ t: 'error', id: m.t === 'search' ? m.id : undefined, message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) });
+    post({ t: 'error', id: m.t === 'init' ? undefined : m.id, message: error instanceof Error ? `${error.message}\n${error.stack}` : String(error) });
   }
 };

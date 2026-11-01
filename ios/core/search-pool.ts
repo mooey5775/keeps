@@ -7,6 +7,10 @@
 // advice for each of your decisions), the workers hold only so many chunks at once: the page's memory is bounded (all
 // at once, they took more than WebKit allows a page, and it ended the page's process). A chunk whose search is no
 // longer wanted (its position has passed) is dropped, not played.
+//
+// The round review's jobs (review-jobs.ts) go to the same workers, but only when no search is waiting, and at most one
+// a worker: the live game always comes first.
+import type { ReviewJob, ReviewResult } from '@keeps/bot/review/jobs.ts';
 import { Superseded, type EvaluateJob, type WorldsPool } from '@keeps/bot/search/search.ts';
 import type { SearchWorkerMessage, SearchWorkerReply } from './search-worker.ts';
 
@@ -17,6 +21,8 @@ const CHUNK = 64;
 const CHUNK_MS = 90_000;
 /** Chunks a worker holds at once: two, so it always has playouts to batch while the other's wait on the network. */
 const PER_WORKER = 2;
+/** How long a worker may take over one review job (a few dozen playouts) before it's taken for stuck. */
+const REVIEW_MS = 120_000;
 
 type ChunkJob = Extract<SearchWorkerMessage, { t: 'search' }>['job'];
 interface Queued {
@@ -25,16 +31,26 @@ interface Queued {
   resolve: (rows: number[][]) => void;
   reject: (e: Error) => void;
 }
+interface QueuedReview {
+  job: ReviewJob;
+  resolve: (result: ReviewResult) => void;
+  reject: (e: Error) => void;
+}
 
 export class WorkerSearch implements WorldsPool {
   private readonly workers: Worker[] = [];
   /** Each chunk sent and not yet answered: its worker, and what to tell its search. */
-  private readonly waiting = new Map<number, { worker: Worker; resolve: (rows: number[][]) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly waiting = new Map<
+    number,
+    { worker: Worker; review: boolean; resolve: (answer: never) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+  >();
   private id = 0;
   private seed = (Math.random() * 2 ** 32) >>> 0;
   private weights: ArrayBuffer = new ArrayBuffer(0);
   /** Chunks waiting for a worker, every search's, in the order asked. */
   private readonly queue: Queued[] = [];
+  /** Review jobs waiting: taken only when no chunk is. */
+  private readonly reviews: QueuedReview[] = [];
 
   private constructor() {}
 
@@ -59,7 +75,7 @@ export class WorkerSearch implements WorldsPool {
         this.waiting.delete(m.id!);
         clearTimeout(job.timer);
         if (m.t === 'error') job.reject(new Error(m.message));
-        else job.resolve(m.rows);
+        else (job.resolve as (answer: unknown) => void)(m.t === 'search' ? m.rows : m.result);
         this.pump();
       };
       // A worker that fails outright (out of memory, say) answers nothing more: its chunks fail now, and it's replaced.
@@ -106,10 +122,21 @@ export class WorkerSearch implements WorldsPool {
     return (await Promise.all(rows)).flat();
   }
 
-  /** Chunks from the queue to the workers with room: those still wanted; the others dropped (Superseded). */
+  /** A review job, played on the workers when the live game leaves them room (review-jobs.ts queues them). */
+  review(job: ReviewJob): Promise<ReviewResult> {
+    const result = new Promise<ReviewResult>((resolve, reject) => this.reviews.push({ job, resolve, reject }));
+    this.pump();
+    return result;
+  }
+
+  /**
+   * Chunks from the queue to the workers with room: those still wanted; the others dropped (Superseded). Then, with no
+   * chunk waiting, review jobs: one a worker at most, so a search that comes finds room.
+   */
   private pump(): void {
     for (const worker of this.workers) {
-      let held = [...this.waiting.values()].filter((w) => w.worker === worker).length;
+      const mine = [...this.waiting.values()].filter((w) => w.worker === worker);
+      let held = mine.length;
       while (held < PER_WORKER && this.queue.length > 0) {
         const next = this.queue.shift()!;
         if (!next.wanted()) {
@@ -119,13 +146,20 @@ export class WorkerSearch implements WorldsPool {
         this.run(worker, next);
         held++;
       }
+      if (held < PER_WORKER && this.queue.length === 0 && this.reviews.length > 0 && !mine.some((w) => w.review)) {
+        const next = this.reviews.shift()!;
+        const id = ++this.id;
+        const timer = setTimeout(() => this.lose(worker, `a search worker took over ${REVIEW_MS / 1000} s on a review job`), REVIEW_MS);
+        this.waiting.set(id, { worker, review: true, resolve: next.resolve as (answer: never) => void, reject: next.reject, timer });
+        worker.postMessage({ t: 'review', id, job: next.job } satisfies SearchWorkerMessage);
+      }
     }
   }
 
   private run(worker: Worker, { job, resolve, reject }: Queued): void {
     const id = ++this.id;
     const timer = setTimeout(() => this.lose(worker, `a search worker took over ${CHUNK_MS / 1000} s on ${job.n} worlds`), CHUNK_MS);
-    this.waiting.set(id, { worker, resolve, reject, timer });
+    this.waiting.set(id, { worker, review: false, resolve: resolve as (answer: never) => void, reject, timer });
     worker.postMessage({ t: 'search', id, job } satisfies SearchWorkerMessage);
   }
 }

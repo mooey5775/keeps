@@ -13,6 +13,8 @@ import { atWorlds } from '@keeps/bot/search/search.ts';
 import { cardCatalog, coreBridge, savedMessage, type ToApp } from './bridge.ts';
 import { LocalServer } from './local-server.ts';
 import { WorkerSearch } from './search-pool.ts';
+import { PhoneReviews } from './review-jobs.ts';
+import { scaledSizes } from '@keeps/bot/review/review.ts';
 
 /** Worlds per search at each level that searches (Hard: 512 on a phone, as decided; Medium as on the website). */
 const WORLDS = { hard: 512, medium: 64 };
@@ -52,6 +54,9 @@ async function boot(): Promise<void> {
   const host = midstrikeHost({
     name: 'Midstrike',
     search: { hard: atWorlds(search, WORLDS.hard), medium: atWorlds(search, WORLDS.medium) },
+    // Each round reviewed on the phone, behind the live game, at half the website's sample sizes.
+    reviews: new PhoneReviews(search),
+    reviewSizes: scaledSizes(0.5),
     onSearch: (room, r) => post({ t: 'search', room: room.code, seat: r.seat, turn: r.turn, worlds: r.worlds, moves: r.moves.length, ms: r.ms }),
   });
   const server = new LocalServer({

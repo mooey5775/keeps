@@ -51,7 +51,36 @@ function* move(state: GameState, seat: Seat, belief: Belief, log: TraceEvent[], 
   }
 }
 
-/** +1 if `me` wins the round after playing `first` in `world`, else -1. */
+/**
+ * A round played out to its end from `world`, each seat reading its own log (`logs`: what each has seen), after
+ * `first` if given: the round's winner, or null.
+ */
+export function* roundPlayout(
+  world: GameState,
+  logs: readonly [Seat, TraceEvent[]][],
+  first: { seat: Seat; command: Command } | null,
+  pick: Pick,
+): Generator<Ask, Seat | null, Float32Array> {
+  const players = new Map(logs.map(([s, log]) => [s, { belief: new Belief(s, { sound: true }), log: [...log] }]));
+  let state = world;
+  let next = first;
+  const obs = new Float32Array(OBSERVATION2_SIZE);
+  for (let step = 0; ; step++) {
+    if (step > 3000) throw new Error('playout did not end');
+    if (state.phase !== 'playing' && state.phase !== 'post-round') return state.lastRoundWinner;
+    const seat = next?.seat ?? state.prompts[0]!.seat;
+    const p = players.get(seat);
+    if (!p) throw new Error(`playout: seat ${seat} has no log to read`);
+    const command = next?.command ?? (yield* move(state, seat, p.belief, p.log, pick, obs));
+    next = null;
+    const r = apply(state, seat, command, { trusted: true });
+    if (!r.ok) throw new Error(r.error.message);
+    state = r.state;
+    for (const [s, q] of players) q.log.push(...eventsFor(r.events, s));
+  }
+}
+
+/** +1 if `me` wins the round after playing `first` in `world`, else -1 (the search's rollout). */
 export function* playout(
   world: GameState,
   me: Seat,
@@ -60,31 +89,14 @@ export function* playout(
   theirLog: TraceEvent[],
   pick: Pick,
 ): Generator<Ask, number, Float32Array> {
-  const opp = ((me + 2) % 4) as Seat;
   // Each side reads its own log: mine as I saw it; the opponent's as they saw this world's history.
-  const players = new Map<Seat, { belief: Belief; log: TraceEvent[] }>([
-    [me, { belief: new Belief(me, { sound: true }), log: [...myLog] }],
-    [opp, { belief: new Belief(opp, { sound: true }), log: [...theirLog] }],
-  ]);
-  let state = world;
-  let command = first;
-  let seat = me;
-  const obs = new Float32Array(OBSERVATION2_SIZE);
-  for (let step = 0; ; step++) {
-    if (step > 3000) throw new Error('playout did not end');
-    const r = apply(state, seat, command, { trusted: true });
-    if (!r.ok) throw new Error(r.error.message);
-    state = r.state;
-    for (const [s, p] of players) p.log.push(...eventsFor(r.events, s));
-    if (state.phase !== 'playing' && state.phase !== 'post-round') return state.lastRoundWinner === me ? 1 : -1;
-    seat = state.prompts[0]!.seat;
-    const p = players.get(seat)!;
-    command = yield* move(state, seat, p.belief, p.log, pick, obs);
-  }
+  const opp = ((me + 2) % 4) as Seat;
+  const winner = yield* roundPlayout(world, [[me, myLog], [opp, theirLog]], { seat: me, command: first }, pick);
+  return winner === me ? 1 : -1;
 }
 
 /** A playout driven one observation at a time, the network run here. */
-export function playOut(game: Generator<Ask, number, Float32Array>, policy: Policy): number {
+export function playOut<T>(game: Generator<Ask, T, Float32Array>, policy: Policy): T {
   let r = game.next();
   while (!r.done) r = game.next(policy.logits(r.value.obs));
   return r.value;

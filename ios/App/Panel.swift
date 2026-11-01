@@ -22,6 +22,14 @@ struct DecisionPanel: View {
       if let hints = table.hints, game.training { Hints(hints: hints) }
       options
       if let undo = game.game?.undo, undo.proposedBy != nil { UndoVote(game: game, undo: undo) }
+      // The round just over, reviewed against Midstrike (it fills in as Midstrike works through it).
+      if view.phase == .roundOver || view.phase == .gameOver, let latest = game.reviews.last {
+        Button { game.reviewing = latest.id } label: {
+          Label(latest.review.pending > 0 ? "Round \(latest.id) review (filling in)" : "Round \(latest.id) review", systemImage: "chart.xyaxis.line")
+        }
+        .font(Theme.text(.body))
+        .tint(Theme.gold)
+      }
       if view.phase == .gameOver {
         HStack {
           // Online, the host takes the room back to its lobby for the next game; the others wait for them.

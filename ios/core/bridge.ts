@@ -84,7 +84,8 @@ export interface TableText {
 export type ToApp =
   | { t: 'ready'; workers: number; network: string; cards: CardInfo[] }
   /** `spelling`, with a room message: its code in the NATO alphabet, to read out (as the website shows it). */
-  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText; spelling?: string }
+  /** `moveLines`, with a round's review: each of its moves' log lines. */
+  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText; spelling?: string; moveLines?: LogLine[][] }
   /**
    * A game's replay log so far (engine/src/replay.ts, as the website's server keeps it), after each move: the app keeps
    * it as `file`; and with it, what taking the game up again takes (`restore`).
@@ -109,8 +110,11 @@ export function savedMessage(server: LocalServer, code: string, startedAt: numbe
   return { t: 'saved', file: replayFileName(code, startedAt), text: formatReplayLog(log), game: { code, ...game } };
 }
 
-/** Each connection's game log so far, for the log's lines (they're worked out from the whole log, as the web client does). */
-type Connection = { receive(m: ClientMessage): void; close(): void; events: TraceEvent[] };
+/**
+ * Each connection's game log so far, for the log's lines (they're worked out from the whole log, as the web client
+ * does), and its game's names by seat (for a round review's lines).
+ */
+type Connection = { receive(m: ClientMessage): void; close(): void; events: TraceEvent[]; names?: (string | null)[] };
 
 /**
  * The app's messages (JSON, FromApp) to `receive`; the core's to `post`. `configure`: the app's settings (Midstrike's
@@ -121,7 +125,13 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
   const deliver = (id: number, message: ServerMessage) => {
     const connection = connections.get(id);
     if (message.t === 'room') return post({ t: 'server', id, message, spelling: natoSpelling(message.room.code) });
+    // A round's review: each move's log lines, as the website's review shows them (named from the reviewed seat's side).
+    if (message.t === 'review' && connection?.names) {
+      const names = makeNames(connection.names, 'spectator', message.review.seat);
+      return post({ t: 'server', id, message, moveLines: message.review.moves.map((m) => logLines(m.events, names).filter((l) => !l.heading)) });
+    }
     if (message.t !== 'game' || !connection) return post({ t: 'server', id, message });
+    connection.names = message.names;
     connection.events = message.reset ? [...message.log] : [...connection.events, ...message.log];
     const viewer = message.view.viewer;
     const anchor = (viewer === 'spectator' ? 0 : viewer) as Seat;

@@ -104,6 +104,9 @@ struct TableView: View {
         return view.lastRoundWinner == game.me ? .success : .warning
       }
       .sheet(isPresented: $showLog) { LogSheet(lines: game.lines) }
+      .sheet(isPresented: Binding(get: { game.reviewing != nil }, set: { if !$0 { game.reviewing = nil } })) {
+        if let round = game.reviewing { ReviewView(game: game, round: round) }
+      }
       .sheet(isPresented: $showDiscard) { DiscardSheet(game: game, cards: view.discard) }
       .sheet(isPresented: .constant(orderPrompt(view) != nil)) {
         if let prompt = orderPrompt(view) { OrderPileSheet(game: game, prompt: prompt) }
@@ -159,6 +162,12 @@ struct TableView: View {
         // (Undo, in a game between people: everyone else agrees to it.)
         if game.game?.undo.available == true {
           Button { game.proposeUndo() } label: { Label("Ask to undo the last move", systemImage: "arrow.uturn.backward") }
+        }
+        // (Each round's review, in a game against Midstrike.)
+        if !game.reviews.isEmpty {
+          Menu {
+            ForEach(game.reviews) { r in Button("Round \(r.id)") { game.reviewing = r.id } }
+          } label: { Label("Round reviews", systemImage: "chart.xyaxis.line") }
         }
         Button { game.report = .now() } label: { Label("Report a problem", systemImage: "exclamationmark.bubble") }
         Divider()

@@ -459,5 +459,30 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(yourPile.exists, "the table isn't back")
   }
 
+  func testARoundIsReviewedOnThePhone() throws {
+    // A game to one mark, your moves made at random until it's over.
+    app = XCUIApplication()
+    app.launchEnvironment["KEEPS_PLAY"] = "easy:1:400"
+    app.launchEnvironment["KEEPS_SEED"] = Deal.alone.rawValue
+    app.launch()
+    let review = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Round 1 review'")).firstMatch
+    XCTAssertTrue(review.waitForExistence(timeout: 240), "the round wasn't reviewed")
+    review.tap()
+    XCTAssertTrue(app.descendants(matching: .any)["round review"].waitForExistence(timeout: 10), "the review didn't open")
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Turn 1'")).firstMatch.waitForExistence(timeout: 10), "the review shows no turns")
+    // (Kept with the results, to look at: the review as it opened.)
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = "round review"
+    shot.lifetime = .keepAlways
+    add(shot)
+    app.swipeUp()
+    let later = XCTAttachment(screenshot: app.screenshot())
+    later.name = "round review, further down"
+    later.lifetime = .keepAlways
+    add(later)
+    app.buttons["Done"].tap()
+    XCTAssertFalse(app.alerts["Something went wrong"].exists)
+  }
+
   func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }
 }
