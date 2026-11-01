@@ -306,8 +306,12 @@ final class TableUITests: XCTestCase {
     launchOnline()
     let code = startOnlineGameAgainstMidstrike()
     // Drawing until a card stays in your hand (a HOT one goes into your keep; the deal online is the server's).
-    for _ in 0..<6 where handCards.isEmpty {
-      XCTAssertTrue(yourTurn(40))
+    for _ in 0..<8 where handCards.isEmpty {
+      XCTAssertTrue(eventually(60) { self.app.buttons["Draw from your pile"].exists || self.putIntoYourKeep.exists }, "no draw came")
+      if putIntoYourKeep.exists {
+        putIntoYourKeep.tap()
+        continue
+      }
       yourPile.tap()
       placeHot()
       _ = eventually(3) { !self.handCards.isEmpty }

@@ -7,14 +7,14 @@ struct LobbyView: View {
   /// Where you play from: on this phone, or online (the lobby opens where you last played).
   @AppStorage(LobbyView.placeKey) private var place = Place.phone
   static let placeKey = "where"
-  @AppStorage("server") private var serverName = OnlineServer.midstrike.name
   @State private var code = ""
   @State private var confirmDiscard = false
   @FocusState private var coding: Bool
 
   enum Place: String { case phone, online }
 
-  private var server: OnlineServer { OnlineServer.known.first { $0.name == serverName } ?? OnlineServer.known[0] }
+  /// The server online play is on (one; tests give their own).
+  private var server: OnlineServer { OnlineServer.known[0] }
   private var playerName: String {
     let trimmed = name.trimmingCharacters(in: .whitespaces)
     return trimmed.isEmpty ? "Player" : trimmed
@@ -156,50 +156,19 @@ struct LobbyView: View {
 
   // MARK: Online
 
-  @ViewBuilder
-  private var onlineRows: some View {
-    if OnlineServer.known.count > 1 {
-      row("Server") {
-        Picker("Server", selection: $serverName) {
-          ForEach(OnlineServer.known) { Text($0.name).tag($0.name) }
-        }
-      }
-    } else {
-      row("Server") { Text(server.name).font(Theme.text(.body)).foregroundStyle(Theme.text) }
-    }
-    row("Join a room") {
-      HStack(spacing: 8) {
-        TextField("Code", text: $code, prompt: Text("Its four letters").foregroundStyle(Theme.muted.opacity(0.7)))
-          .font(Theme.text(.title3).monospaced())
-          .foregroundStyle(Theme.text)
-          .textInputAutocapitalization(.characters)
-          .autocorrectionDisabled()
-          .submitLabel(.join)
-          .focused($coding)
-          .onSubmit(joinRoom)
-          // (Left as typed: rewriting it at each keystroke loses the next ones, typed quickly. Tidied when used.)
-          .accessibilityIdentifier("room code")
-        Button("Join", action: joinRoom)
-          .buttonStyle(.borderedProminent)
-          .tint(Theme.gold)
-          .foregroundStyle(Theme.background)
-          .disabled(roomCode.count != 4)
-      }
-      .padding(.horizontal, 12)
-      .padding(.vertical, 8)
-      .background(Theme.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-      .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(coding ? Theme.gold : Theme.line, lineWidth: coding ? 1.5 : 1) }
-    }
-  }
+  /// Online, the card holds only your name: where you play is chosen below.
+  private var onlineRows: some View { EmptyView() }
 
+  /// The ways in, online: back to your room, if you have one; else joining one by its code, or making one, side by
+  /// side in weight (neither is the main way: it depends on who's asking whom).
   private var onlineButtons: some View {
     VStack(spacing: 12) {
-      // The room you were in when the app closed, to go back to.
+      // The room you were in when you left, or the app closed: your seat is kept there.
       if let seat = game.onlineSeat {
         Button { game.rejoin() } label: {
           VStack(spacing: 2) {
             Text("Back to \(seat.code)").font(Theme.heading(30))
-            Text("on \(seat.server.name)").font(Theme.text(.footnote))
+            Text("Your seat is kept").font(Theme.text(.footnote))
           }
           .frame(maxWidth: .infinity)
           .padding(.vertical, 6)
@@ -208,14 +177,33 @@ struct LobbyView: View {
         .tint(Theme.gold)
         .foregroundStyle(Theme.background)
       }
-      Button { game.host(on: server, name: playerName) } label: {
-        Text("Make a room").font(Theme.heading(game.onlineSeat == nil ? 30 : 24)).frame(maxWidth: .infinity).padding(.vertical, 6)
+      HStack(spacing: 8) {
+        TextField("Room code", text: $code, prompt: Text("Room code").foregroundStyle(Theme.muted))
+          .font(Theme.heading(24))
+          .foregroundStyle(Theme.text)
+          .textInputAutocapitalization(.characters)
+          .autocorrectionDisabled()
+          .submitLabel(.join)
+          .focused($coding)
+          .onSubmit(joinRoom)
+          // (Left as typed: rewriting it at each keystroke loses the next ones, typed quickly. Tidied when used.)
+          .accessibilityIdentifier("room code")
+          .padding(.horizontal, 20)
+          .frame(height: Self.wayIn)
+          .background(Theme.background.opacity(0.55), in: Capsule())
+          .overlay { Capsule().strokeBorder(coding ? Theme.gold : Theme.line, lineWidth: coding ? 1.5 : 1) }
+        Button("Join", action: joinRoom)
+          .buttonStyle(WayIn(fill: Theme.gold, text: Theme.background, width: 96))
+          .disabled(roomCode.count != 4)
       }
-      .buttonStyle(.borderedProminent)
-      .tint(game.onlineSeat == nil ? Theme.gold : Theme.panel)
-      .foregroundStyle(game.onlineSeat == nil ? Theme.background : Theme.gold)
+      Text("or").font(Theme.text(.footnote)).italic().foregroundStyle(Theme.muted)
+      Button("Make a room") { game.host(on: server, name: playerName) }
+        .buttonStyle(WayIn(fill: Theme.panel, text: Theme.gold))
     }
   }
+
+  /// The height of the ways in online: joining and making a room, alike.
+  fileprivate static let wayIn: CGFloat = 52
 
   /// The code as typed, tidied: its letters, in capitals.
   private var roomCode: String { String(code.uppercased().filter(\.isLetter)) }
@@ -246,5 +234,25 @@ struct LobbyView: View {
       Text(title).font(Theme.text(.subheadline)).foregroundStyle(Theme.muted)
       content()
     }
+  }
+}
+
+/// A way in online (Join, Make a room): a capsule exactly the code field's height, so they line up as equals (the
+/// system's button styles add padding of their own). Dimmed while it can't be used, pressed a little darker.
+private struct WayIn: ButtonStyle {
+  let fill: Color
+  let text: Color
+  var width: CGFloat?
+  @Environment(\.isEnabled) private var enabled
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .font(Theme.heading(24))
+      .foregroundStyle(text)
+      .frame(maxWidth: width ?? .infinity)
+      .frame(width: width, height: LobbyView.wayIn)
+      .background(fill.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.35), in: Capsule())
+      .opacity(enabled ? 1 : 0.6)
+      .contentShape(Capsule())
   }
 }

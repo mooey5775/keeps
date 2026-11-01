@@ -4092,13 +4092,15 @@ public struct ToAppServer: Codable, Equatable, Sendable {
   public var options: [Option]?
   public var lines: [LogLine]?
   public var table: TableText?
+  public var spelling: String?
 
-  public init(id: Double, message: ServerMessage, options: [Option]? = nil, lines: [LogLine]? = nil, table: TableText? = nil) {
+  public init(id: Double, message: ServerMessage, options: [Option]? = nil, lines: [LogLine]? = nil, table: TableText? = nil, spelling: String? = nil) {
     self.id = id
     self.message = message
     self.options = options
     self.lines = lines
     self.table = table
+    self.spelling = spelling
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -4107,6 +4109,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     case options
     case lines
     case table
+    case spelling
   }
 
   public init(from decoder: Decoder) throws {
@@ -4116,6 +4119,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     self.options = try container.decodeIfPresent([Option].self, forKey: .options)
     self.lines = try container.decodeIfPresent([LogLine].self, forKey: .lines)
     self.table = try container.decodeIfPresent(TableText.self, forKey: .table)
+    self.spelling = try container.decodeIfPresent(String.self, forKey: .spelling)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -4125,6 +4129,7 @@ public struct ToAppServer: Codable, Equatable, Sendable {
     try container.encodeIfPresent(self.options, forKey: .options)
     try container.encodeIfPresent(self.lines, forKey: .lines)
     try container.encodeIfPresent(self.table, forKey: .table)
+    try container.encodeIfPresent(self.spelling, forKey: .spelling)
   }
 }
 

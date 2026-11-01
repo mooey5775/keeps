@@ -8,6 +8,7 @@ import type { SavedGame } from '../../packages/server/src/room.ts';
 import { hintChance, hintLabel } from '../../packages/web/src/game/hints.ts';
 import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
 import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/web/src/game/options.ts';
+import { natoSpelling } from '../../packages/web/src/game/nato.ts';
 import { capital, headline, promptText } from '../../packages/web/src/game/status.ts';
 import type { LocalServer } from './local-server.ts';
 import { remoteConnection, type LinkState } from './remote.ts';
@@ -68,7 +69,8 @@ export interface TableText {
 
 export type ToApp =
   | { t: 'ready'; workers: number; network: string; cards: CardInfo[] }
-  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText }
+  /** `spelling`, with a room message: its code in the NATO alphabet, to read out (as the website shows it). */
+  | { t: 'server'; id: number; message: ServerMessage; options?: Option[]; lines?: LogLine[]; table?: TableText; spelling?: string }
   /**
    * A game's replay log so far (engine/src/replay.ts, as the website's server keeps it), after each move: the app keeps
    * it as `file`; and with it, what taking the game up again takes (`restore`).
@@ -99,6 +101,7 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
   const connections = new Map<number, Connection>();
   const deliver = (id: number, message: ServerMessage) => {
     const connection = connections.get(id);
+    if (message.t === 'room') return post({ t: 'server', id, message, spelling: natoSpelling(message.room.code) });
     if (message.t !== 'game' || !connection) return post({ t: 'server', id, message });
     connection.events = message.reset ? [...message.log] : [...connection.events, ...message.log];
     const viewer = message.view.viewer;

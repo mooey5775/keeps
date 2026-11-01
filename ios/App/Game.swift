@@ -54,6 +54,8 @@ final class Game {
   private static let seatKey = "onlineSeat"
 
   private(set) var room: RoomSummary?
+  /// The room's code in the NATO alphabet, to read out ("Mike · Tango · Uniform · Charlie").
+  private(set) var roomSpelling: String?
   private(set) var game: ServerMessageGame?
   private(set) var options: [Option] = []
   private(set) var lines: [LogLine] = []
@@ -535,6 +537,7 @@ final class Game {
     switch server.message {
     case .room(let message):
       room = message.room
+      roomSpelling = server.spelling
       if online != nil {
         // Online, the room's lobby is a screen of its own (whoever's in, the host's settings), between games too.
         if message.room.phase == .lobby, screen != .room {

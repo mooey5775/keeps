@@ -49,8 +49,12 @@ struct RoomView: View {
       Text("Room").font(Theme.text(.subheadline)).foregroundStyle(Theme.muted)
       Text(room.code).font(Theme.heading(56, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright).kerning(6)
         .accessibilityIdentifier("room's code")
+      // To read out: no "B or D?".
+      if let spelling = game.roomSpelling {
+        Text(spelling).font(Theme.text(.callout)).foregroundStyle(Theme.text)
+      }
       if let online = game.online {
-        Text("on \(online.server.name): others join with this code").font(Theme.text(.footnote)).foregroundStyle(Theme.muted)
+        Text("Others join with this code").font(Theme.text(.footnote)).foregroundStyle(Theme.muted)
         if let link = online.server.invite(room.code) {
           ShareLink(item: link, message: Text("Play Keeps with me: room \(room.code)")) {
             Label("Invite", systemImage: "square.and.arrow.up").font(Theme.text(.body))
