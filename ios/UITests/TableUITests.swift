@@ -3,28 +3,14 @@ import XCTest
 /// The table, touched as a person touches it: cards picked up from your hand and let go where they go, held to look at, touched to choose (a game against Easy Midstrike; the moves themselves are the core's: here, what's checked is that carrying a card makes one).
 final class TableUITests: KeepsUITestCase {
   func testACardCarriedToWhereItGoesMakesTheMove() throws {
+    // Your first draw is played on its own (Deal.alone): carried to the middle of the table, it's played.
     launch()
-    var carried = 0
-    for _ in 0..<30 where carried < 1 {
-      guard yourTurn() else { break }
-      // A card from your hand to your keep, the table's middle (played alone), or Midstrike's keep: one of them takes it.
-      guard let card = handCards.first(where: { $0.isHittable }) else {
-        app.buttons["Draw from your pile"].tap()
-        continue
-      }
-      let id = card.identifier
-      for place in ["Your keep", "table", "Midstrike's keep"] {
-        let target = element(place)
-        guard target.exists, element(id).exists else { continue }
-        element(id).press(forDuration: 0.12, thenDragTo: target)
-        if gone(element(id), within: 2) {
-          carried += 1
-          break
-        }
-      }
-      if element(id).exists, app.buttons["Draw from your pile"].exists { app.buttons["Draw from your pile"].tap() }
-    }
-    XCTAssertGreaterThan(carried, 0, "no card carried from the hand made a move")
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    XCTAssertTrue(eventually(5) { handCards.contains { $0.isHittable } }, "no card drawn")
+    let id = handCards.first { $0.isHittable }!.identifier
+    element(id).press(forDuration: 0.12, thenDragTo: element("table"))
+    XCTAssertTrue(gone(element(id), within: 3), "the card carried to the middle of the table stayed in your hand")
   }
 
   func testTouchingYourPileDraws() throws {
