@@ -1,27 +1,27 @@
-// The remote worker for the demo server (remote.ts): runs on a machine the server can't reach (gpu03), asks the
+// The remote worker for the website's server (remote.ts): runs on a machine the server can't reach (gpu03), asks the
 // server for work over HTTPS, and answers it. Searches run in worker threads here; reviews in worker processes
 // at nice 19 (the review pool's own), so the live game's searches come first.
-//   node remote-worker.ts <server url> <token file> <weights> <search threads> <review processes>
-// With SEARCH_INFERENCE=<socket of bot/keeps_bot/serve.py>, searches are batched (batch-search.ts), the network on
+//   node packages/bot/src/remote/worker.ts <server url> <token file> <weights> <search threads> <review processes>
+// With SEARCH_INFERENCE=<socket of training/keeps_bot/serve.py>, searches are batched (batch-search.ts), the network on
 // that GPU server; otherwise each thread plays its playouts one at a time (RolloutPool).
-// It must run the server's network: a job stamped with another network is refused (the server then searches itself).
+// It must run the server's network: a job stamped with another network is refused (a failure the server counts).
 import { readFileSync } from 'node:fs';
 import { Policy } from '../policy.ts';
 import { ReviewPool } from '../review/pool.ts';
 import type { ReviewJob, ReviewResult } from '../review/jobs.ts';
 import { BatchedPool } from '../search/batch-search.ts';
-import { type EvaluateJob, type Evaluator } from '../search/search.ts';
+import type { EvaluateJob, WorldsPool } from '../search/search.ts';
 import { RolloutPool } from '../search/rollout-pool.ts';
 import type { RemoteKind } from './remote.ts';
 
 const [url, tokenFile, weights, searchArg, reviewArg] = process.argv.slice(2);
-if (!url || !tokenFile || !weights) throw new Error('usage: remote-worker.ts <server url> <token file> <weights> <search threads> <review processes>');
+if (!url || !tokenFile || !weights) throw new Error('usage: worker.ts <server url> <token file> <weights> <search threads> <review processes>');
 const token = readFileSync(tokenFile, 'utf8').trim();
 const { step, fingerprint } = Policy.load(readFileSync(weights)).info;
 const stamp = `${step}:${fingerprint}`;
 const inference = process.env.SEARCH_INFERENCE || null;
 const log = (line: string) => console.log(`${new Date().toISOString()} ${line}`);
-const searches: Evaluator = inference ? new BatchedPool(Number(searchArg ?? 32), weights, inference, true, log) : new RolloutPool(Number(searchArg ?? 32), weights, true);
+const searches: WorldsPool = inference ? new BatchedPool(Number(searchArg ?? 32), weights, inference, true, log) : new RolloutPool(Number(searchArg ?? 32), weights, true);
 const reviews = new ReviewPool(Number(reviewArg ?? 16), weights);
 /** Jobs at once, by kind: a search fills the threads by itself, so a few are plenty; a review job takes one process. */
 const slots: Record<RemoteKind, number> = { search: 4, review: Number(reviewArg ?? 16) };
@@ -59,7 +59,8 @@ async function work(job: { id: number; kind: RemoteKind; stamp: string; payload:
   }
   try {
     if (job.kind === 'search') {
-      const rows = await searches.evaluate(job.payload as EvaluateJob);
+      // (Its worlds, `n`: the server's REMOTE_WORLDS.)
+      const rows = await searches.evaluate(job.payload as EvaluateJob & { n: number });
       await answer(job.id, { result: rows });
     } else {
       const result = await new Promise<ReviewResult | null>((resolve) => reviews.submit('remote', 0, job.payload as ReviewJob, resolve));

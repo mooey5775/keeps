@@ -1,5 +1,5 @@
 // One request of observations for the network, in the inference protocol's binary form (inference.ts describes it):
-// the GPU server (bot/keeps_bot/serve.py) reads it over a Unix socket, the iOS app's Core ML host over its URL scheme.
+// the GPU server (training/keeps_bot/serve.py) reads it over a Unix socket, the iOS app's Core ML host over its URL scheme.
 // Kept apart from inference.ts, which needs Node's sockets, so a browser can use it.
 
 // Typed arrays are in the platform's byte order; the protocol is little-endian, as every machine this runs on is.

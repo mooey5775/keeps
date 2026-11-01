@@ -37,10 +37,15 @@ For development, `pnpm dev` runs the server and the Vite dev server together. Op
 | Path | What it is |
 |---|---|
 | `packages/engine` | The rules engine: pure TypeScript, no dependencies, shared by the server and the browser. See [docs/ENGINE.md](docs/ENGINE.md). |
-| `docs/ROADMAP.md` | Plans: persistence, bots, accounts and ratings. |
-| `packages/server` | Node server: rooms, WebSockets, static files. |
-| `packages/protocol` | Message types shared by the server and the client. |
-| `packages/web` | React client. |
+| `packages/protocol` | Message types shared by the server and its clients (the website, the app). |
+| `packages/table` | What the table says, for every client alike: the moves open to a player, the log's lines, the headline, training mode's hints. |
+| `packages/bot` | Midstrike: its network, its search, the round reviews, and the worker for its search on a remote machine. |
+| `packages/server` | The one server: rooms, WebSockets, static files, Midstrike's host and admin pages. Its entry point is `src/main.ts`. |
+| `packages/web` | The React client. |
+| `packages/learn` | Research in TypeScript: the training environment's bridge, benchmarks, maintained tools (`tools/`: a match between bots, a game in the terminal) and one-off analyses. |
+| `training/` | Python: training (R-NaD, and VRPO on the vendored MARVEL trainer in `training/marvel`), export, evaluation. See [training/README.md](training/README.md) and [docs/BOT.md](docs/BOT.md). |
+| `ios/` | The iOS app: SwiftUI, with the website's TypeScript as its core (`ios/core`, a workspace package). See [ios/README.md](ios/README.md). |
+| `docs/` | The engine, the bot, and the roadmap. |
 | `rules/` | The official rules card, rules reference, clarifications, and puzzles. |
 | `cards/` | Original card scans. |
 

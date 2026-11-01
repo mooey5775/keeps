@@ -1,5 +1,5 @@
 // Checks self-play trajectories, as the trainer receives them, against an independent replay of their rounds
-// (bot/tests/test_trajectories.py runs it on rollouts from the real Sampler and its Node workers).
+// (training/tests/test_trajectories.py runs it on rollouts from the real Sampler and its Node workers).
 //
 // The replay uses none of the training code (RoundEnv, worker.ts): only what the deployed bot uses. The engine,
 // with its legality checks on; Decision for the legal ids; each player's belief updated from their log and view at

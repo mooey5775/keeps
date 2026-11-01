@@ -3,7 +3,7 @@
 // plays there as it plays here. A connection that drops comes back by itself and takes its seat again (`resume`, with
 // the seat's token), as the website's does; one the server ends (`gone`, or `replaced` by another connection to the
 // seat) stays closed.
-import { PROTOCOL, type ClientMessage, type ServerMessage } from '../../packages/protocol/src/index.ts';
+import { PROTOCOL, type ClientMessage, type ServerMessage } from '@keeps/protocol';
 
 /** What the app is told about the connection itself. */
 export type LinkState = 'connecting' | 'open' | 'reconnecting' | 'closed';

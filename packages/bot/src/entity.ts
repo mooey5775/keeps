@@ -1,6 +1,6 @@
 import { NUM_ACTIONS } from './actions.ts';
 
-// The entity network's forward pass (bot/keeps_bot/networks.py, `entity`), for
+// The entity network's forward pass (training/keeps_bot/networks.py, `entity`), for
 // one observation v2. It mirrors the Haiku code step by step: shared MLPs over
 // card rows and pile rows, pooling by place, a residual trunk, pointer heads.
 // Parameters are looked up by their Haiku names (module/parameter).

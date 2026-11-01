@@ -7,7 +7,7 @@
 // advice for each of your decisions), the workers hold only so many chunks at once: the page's memory is bounded (all
 // at once, they took more than WebKit allows a page, and it ended the page's process). A chunk whose search is no
 // longer wanted (its position has passed) is dropped, not played.
-import { Superseded, type EvaluateJob, type Evaluator } from '../../packages/bot/src/search/search.ts';
+import { Superseded, type EvaluateJob, type WorldsPool } from '@keeps/bot/search/search.ts';
 import type { SearchWorkerMessage, SearchWorkerReply } from './search-worker.ts';
 
 /** Worlds per chunk: enough playouts for a worker to batch (each world plays every candidate move). */
@@ -26,7 +26,7 @@ interface Queued {
   reject: (e: Error) => void;
 }
 
-export class WorkerSearch implements Evaluator {
+export class WorkerSearch implements WorldsPool {
   private readonly workers: Worker[] = [];
   /** Each chunk sent and not yet answered: its worker, and what to tell its search. */
   private readonly waiting = new Map<number, { worker: Worker; resolve: (rows: number[][]) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>();
@@ -96,7 +96,7 @@ export class WorkerSearch implements Evaluator {
     return this.workers.length;
   }
 
-  async evaluate(job: EvaluateJob): Promise<number[][]> {
+  async evaluate(job: EvaluateJob & { n: number }): Promise<number[][]> {
     const { state, me, myLog, commands, n, wanted = () => true } = job;
     const seed = this.seed;
     this.seed = (this.seed + 0x9e3779b9) >>> 0;
@@ -130,5 +130,3 @@ export class WorkerSearch implements Evaluator {
   }
 }
 
-/** `search` with at most `worlds` worlds per search. */
-export const capped = (search: Evaluator, worlds: number): Evaluator => ({ evaluate: (job) => search.evaluate({ ...job, n: Math.min(job.n, worlds) }) });

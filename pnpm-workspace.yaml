@@ -1,5 +1,7 @@
 packages:
   - packages/*
+  # The app's core: the website's TypeScript, bundled for the phone.
+  - ios/core
 allowBuilds:
   # core-js (via posthog-js) only prints a donation message on install.
   core-js: false

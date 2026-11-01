@@ -1,20 +1,12 @@
-// Search bot for the demo server: Ataraxos-style update-equivalent search on top of the policy.
+// Midstrike's search: Ataraxos-style update-equivalent search on top of the policy.
 //
-// At each of the bot's decisions with a real choice: sample WORLDS hidden states exactly from
-// the chance-only posterior given what the bot knows (packages/bot/src/worlds.ts), play every
-// legal command out to the end of the round in each world (the policy on both sides, in worker
-// threads), and take one damped policy-improvement step from the network's policy (see `mode`).
-import {
-  eventsFor,
-  legalCommands,
-  viewFor,
-  type Command,
-  type GameState,
-  type Seat,
-  type TraceEvent,
-} from '@keeps/engine';
+// At each of the bot's decisions with a real choice: sample hidden states exactly from the
+// chance-only posterior given what the bot knows (worlds.ts), as many as the Evaluator was made
+// for, play every legal command out to the end of the round in each world (the policy on both
+// sides, in worker threads or on another machine), and choose by the rollouts (see SearchMode).
+import { legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { actionName, Decision, NUM_ACTIONS } from '../actions.ts';
-import { Belief, noteObservation } from '../belief.ts';
+import type { Belief } from '../belief.ts';
 import { encodeObservation2 } from '../observation2.ts';
 import type { BotPlayer } from '../bot.ts';
 import type { Policy } from '../policy.ts';
@@ -22,27 +14,20 @@ import type { Policy } from '../policy.ts';
 /** A setting from the environment, where there is one (not in a browser). */
 const env = (name: string): string | undefined => (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env[name];
 
-export let WORLDS = Number(env('SEARCH_WORLDS') ?? 256);
-export function setWorlds(n: number): void {
-  WORLDS = n;
-}
 /**
  * How the bot picks from the search.
- * 'damped' (the default): one damped policy-improvement step, as Ataraxos's Stratego search takes (its
+ * 'best-q' (Midstrike's): the move with the best rollout value, the policy breaking near-ties (within tie(worlds)).
+ * 'damped': one damped policy-improvement step, as Ataraxos's Stratego search takes (its
  * Table S12): a tabular step of magnetic mirror descent,
  *   pi'(c) ∝ [exp(Q(c)) · rho(c)^ALPHA · pi(c)^BETA]^(1 / (ALPHA + BETA)),
  * where Q is the command's average result (±1), pi the network's probability of the whole command, and
  * rho the magnet: uniform at each step of a decision, as VRPO's training regularizes towards. The step
  * stays close to the (near-equilibrium) policy, moving only where the values clearly say so. The bot's
  * move is sampled from pi'; training mode's advice shows pi''s most likely move.
- * 'best-q': the move with the best rollout value, the policy breaking near-ties (within tie(worlds)).
  */
+export type SearchMode = 'best-q' | 'damped';
 export const ALPHA = Number(env('SEARCH_ALPHA') ?? 0.002);
 export const BETA = Number(env('SEARCH_BETA') ?? 0.02);
-let mode: 'damped' | 'best-q' = env('SEARCH_MODE') === 'best-q' ? 'best-q' : 'damped';
-export function setSearchMode(m: 'damped' | 'best-q'): void {
-  mode = m;
-}
 /**
  * best-Q's near-tie margin for a search of `worlds` worlds: it shrinks as Q's noise does, as 1/√worlds, from 0.05 at
  * 512 (0.025 at 2,048, 0.14 at 64). Judged on held-out worlds (30 decisions of 8,192 worlds each, split), it loses
@@ -50,7 +35,7 @@ export function setSearchMode(m: 'damped' | 'best-q'): void {
  */
 const tie = (worlds: number) => 0.05 * Math.sqrt(512 / worlds);
 
-/** What the bot thought at one decision, for the demo's insight page. Evaluations are its chance to win (0..1). */
+/** What the bot thought at one decision, for the admin's insight page. Evaluations are its chance to win (0..1). */
 export interface SearchReport {
   seat: Seat;
   turn: number;
@@ -61,7 +46,7 @@ export interface SearchReport {
   after: number | null;
   worlds: number;
   ms: number;
-  mode: 'damped' | 'best-q';
+  mode: SearchMode;
   overrode: boolean;
   /** Every candidate (reveals the bot's hand): its move, policy probability, rollout win chance, chosen. */
   moves: { move: string; policy: number; win: number; chosen: boolean; command: Command }[];
@@ -78,13 +63,12 @@ export function setSearchLog(sink: (line: string) => void): void {
   log = sink;
 }
 
-/** A search's expensive part: `n` worlds sampled for `me` from its log, every command played out in each. */
+/** A search's expensive part: worlds sampled for `me` from its log, every command played out in each. */
 export interface EvaluateJob {
   state: GameState;
   me: Seat;
   myLog: TraceEvent[];
   commands: Command[];
-  n: number;
   /** Whether its result is still wanted (the game hasn't moved on): a pool may drop the rest of it, with Superseded. */
   wanted?: () => boolean;
 }
@@ -97,10 +81,21 @@ export class Superseded extends Error {
   }
 }
 
-/** What runs it: here (rollout-pool.ts, batch-search.ts), or on another machine (remote.ts). One row per world: ±1 per command, `me`'s result. */
+/**
+ * What runs it, with as many worlds as it was made for: a pool at a number of worlds (atWorlds), or another machine
+ * (remote.ts). One row per world: ±1 per command, `me`'s result.
+ */
 export interface Evaluator {
   evaluate(job: EvaluateJob): Promise<number[][]>;
 }
+
+/** What plays out any number of worlds, `n` (rollout-pool.ts, batch-search.ts, the app's workers). */
+export interface WorldsPool {
+  evaluate(job: EvaluateJob & { n: number }): Promise<number[][]>;
+}
+
+/** `pool`, `worlds` worlds a search. */
+export const atWorlds = (pool: WorldsPool, worlds: number): Evaluator => ({ evaluate: (job) => pool.evaluate({ ...job, n: worlds }) });
 
 /** `prefix` completed with the policy's most likely id at each remaining step. */
 function completeGreedily(decision: Decision, view: ReturnType<typeof viewFor>, belief: Belief, policy: Policy, prefix: number[]): number[] {
@@ -119,7 +114,7 @@ function completeGreedily(decision: Decision, view: ReturnType<typeof viewFor>, 
  * The searched move's index, from the policy's prior, the magnet and the rollouts' Q (by `mode`), and the
  * search policy pi'. `by`: sample the move from pi' (the bot's play), or take its most likely (advice).
  */
-function pick(prior: number[], rho: number[], q: number[], worlds: number, by: 'sample' | 'mode'): { k: number; searched: number[] } {
+function pick(mode: SearchMode, prior: number[], rho: number[], q: number[], worlds: number, by: 'sample' | 'mode'): { k: number; searched: number[] } {
   const total = prior.reduce((a, c) => a + c, 0);
   const logits = prior.map((p, k) => (q[k]! + ALPHA * Math.log(rho[k]!) + BETA * Math.log(p / total)) / (ALPHA + BETA));
   const m = Math.max(...logits);
@@ -140,28 +135,28 @@ function pick(prior: number[], rho: number[], q: number[], worlds: number, by: '
   return { k, searched };
 }
 
+export interface SearchOptions {
+  /** How it chooses (Midstrike's: best-q). */
+  mode?: SearchMode;
+  /** The search's report, once it's made. */
+  report?: (r: SearchReport) => void;
+  /** Called once the policy's view is known, before the rollouts: each candidate with its probability. */
+  early?: (e: { before: number | null; moves: { move: string; policy: number; command: Command }[] }) => void;
+  /** Sample the move from the search policy (the bot's own play), or take its most likely (training mode's advice). */
+  by?: 'sample' | 'mode';
+}
+
 /** The bot's move, chosen by search. Updates the bot's belief exactly as BotPlayer.choose does. */
 export async function searchChoose(
   bot: BotPlayer,
   state: GameState,
   events: readonly TraceEvent[],
   pool: Evaluator,
-  report?: (r: SearchReport) => void,
-  /** Called once the policy's view is known, before the rollouts: each candidate with its probability. */
-  early?: (e: { before: number | null; moves: { move: string; policy: number; command: Command }[] }) => void,
-  /** Sample the move from the search policy (the bot's own play), or take its most likely (training mode's advice). */
-  by: 'sample' | 'mode' = 'sample',
+  { mode = 'best-q', report, early, by = 'sample' }: SearchOptions = {},
 ): Promise<Command> {
-  const b = bot as unknown as { log: TraceEvent[]; read: number; belief: Belief; policy: Policy; seat: Seat };
-  const seat = b.seat;
-  b.log.push(...eventsFor(events.slice(b.read), seat));
-  b.read = events.length;
-  const view = viewFor(state, seat);
-  b.belief.update(noteObservation(b.log, view, seat));
-  // What the seat knew as it decided: the bot's own log and belief move on with the game while this search awaits (a
-  // seat training mode advises may well answer first), so the search keeps copies.
-  const myLog = [...b.log];
-  const belief = b.belief.clone();
+  const seat = bot.seat;
+  const policy = bot.policy;
+  const { view, log: myLog, belief } = bot.knowledge(state, events);
   const legal = legalCommands(state, seat);
   // (A decision with no moves would never complete below: a caller's mistake, said plainly.)
   if (!legal.length) throw new Error(`searchChoose: seat ${seat} has no move to make`);
@@ -180,19 +175,19 @@ export async function searchChoose(
       }
       const mask = new Uint8Array(NUM_ACTIONS);
       for (const id of ids) mask[id] = 1;
-      const p = b.policy.raw(encodeObservation2(view, belief, fixed, ids), mask);
+      const p = policy.raw(encodeObservation2(view, belief, fixed, ids), mask);
       const prior = ids.map((id) => Math.max(p[id]!, 1e-9));
-      const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, belief, b.policy, [...fixed, id]))!);
-      const results = await pool.evaluate({ state, me: seat, myLog, commands: candidates, n: WORLDS });
+      const candidates = ids.map((id) => decision.complete(completeGreedily(decision, view, belief, policy, [...fixed, id]))!);
+      const results = await pool.evaluate({ state, me: seat, myLog, commands: candidates });
       const q = candidates.map((_, k) => results.reduce((sum, r) => sum + r[k]!, 0) / results.length);
-      fixed.push(ids[pick(prior, ids.map(() => 1 / ids.length), q, results.length, by).k]!);
+      fixed.push(ids[pick(mode, prior, ids.map(() => 1 / ids.length), q, results.length, by).k]!);
     }
     log(`[search] seat ${seat} turn ${state.turnNumber}: reorder searched card by card → ${fixed.map(actionName).join(' ')}`);
     return decision.complete(fixed)!;
   }
   const encodings = decision.encodings();
   const commands = encodings.map((ids) => decision.complete(ids)!);
-  const before = b.policy.value(encodeObservation2(view, belief, [], first));
+  const before = policy.value(encodeObservation2(view, belief, [], first));
   const kind = state.prompts.find((p) => p.seat === seat)?.kind ?? '?';
   const base = { seat, turn: state.turnNumber, kind, before: before === null ? null : toWin(before), mode };
   if (encodings.length === 1) {
@@ -207,16 +202,16 @@ export async function searchChoose(
       const next = decision.next(ids.slice(0, i));
       const mask = new Uint8Array(NUM_ACTIONS);
       for (const id of next) mask[id] = 1;
-      p *= b.policy.raw(encodeObservation2(view, belief, ids.slice(0, i), next), mask)[ids[i]!]!;
+      p *= policy.raw(encodeObservation2(view, belief, ids.slice(0, i), next), mask)[ids[i]!]!;
     }
     return Math.max(p, 1e-9);
   });
   const total = prior.reduce((a, c) => a + c, 0);
   early?.({ before: base.before, moves: encodings.map((ids, i) => ({ move: ids.map(actionName).join(' '), policy: prior[i]! / total, command: commands[i]! })) });
   const started = Date.now();
-  const results = await pool.evaluate({ state, me: seat, myLog, commands, n: WORLDS });
+  const results = await pool.evaluate({ state, me: seat, myLog, commands });
   const q = commands.map((_, k) => results.reduce((s, r) => s + r[k]!, 0) / results.length);
-  const { k, searched } = pick(prior, magnet, q, results.length, by);
+  const { k, searched } = pick(mode, prior, magnet, q, results.length, by);
   const rows = encodings
     .map((ids, i) => ({ move: ids.map(actionName).join(' '), prior: prior[i]! / total, q: q[i]!, search: searched[i]!, chosen: i === k }))
     .sort((a, c) => c.search - a.search)
@@ -249,22 +244,18 @@ export async function searchAdvise(
   state: GameState,
   events: readonly TraceEvent[],
   pool: Evaluator,
-  /** The search's full report (training mode's advice is also the round review's). */
-  onReport?: (r: SearchReport) => void,
+  /** `report`: the search's full report (training mode's advice is also the round review's). */
+  { mode, report }: Pick<SearchOptions, 'mode' | 'report'> = {},
 ): Promise<{ command: Command; probability: number; win?: number }[]> {
   let moves: SearchReport['moves'] = [];
-  const command = await searchChoose(
-    advisor,
-    state,
-    events,
-    pool,
-    (r) => {
+  const command = await searchChoose(advisor, state, events, pool, {
+    ...(mode ? { mode } : {}),
+    report: (r) => {
       moves = r.moves;
-      onReport?.(r);
+      report?.(r);
     },
-    undefined,
-    'mode',
-  );
+    by: 'mode',
+  });
   if (moves.length === 0) return [{ command, probability: 1 }];
   const ranked = [...moves].sort((a, b) => Number(b.chosen) - Number(a.chosen) || b.win - a.win);
   return ranked.map((m) => ({ command: m.command, probability: m.policy, win: m.win }));

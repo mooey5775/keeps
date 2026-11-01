@@ -16,7 +16,7 @@ import { sample, type Policy } from './policy.ts';
 
 export class BotPlayer {
   readonly seat: Seat;
-  private readonly policy: Policy;
+  readonly policy: Policy;
   private readonly random: () => number;
   private readonly belief: Belief;
   /** The bot's own log, and how many of the game's events it has read. */
@@ -113,5 +113,14 @@ export class BotPlayer {
     // What the view shows goes in the log (the search is given the log), and the belief learns it from there.
     this.belief.update(noteObservation(this.log, view, this.seat));
     return view;
+  }
+
+  /**
+   * What the seat knows at its decision now, for a search of it (searchChoose): observe(), and copies of its log and
+   * belief, which move on with the game while the search awaits (a seat training mode advises may well answer first).
+   */
+  knowledge(state: GameState, events: readonly TraceEvent[]): { view: ReturnType<typeof viewFor>; log: TraceEvent[]; belief: Belief } {
+    const view = this.observe(state, events);
+    return { view, log: [...this.log], belief: this.belief.clone() };
   }
 }

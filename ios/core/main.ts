@@ -6,13 +6,13 @@
 // `core` message handler. A connection speaks the website's own protocol (packages/protocol), so the app is a client
 // like a browser; each game message comes with what the web client works out for itself: the options (every legal
 // move, with what it involves on the table: packages/table/src/options.ts) and the log's lines (packages/table/src/log.ts).
-import { Policy } from '../../packages/bot/src/policy.ts';
-import { midstrikeHost } from '../../packages/server/src/host.ts';
-import { seeded } from '../../packages/bot/src/random.ts';
-import { setSearchMode, setWorlds } from '../../packages/bot/src/search/search.ts';
+import { Policy } from '@keeps/bot/policy.ts';
+import { midstrikeHost } from '@keeps/server/host.ts';
+import { seeded } from '@keeps/bot/random.ts';
+import { atWorlds } from '@keeps/bot/search/search.ts';
 import { cardCatalog, coreBridge, savedMessage, type ToApp } from './bridge.ts';
 import { LocalServer } from './local-server.ts';
-import { capped, WorkerSearch } from './search-pool.ts';
+import { WorkerSearch } from './search-pool.ts';
 
 /** Worlds per search at each level that searches (Hard: 512 on a phone, as decided; Medium as on the website). */
 const WORLDS = { hard: 512, medium: 64 };
@@ -44,8 +44,6 @@ async function boot(): Promise<void> {
   }
   // One worker per core but two: the page, WebKit's own processes and Core ML's CPU-side work need the rest.
   const search = await WorkerSearch.start(Math.max(1, Number(info.cores) - 2), weights);
-  setSearchMode('best-q');
-  setWorlds(WORLDS.hard);
   let botDelayMs = 900;
   // For tests (FromApp config's seed): every game dealt the same, and the server's chance (the seating, Midstrike's
   // draws from its network) drawn from that seed.
@@ -53,7 +51,7 @@ async function boot(): Promise<void> {
   let fixedRandom: (() => number) | null = null;
   const host = midstrikeHost({
     name: 'Midstrike',
-    search: { hard: capped(search, WORLDS.hard), medium: capped(search, WORLDS.medium) },
+    search: { hard: atWorlds(search, WORLDS.hard), medium: atWorlds(search, WORLDS.medium) },
     onSearch: (room, r) => post({ t: 'search', room: room.code, seat: r.seat, turn: r.turn, worlds: r.worlds, moves: r.moves.length, ms: r.ms }),
   });
   const server = new LocalServer({

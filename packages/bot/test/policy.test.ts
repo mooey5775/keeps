@@ -6,7 +6,7 @@ import { Policy, readTensors, sample } from '../src/policy.ts';
 
 // The shipped weights, run in TypeScript, must give the probabilities JAX gives
 // them: test/fixtures/bot-parity.bin holds decision points from self-play with
-// JAX's raw and post-processed probabilities (bot/keeps_bot/export.py writes
+// JAX's raw and post-processed probabilities (training/keeps_bot/export.py writes
 // both files together).
 
 const weights = readFileSync(new URL('../weights/bot.bin', import.meta.url));

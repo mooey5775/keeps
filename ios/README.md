@@ -3,18 +3,25 @@
 The game against Midstrike, offline, on the phone.
 
 - **The UI** is SwiftUI (`App/`).
-- **The core** (`core/`, bundled by `sync.sh`) is the website's TypeScript running in a hidden WKWebView: the engine, the game server, Midstrike's host and its search in Web Workers. WebKit's JIT is what makes the search fast enough.
+- **The core** (`core/`, the workspace package `@keeps/ios-core`, bundled by `sync.sh`) is the website's TypeScript running in a hidden WKWebView: the engine, the game server, Midstrike's host and its search in Web Workers. WebKit's JIT is what makes the search fast enough.
 - **The network** runs in Core ML on the Neural Engine, served to the core through the `keeps://` scheme (`Shared/SchemeHandler.swift`, `Shared/Inference.swift`).
 - **Swift talks to the core** in the website's own protocol, with Swift types generated from the TypeScript ones (`Shared/Protocol.swift`, from `tools/swift-types/generate.ts`).
 - **No rules or wording in Swift.** With each game message the core sends what the web client works out: the options (every legal move, with the table elements it involves, and how it's dragged), the log's lines and the table's words. Choosing by touch is `packages/table/src/options.ts`'s logic, in `Shared/Choosing.swift`, held to it by `ChoosingTests`.
 
 ## Building, testing, looking
 
-All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address: Tailscale by default, or `edwardli@10.16.19.95` on the local network.
+All of it runs from this machine. The Mac builds over ssh. The scripts take the Mac's address (`MAC=user@host`), the
+phone's id (`DEVICE=`, from `xcrun devicectl list devices`) and the bundle id to build as (`APP_ID=`) from the
+environment or from `ios/local.env` (not committed), a shell file that sets them:
+
+```
+MAC=${MAC:-me@my-mac.local}
+DEVICE=${DEVICE:-00008150-...}
+APP_ID=${APP_ID:-online.playkeeps.KeepsSpike}   # until the developer account has a profile for the app's own id
+```
 
 - `ios/sync.sh` builds the app, installs it on the phone and runs it.
   - Add `--no-run` to only install it.
-  - Use `APP_ID=online.playkeeps.KeepsSpike` until the developer account has a profile for the app's own id.
 - `SIM='iPhone 17' ios/sync.sh --no-run` builds for the Mac's simulator instead (no signing).
 - `ios/tools/screenshot.sh out.png 20 KEEPS_PLAY=easy:3:12` takes a screenshot on the simulator: a game against Easy, with your first 12 moves made at random.
 - `GOLDENS_HOST=gpu03 ios/test.sh` runs the tests (on this tree's core, built by `ios/tools/build-core.sh`, as `sync.sh`'s is):
@@ -58,7 +65,7 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
   another and says which side is behind, rather than meet messages the app can't read. Bump it only for a change an
   older app can't read; make new fields optional instead where possible.
 - **Tests:** `ios/core/test/remote.test.ts` plays through the bridge on the website's server, run in Node
-  (`pnpm -C packages/server exec vitest run --dir ../../ios/core/test`); the UI tests play on `ios/tools/test-server.ts`,
+  (`pnpm -C ios/core test`, and with every package's: `pnpm test`); the UI tests play on `ios/tools/test-server.ts`,
   which `test.sh` runs here and forwards to the Mac (`KEEPS_SERVER=ws://localhost:7777/ws`).
 
 ## TODO

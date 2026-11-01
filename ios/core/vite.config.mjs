@@ -1,6 +1,6 @@
 // The app's core (main.ts) and its search workers, bundled for the app (served from the app bundle through the
 // keeps:// scheme).
-//   packages/learn/node_modules/.bin/vite build --config ios/core/vite.config.mjs
+//   pnpm -C ios/core build
 import { fileURLToPath } from 'node:url';
 
 export default {

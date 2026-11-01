@@ -71,7 +71,7 @@ describe('the remote queue', () => {
     const url = await serve(queue);
     const here: EvaluateJob[] = [];
     const local: Evaluator = { evaluate: async (job) => (here.push(job), [[1]]) };
-    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [], n: 32 };
+    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [] };
     const remote = new RemoteEvaluator(queue, local, 512);
     expect(await remote.evaluate(job)).toEqual([[1]]);
     expect(here).toHaveLength(1);
@@ -126,7 +126,7 @@ describe('the remote queue', () => {
   it("checks a search's shape: a malformed one is a failure, searched here if this server can", async () => {
     const queue = new RemoteQueue('secret', '1:abc');
     const url = await serve(queue);
-    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [{ type: 'resign' }, { type: 'resign' }], n: 32 };
+    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [{ type: 'resign' }, { type: 'resign' }] };
     const alone = new RemoteEvaluator(queue, null, 2);
     let poll = (await waitingWorker(url)).job;
     const malformed = alone.evaluate(job).catch((e: unknown) => e);

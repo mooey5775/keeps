@@ -78,9 +78,11 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
       const found = liveSearch(state, bot.seat);
       try {
         // (Dropped, the search fails with Superseded: the room drops a move for a position that's gone anyway.)
-        const command = await searchChoose(bot, state, events, whileWanted(level === 'medium' ? search.medium : search.hard, wanted), (report) => {
-          options.onSearch?.(room, report);
-          found(report);
+        const command = await searchChoose(bot, state, events, whileWanted(level === 'medium' ? search.medium : search.hard, wanted), {
+          report: (report) => {
+            options.onSearch?.(room, report);
+            found(report);
+          },
         });
         return { command };
       } catch (error) {
@@ -95,7 +97,7 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
     // own information; with the search machine away, no hint at all.
     advise({ room, bot, state, events, wanted }: BotTurn) {
       const found = liveSearch(state, bot.seat);
-      return searchAdvise(bot, state, events, whileWanted(search.hard, wanted), found)
+      return searchAdvise(bot, state, events, whileWanted(search.hard, wanted), { report: found })
         .catch((error: unknown) => {
           // Advice for a decision already made: none.
           if (error instanceof Superseded) return [];

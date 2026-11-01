@@ -1,7 +1,7 @@
 import CoreML
 import Foundation
 
-/// The policy network in Core ML (KeepsPolicy, made by bot/keeps_bot/coreml.py): float16 observations [B, O] to
+/// The policy network in Core ML (KeepsPolicy, made by training/keeps_bot/coreml.py): float16 observations [B, O] to
 /// logits [B, 48], B one of the model's fixed batch sizes (the Neural Engine runs only fixed shapes), so each
 /// request's rows are padded up to the next size, or cut into the largest.
 ///

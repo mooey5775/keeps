@@ -1,14 +1,14 @@
 // The search's playouts in Node worker threads, one playout at a time each (rollout-worker.ts): the Evaluator
-// used where there is no GPU server (batch-search.ts batches them). Node only; search-bot.ts holds the search itself.
+// used where there is no GPU server (batch-search.ts batches them). Node only; search.ts holds the search itself.
 import { Worker } from 'node:worker_threads';
 import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Belief, noteObservation } from '../belief.ts';
 import { sampleHistory, worldModel } from '../worlds.ts';
-import { random, Superseded, type EvaluateJob, type Evaluator } from './search.ts';
+import { random, Superseded, type EvaluateJob, type WorldsPool } from './search.ts';
 import { Threads } from './threads.ts';
 
 /** Worker threads that play out commands in sampled worlds. */
-export class RolloutPool implements Evaluator {
+export class RolloutPool implements WorldsPool {
   private readonly threads: Threads<{ out: number[] }>;
   private next = 0;
 
@@ -17,7 +17,7 @@ export class RolloutPool implements Evaluator {
     this.threads = new Threads(size, () => new Worker(new URL('./rollout-worker.ts', import.meta.url), { workerData: { weights, sampled } }));
   }
 
-  async evaluate(job: EvaluateJob): Promise<number[][]> {
+  async evaluate(job: EvaluateJob & { n: number }): Promise<number[][]> {
     // (A search no longer wanted isn't started; one under way plays out.)
     if (job.wanted && !job.wanted()) throw new Superseded();
     const { state, me, myLog, commands, n } = job;

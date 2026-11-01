@@ -1,8 +1,8 @@
 // The app's own game server: rooms (packages/server/src/room.ts) held here, one connection per client, speaking the
 // same protocol as the website's server (packages/server/src/server.ts handles a WebSocket the same way). Offline
 // games against Midstrike run on it; the app talks to it exactly as a browser talks to the site.
-import type { ClientMessage, ServerMessage } from '../../packages/protocol/src/index.ts';
-import { Room, type RoomDeps, type SavedGame } from '../../packages/server/src/room.ts';
+import type { ClientMessage, ServerMessage } from '@keeps/protocol';
+import { Room, type RoomDeps, type SavedGame } from '@keeps/server/room.ts';
 
 // Unambiguous letters for room codes (no I, O, L), as the website's.
 const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';

@@ -5,9 +5,11 @@ coverage/
 .DS_Store
 data/
 screenshots/
-bot/.venv/
-bot/.venv-torch/
+training/.venv/
+training/.venv-torch/
 __pycache__/
-bot/runs/
+training/runs/
 # Research networks (packages/bot/weights holds the ones in use: Midstrike, and the tests' small one).
 packages/learn/weights/
+# The Mac and the phone the iOS scripts use (ios/README.md).
+ios/local.env

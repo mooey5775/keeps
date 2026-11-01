@@ -1,5 +1,5 @@
 // The TypeScript network's logits (what the deployed bot runs) for observations, so a Python test can hold them to
-// the PyTorch network that trained them (bot/tests/test_parity.py).
+// the PyTorch network that trained them (training/tests/test_parity.py).
 //   node logits.ts <policy.bin> <obs.f32> <out.f32>   (obs: float32 [N, observationSize]; out: float32 [N, numActions])
 import { readFileSync, writeFileSync } from 'node:fs';
 import { Policy } from '../../src/policy.ts';

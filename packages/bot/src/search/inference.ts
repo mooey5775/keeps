@@ -1,5 +1,5 @@
 // Where the batched search's network runs (batch-worker.ts): here, one observation at a time (LocalInference),
-// or in the GPU server (bot/keeps_bot/serve.py) over a Unix socket (SocketInference), many at once.
+// or in the GPU server (training/keeps_bot/serve.py) over a Unix socket (SocketInference), many at once.
 //
 // The socket's protocol, all little-endian:
 //   hello     client: b'KPI1', uint32 length, JSON {fingerprint, step, observationSize, numActions}

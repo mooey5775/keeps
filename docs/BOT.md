@@ -25,7 +25,7 @@ For the bot and its next training run; each with what it would take. (The iOS ap
 - **Providence is sometimes missed.** The network plays it 16% of the time on average where it's playable, and under 1%
   at three positions in four, and in game XDMY (2026-10-30) it missed a swap that won the round outright: only search
   found it (100% against 78% for drawing), in the player's seat or in Midstrike's playouts of the player.
-  `packages/learn/analysis/providence.ts` is a benchmark for it: 327 self-play positions where Providence is playable
+  `packages/learn/tools/providence.ts` is a benchmark for it: 327 self-play positions where Providence is playable
   (`benchmarks/providence-positions.jsonl`), reference values from Midstrike's search at 1,024 worlds, from the
   decider's information (`benchmarks/providence-reference-vrpo1-40000.jsonl`), and a scorer that rates any network
   against them in seconds: `node providence.ts score benchmarks/providence-positions.jsonl
@@ -52,7 +52,7 @@ For the bot and its next training run; each with what it would take. (The iOS ap
 - **Count sampler give-ups and the bot's fallbacks in production**, somewhere persistent: the console logs on Fly last
   minutes. They'd have shown the seen-pile and Duplicity-reveal sampler failures before a hunt did.
 - **Analysis on the batched path.** Most analysis tools search on the CPU (`RolloutPool`, minutes a position for a big
-  search); with the network served on a GPU (`bot/keeps_bot/serve.py`, `SEARCH_INFERENCE=<socket>`) a few seconds.
+  search); with the network served on a GPU (`training/keeps_bot/serve.py`, `SEARCH_INFERENCE=<socket>`) a few seconds.
   providence.ts takes it (its reference ran on the laptop's RTX 5080 in about 25 minutes); the others don't yet.
 - The two belief items under Known limitations below (a pile seen then taken from unseen; "just taken" through a
   Duplicity reveal): both change what the network sees, so they go in with the next training run.
@@ -111,7 +111,7 @@ Decisions (2026-10-21):
 
 Parts:
 
-1. **Export** (`bot/keeps_bot/export.py`): `policy-<step>.pkl` → a weights file whose header records the run, step,
+1. **Export** (`training/keeps_bot/export.py`): `policy-<step>.pkl` → a weights file whose header records the run, step,
    network shape, post-processing (drop actions under 3%, round to 32nds), eval results, and the **encoder version**.
    The server refuses weights whose encoder version differs from its own, so a changed observation can't silently
    feed the network garbage.
@@ -241,4 +241,4 @@ Implement Ataraxos's learner as an alternative to R-NaD (`--learner mmd`), after
 ## Layout
 
 - `packages/learn/`: action space, observation encoder, belief tracking, round environment, env server (TypeScript).
-- `bot/`: Python. The OpenSpiel game wrapper, training and evaluation scripts. Its own virtualenv (`bot/.venv`, not committed).
+- `training/`: Python. The OpenSpiel game wrapper, training and evaluation scripts. Its own virtualenv (`training/.venv`, not committed).

@@ -1,13 +1,13 @@
 // The search's playouts batched (an Evaluator, like RolloutPool): each worker thread (batch-worker.ts) samples
 // its share of the worlds and plays its playouts in lockstep, the network run once per step for all of them,
-// on a GPU server (bot/keeps_bot/serve.py) when `inference` names its socket, else in the worker. About 95% of a
+// on a GPU server (training/keeps_bot/serve.py) when `inference` names its socket, else in the worker. About 95% of a
 // playout's time is the network, one observation at a time; batched on a GPU it's a small part.
 import { Worker } from 'node:worker_threads';
 import type { BatchJob } from './batch-worker.ts';
-import { Superseded, type EvaluateJob, type Evaluator } from './search.ts';
+import { Superseded, type EvaluateJob, type WorldsPool } from './search.ts';
 import { Threads } from './threads.ts';
 
-export class BatchedPool implements Evaluator {
+export class BatchedPool implements WorldsPool {
   private readonly threads: Threads<{ rows: number[][] }>;
   private seed = (Math.random() * 2 ** 32) >>> 0;
 
@@ -21,7 +21,7 @@ export class BatchedPool implements Evaluator {
     this.seed = seed >>> 0;
   }
 
-  async evaluate(job: EvaluateJob): Promise<number[][]> {
+  async evaluate(job: EvaluateJob & { n: number }): Promise<number[][]> {
     // (A search no longer wanted isn't started; one under way plays out.)
     if (job.wanted && !job.wanted()) throw new Superseded();
     const { state, me, myLog, commands, n } = job;

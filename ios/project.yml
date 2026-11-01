@@ -1,4 +1,4 @@
-# The iOS app (Keeps), its tests (KeepsTests: ios/test.sh) and the spike that measured it (KeepsSpike). XcodeGen makes the Xcode project from this file;
+# The iOS app (Keeps) and its tests (KeepsTests, KeepsUITests: ios/test.sh). XcodeGen makes the Xcode project from this file;
 # the project itself isn't kept (ios/sync.sh generates it on the Mac).
 name: Keeps
 options:
@@ -28,7 +28,7 @@ targets:
       - path: build/fonts
         type: folder
         buildPhase: resources
-      # Made on the Mac by bot/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
+      # Made on the Mac by training/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
       - path: build/KeepsPolicy.mlpackage
     settings:
       base:
@@ -41,25 +41,6 @@ targets:
         # The table is laid out for a phone held upright (the wide layout comes later); an iPad turns any way.
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
-        TARGETED_DEVICE_FAMILY: "1,2"
-  KeepsSpike:
-    type: application
-    platform: iOS
-    sources:
-      - path: Spike
-      - path: Shared
-      # The spike's page, its workers, the weights and the benchmark positions, built by sync.sh.
-      - path: build/web
-        type: folder
-        buildPhase: resources
-      - path: build/KeepsPolicy.mlpackage
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.KeepsSpike
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Keeps Spike
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         TARGETED_DEVICE_FAMILY: "1,2"
   KeepsTests:
     type: bundle.unit-test

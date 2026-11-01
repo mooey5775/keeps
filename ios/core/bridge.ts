@@ -2,14 +2,25 @@
 // message sent with what the web client works out for itself (packages/table/src/options.ts, log.ts). The app's core
 // (main.ts) wires it to the web view's message handler; tools/swift-types/goldens.ts drives it from Node, recording
 // what the app would get.
-import { CARD_IDS, CARDS, coinsLabel, formatReplayLog, parseReplayLog, type CardId, type ReplayLog, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
-import { replayFileName, type ClientMessage, type ServerMessage, type Settings } from '../../packages/protocol/src/index.ts';
-import type { SavedGame } from '../../packages/server/src/room.ts';
-import { hintChance, hintLabel } from '../../packages/table/src/hints.ts';
-import { logLines, type LogLine } from '../../packages/table/src/log.ts';
-import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/table/src/options.ts';
-import { natoSpelling } from '../../packages/table/src/nato.ts';
-import { capital, headline, promptText } from '../../packages/table/src/status.ts';
+import { CARD_IDS, CARDS, coinsLabel, formatReplayLog, parseReplayLog, type CardId, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
+import { replayFileName, type ClientMessage, type ServerMessage, type Settings } from '@keeps/protocol';
+import type { SavedGame } from '@keeps/server/room.ts';
+import {
+  capital,
+  describeOptions,
+  headline,
+  hintChance,
+  hintLabel,
+  logLines,
+  makeNames,
+  natoSpelling,
+  promptText,
+  shownCards,
+  type LogLine,
+  type Names,
+  type Option,
+  type ShownCard,
+} from '@keeps/table';
 import type { LocalServer } from './local-server.ts';
 import { remoteConnection, type LinkState } from './remote.ts';
 

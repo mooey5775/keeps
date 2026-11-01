@@ -1,4 +1,4 @@
-// The search (demo/search-bot.ts) judges a decision from what the seat knew then, however long it takes: the game
+// The search (search/search.ts) judges a decision from what the seat knew then, however long it takes: the game
 // may move on while it awaits its evaluator (training mode advises a person, who may answer first).
 import { describe, expect, it } from 'vitest';
 import { apply, newGame, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
@@ -51,7 +51,7 @@ describe('the search', () => {
         return [job.commands.map(() => 0.5)];
       },
     };
-    await searchChoose(advisor, decided, events, evaluator, undefined, undefined, 'mode');
+    await searchChoose(advisor, decided, events, evaluator, { by: 'mode' });
     expect(jobs.length).toBeGreaterThan(1);
     for (const job of jobs) {
       expect(job.state).toBe(decided);

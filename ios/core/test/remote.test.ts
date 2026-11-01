@@ -1,10 +1,10 @@
 // The app playing on the website's server (packages/server, run here on a free port), through the core's bridge:
 // rooms made and joined by their code, games played with the options and words the app gets for its own games, and a
 // connection that drops coming back to its seat.
-//   pnpm -C packages/server exec vitest run --dir ../../ios/core/test
+//   pnpm -C ios/core test
 import { join } from 'node:path';
-import { PROTOCOL, type ClientMessage, type ServerMessage } from '../../../packages/protocol/src/index.ts';
-import { createKeepsServer, type KeepsServer } from '../../../packages/server/src/server.ts';
+import { PROTOCOL, type ClientMessage, type ServerMessage } from '@keeps/protocol';
+import { createKeepsServer, type KeepsServer } from '@keeps/server/server.ts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { coreBridge, type FromApp, type ToApp } from '../bridge.ts';
 import { LocalServer } from '../local-server.ts';

@@ -8,6 +8,37 @@ importers:
 
   .: {}
 
+  ios/core:
+    dependencies:
+      '@keeps/bot':
+        specifier: workspace:*
+        version: link:../../packages/bot
+      '@keeps/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
+      '@keeps/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@keeps/server':
+        specifier: workspace:*
+        version: link:../../packages/server
+      '@keeps/table':
+        specifier: workspace:*
+        version: link:../../packages/table
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.5)
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.4(@types/node@26.6.5))
+
   packages/bot:
     dependencies:
       '@keeps/engine':

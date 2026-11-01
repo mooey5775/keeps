@@ -3,11 +3,11 @@ import { EntityNetwork } from './entity.ts';
 import { observationSize, type ObservationVersion } from './env.ts';
 import { encoderFingerprint } from './fingerprint.ts';
 
-// A trained policy network, as exported by bot/keeps_bot/export.py: an MLP
+// A trained policy network, as exported by training/keeps_bot/export.py: an MLP
 // torso (ReLU after every layer) and a linear policy head, then R-NaD's
 // legal-action softmax and its play-time post-processing (drop actions under a
 // threshold, round the rest to multiples of 1/discretization). Ported from
-// bot/keeps_bot/rnad.py (_legal_policy, FineTuning) to give the same
+// training/keeps_bot/rnad.py (_legal_policy, FineTuning) to give the same
 // probabilities as training; test/policy.test.ts checks it against JAX.
 
 /** The file's header: where the policy came from and how to run it. */

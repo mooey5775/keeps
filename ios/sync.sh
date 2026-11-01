@@ -5,55 +5,46 @@
 #   ios/sync.sh                      the app (Keeps): build, install and run
 #   ios/sync.sh --no-run             build and install only
 #   KEEPS_SELFTEST=1 ios/sync.sh     run the app's self-test (KEEPS_SELFTEST_GAMES='hard:1,easy:1': level:marks, ...)
-#   TARGET=KeepsSpike ios/sync.sh    the spike (SPIKE_QUERY='positions=4&worlds=256': its plan, see ios/web/main.ts)
 #   SIM='iPhone 17' ios/sync.sh      on the Mac's iOS simulator instead of the phone (no signing needed)
 #   KEEPS_PLAY=easy:3 ios/sync.sh    straight into a game against Midstrike at that level, to that many marks
+# The Mac (MAC), the phone (DEVICE) and the bundle id to build as (APP_ID) come from the environment or ios/local.env.
 set -euo pipefail
-MAC=${MAC:-edwardli@100.90.147.75}  # the Mac, on Tailscale (MAC=edwardli@10.16.19.95 on the local network)
-TARGET=${TARGET:-Keeps}
-# The bundle id to build it as (APP_ID: another one, as long as there's no profile for its own; see ios/README.md).
-APP_ID=${APP_ID:-online.playkeeps.$TARGET}
+ROOT=$(cd "$(dirname "$0")/.." && pwd)
+cd "${ROOT:?}"
+[ -f ios/local.env ] && . ios/local.env
+MAC=${MAC:?the Mac to build on (user@host): set it in ios/local.env (see ios/README.md)}
+DEVICE=${DEVICE:-}
+[ -n "${SIM:-}" ] || : "${DEVICE:?the phone to install on (an id from xcrun devicectl list devices): set it in ios/local.env, or SIM= for the simulator}"
+# Another bundle id, while the developer account has no profile for the app's own (see ios/README.md).
+APP_ID=${APP_ID:-online.playkeeps.Keeps}
 # Signing uses the build keychain (ios/tools/setup-build-keychain.sh, once). Without it, codesign needs the login
 # keychain unlocked in this very ssh session: a shared connection in which you unlocked it is reused, if there is one.
 SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 export RSYNC_RSH="ssh -o ControlPath=$HOME/.ssh/keeps-mac-%C"
-DEVICE=${DEVICE:-00008150-000150E83EF0401C}
 WEIGHTS=packages/bot/weights/midstrike.bin
-ROOT=$(cd "$(dirname "$0")/.." && pwd)
-cd "${ROOT:?}"
 
-VITE=packages/learn/node_modules/.bin/vite
-if [ "$TARGET" = KeepsSpike ]; then
-  $VITE build --config ios/web/vite.config.mjs
-  [ -f ios/build/positions.json ] || node ios/web/positions.ts "$WEIGHTS" ios/build/positions.json 24
-  cp ios/build/positions.json "$WEIGHTS" ios/build/web/
-  BUNDLE=web
-else
-  ios/tools/build-core.sh
-  BUNDLE=core
-fi
+ios/tools/build-core.sh
 
-ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/bot ~/src/keeps/packages/bot/weights'
-rsync -a --delete ios/App ios/Shared ios/Spike ios/project.yml "$MAC:src/keeps/ios/"
-rsync -a --delete "ios/build/$BUNDLE" "$MAC:src/keeps/ios/build/"
-[ "$BUNDLE" = core ] && rsync -a --delete ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
-rsync -a --delete --exclude=__pycache__ bot/keeps_bot bot/marvel "$MAC:src/keeps/bot/"
+ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/training ~/src/keeps/packages/bot/weights'
+rsync -a --delete ios/App ios/Shared ios/project.yml "$MAC:src/keeps/ios/"
+rsync -a --delete ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
+rsync -a --delete --exclude=__pycache__ training/keeps_bot training/marvel "$MAC:src/keeps/training/"
 rsync -a "$WEIGHTS" "$MAC:src/keeps/$WEIGHTS"
 
 SIM=${SIM:-}
-ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$TARGET" "$APP_ID" "$(printf %q "$SIM")" <<'EOF'
+ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$APP_ID" "$(printf %q "$SIM")" <<'EOF'
 set -euo pipefail
-DEVICE=$1 WEIGHTS=$2 TARGET=$3 APP_ID=$4 SIM=$5
+DEVICE=$1 WEIGHTS=$2 APP_ID=$3 SIM=$4
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps
 if [ ! -d ios/build/KeepsPolicy.mlpackage ] || [ "$WEIGHTS" -nt ios/build/KeepsPolicy.mlpackage ]; then
   rm -rf ios/build/KeepsPolicy.mlpackage
-  (cd bot && PYTHONPATH=. ~/src/keeps-ios-venv/bin/python -m keeps_bot.coreml "../$WEIGHTS" ../ios/build/KeepsPolicy.mlpackage 2>&1 | grep -v "^\s*$\|Torch version\|it/s\]\|passes/s\]\|ops/s\]")
+  (cd training && PYTHONPATH=. ~/src/keeps-ios-venv/bin/python -m keeps_bot.coreml "../$WEIGHTS" ../ios/build/KeepsPolicy.mlpackage 2>&1 | grep -v "^\s*$\|Torch version\|it/s\]\|passes/s\]\|ops/s\]")
 fi
 cd ios
-# Each target's resources must exist for the project to generate (the other target's may not be built).
-mkdir -p build/web build/core build/cards build/fonts
+# The resources must exist for the project to generate (the tests' goldens may not be there).
+mkdir -p build/core build/cards build/fonts build/goldens
 # Signing: the build keychain (ios/tools/setup-build-keychain.sh) if it's set up, else whatever this session has.
 if [ -f ~/.keeps-build-keychain ] && [ -f ~/Library/Keychains/keeps-build.keychain-db ]; then
   security unlock-keychain -p "$(cat ~/.keeps-build-keychain)" keeps-build.keychain
@@ -63,14 +54,14 @@ else
 fi
 xcodegen generate --quiet
 if [ -n "$SIM" ]; then
-  xcodebuild -project Keeps.xcodeproj -scheme "$TARGET" -configuration Release -destination "platform=iOS Simulator,name=$SIM" \
+  xcodebuild -project Keeps.xcodeproj -scheme Keeps -configuration Release -destination "platform=iOS Simulator,name=$SIM" \
     -derivedDataPath build/derived-sim -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" build
   xcrun simctl boot "$SIM" 2>/dev/null || true
-  xcrun simctl install "$SIM" "build/derived-sim/Build/Products/Release-iphonesimulator/$TARGET.app"
+  xcrun simctl install "$SIM" "build/derived-sim/Build/Products/Release-iphonesimulator/Keeps.app"
 else
-  xcodebuild -project Keeps.xcodeproj -scheme "$TARGET" -configuration Release -destination "id=$DEVICE" \
+  xcodebuild -project Keeps.xcodeproj -scheme Keeps -configuration Release -destination "id=$DEVICE" \
     -derivedDataPath build/derived -allowProvisioningUpdates -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" ${SIGN[@]+"${SIGN[@]}"} build
-  xcrun devicectl device install app --device "$DEVICE" "build/derived/Build/Products/Release-iphoneos/$TARGET.app" | tail -2
+  xcrun devicectl device install app --device "$DEVICE" "build/derived/Build/Products/Release-iphoneos/Keeps.app" | tail -2
 fi
 EOF
 
@@ -78,15 +69,12 @@ EOF
 if [ -n "$SIM" ]; then
   # The simulator passes SIMCTL_CHILD_* variables to the app, without the prefix.
   RUN_ENV=""
-  [ "$TARGET" = KeepsSpike ] && RUN_ENV="SIMCTL_CHILD_SPIKE_QUERY=$(printf %q "${SPIKE_QUERY:-}")"
   [ -n "${KEEPS_SELFTEST:-}" ] && RUN_ENV="SIMCTL_CHILD_KEEPS_SELFTEST=1 SIMCTL_CHILD_KEEPS_SELFTEST_GAMES=${KEEPS_SELFTEST_GAMES:-hard:1,easy:1}"
   [ -n "${KEEPS_PLAY:-}" ] && RUN_ENV="SIMCTL_CHILD_KEEPS_PLAY=$KEEPS_PLAY"
   ssh "$MAC" "$RUN_ENV xcrun simctl launch --console-pty --terminate-running-process $(printf %q "$SIM") $APP_ID" 2>&1 | sed -u 's/\r$//; /^DONE$/q'
   exit 0
 fi
-if [ "$TARGET" = KeepsSpike ]; then
-  ENV="{\"SPIKE_QUERY\": \"${SPIKE_QUERY:-}\"}"
-elif [ -n "${KEEPS_SELFTEST:-}" ]; then
+if [ -n "${KEEPS_SELFTEST:-}" ]; then
   ENV="{\"KEEPS_SELFTEST\": \"1\", \"KEEPS_SELFTEST_GAMES\": \"${KEEPS_SELFTEST_GAMES:-hard:1,easy:1}\"}"
 else
   ENV='{}'

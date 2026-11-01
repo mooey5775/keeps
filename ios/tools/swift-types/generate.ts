@@ -27,7 +27,7 @@ const IOS = join(here, '..', '..');
 const OUT = join(IOS, 'Shared', 'Protocol.swift');
 const ROOTS = ['FromApp', 'ToApp'];
 
-const config = ts.getParsedCommandLineOfConfigFile(join(IOS, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n')); } })!;
+const config = ts.getParsedCommandLineOfConfigFile(join(IOS, 'core', 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n')); } })!;
 const program = ts.createProgram([join(IOS, 'core', 'bridge.ts')], { ...config.options, noEmit: true });
 const checker = program.getTypeChecker();
 const main = program.getSourceFile(join(IOS, 'core', 'bridge.ts'))!;

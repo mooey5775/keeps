@@ -12,7 +12,7 @@ import { composeHooks, midstrikeHost } from './host.ts';
 import { RemoteAway, RemoteEvaluator, RemoteQueue } from '@keeps/bot/remote/remote.ts';
 import { ReviewPool } from '@keeps/bot/review/pool.ts';
 import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
-import { setSearchMode, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
+import { atWorlds, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
 import { authorized } from './admin.ts';
 import { replayFileName } from './replays.ts';
 import type { BotFailure, Room, RoomHooks } from './room.ts';
@@ -74,13 +74,12 @@ export function midstrike(
   config: MidstrikeConfig,
   { dataDir, adminToken, rooms }: { dataDir: string | undefined; adminToken: string | undefined; rooms: () => ReadonlyMap<string, Room> },
 ): Pick<ServerOptions, 'botWeights' | 'botName' | 'botLevels' | 'botPlay' | 'roomHooks' | 'extraRoutes'> & { describe: string } {
-  setSearchMode('best-q');
   const threads = Math.max(1, availableParallelism() - 2);
   const pool = config.localSearch ? new RolloutPool(threads, config.weights, true) : null;
   const policy = Policy.load(readFileSync(config.weights));
   const remote = config.remoteToken ? new RemoteQueue(config.remoteToken, `${policy.info.step}:${policy.info.fingerprint}`) : null;
-  const capped = (n: number): Evaluator | null => pool && { evaluate: (job) => pool.evaluate({ ...job, n: Math.min(job.n, n) }) };
-  const searchAt = (worlds: number) => (remote ? new RemoteEvaluator(remote, capped(Math.min(worlds, config.localWorlds)), worlds) : capped(worlds));
+  const here = (worlds: number): Evaluator | null => pool && atWorlds(pool, Math.min(worlds, config.localWorlds));
+  const searchAt = (worlds: number) => (remote ? new RemoteEvaluator(remote, here(worlds), worlds) : here(worlds));
   const hard = searchAt(config.remoteToken ? config.remoteWorlds : config.localWorlds);
   const medium = searchAt(config.mediumWorlds);
   const reviewPool = config.reviews && (pool || remote) ? new ReviewPool(config.localSearch ? threads : 0, config.weights) : null;

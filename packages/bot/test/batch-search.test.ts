@@ -1,4 +1,4 @@
-// The batched search (demo/lockstep.ts, demo/inference.ts): playouts in lockstep give exactly the results of the
+// The batched search (search/lockstep.ts, search/inference.ts): playouts in lockstep give exactly the results of the
 // same playouts one at a time, and the inference socket carries observations and logits exactly.
 import { createServer, type Server } from 'node:net';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -81,7 +81,7 @@ function decodeRequest(bytes: Uint8Array): Float32Array[] {
   return out;
 }
 
-/** A stand-in for bot/keeps_bot/serve.py: the protocol, the network run here. */
+/** A stand-in for training/keeps_bot/serve.py: the protocol, the network run here. */
 function fakeServer(path: string, fingerprint: string): Server {
   const server = createServer((socket) => {
     let got = Buffer.alloc(0);
