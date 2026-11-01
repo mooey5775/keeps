@@ -19,7 +19,7 @@ SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 export RSYNC_RSH="ssh -o ControlPath=$HOME/.ssh/keeps-mac-%C"
 DEVICE=${DEVICE:-00008150-000150E83EF0401C}
-WEIGHTS=packages/learn/demo/weights/midstrike.bin
+WEIGHTS=packages/bot/weights/midstrike.bin
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "${ROOT:?}"
 
@@ -34,7 +34,7 @@ else
   BUNDLE=core
 fi
 
-ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/bot ~/src/keeps/packages/learn/demo/weights'
+ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/bot ~/src/keeps/packages/bot/weights'
 rsync -a --delete ios/App ios/Shared ios/Spike ios/project.yml "$MAC:src/keeps/ios/"
 rsync -a --delete "ios/build/$BUNDLE" "$MAC:src/keeps/ios/build/"
 [ "$BUNDLE" = core ] && rsync -a --delete ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"

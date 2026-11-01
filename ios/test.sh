@@ -17,11 +17,10 @@ cd "${ROOT:?}"
 [ -d ios/tools/swift-types/node_modules ] || (cd ios/tools/swift-types && npm install --no-audit --no-fund --silent)
 node ios/tools/swift-types/generate.ts --check
 if [ -n "${GOLDENS_HOST:-}" ]; then
-  command ssh "$GOLDENS_HOST" 'mkdir -p ~/src/keeps-work/ios/build ~/src/keeps-work/packages/learn/demo/weights'
-  rsync -a --delete --exclude=.git --exclude=/bot --exclude=/ios/build --exclude='/packages/learn/demo/weights/*' --exclude=/packages/learn/demo/data \
+  command ssh "$GOLDENS_HOST" 'mkdir -p ~/src/keeps-work/ios/build'
+  rsync -a --delete --exclude=.git --exclude=/bot --exclude=/ios/build --exclude=/packages/learn/weights --exclude=/packages/learn/demo/data \
     --exclude=/packages/web/dist ./ "$GOLDENS_HOST:src/keeps-work/"
   rsync -a ios/build/protocol-tags.json "$GOLDENS_HOST:src/keeps-work/ios/build/"
-  rsync -a packages/learn/demo/weights/midstrike.bin "$GOLDENS_HOST:src/keeps-work/packages/learn/demo/weights/"
   command ssh "$GOLDENS_HOST" 'cd ~/src/keeps-work && PATH=$HOME/.local/node24/bin:$PATH node ios/tools/swift-types/goldens.ts ios/build/goldens'
   rsync -a --delete "$GOLDENS_HOST:src/keeps-work/ios/build/goldens" ios/build/
 else

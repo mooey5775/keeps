@@ -3,12 +3,12 @@
 //   node searchat.ts <replay> <weights> <K> <worlds>      (ROLLOUTS=sampled or greedy: only that one)
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { noteObservation } from '../src/belief.ts';
+import { BotPlayer } from '@keeps/bot';
+import { noteObservation } from '@keeps/bot';
 import { eventsFor, viewFor } from '../../engine/src/index.ts';
-import { Policy } from '../src/policy.ts';
-import { searchChoose, setSearchLog, setSearchMode, setWorlds, type SearchReport } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { Policy } from '@keeps/bot';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds, type SearchReport } from '@keeps/bot/search/search.ts';
+import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 const [path, weights, kArg, worldsArg] = process.argv.slice(2);
 setSearchMode('best-q'); setWorlds(Number(worldsArg)); setSearchLog(() => {});
 const lines = readFileSync(path!, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

@@ -4,10 +4,10 @@
 //   node valuetrace.ts <replay.jsonl> <weights> <seat> <R> <from> <to>   → one JSON line per position
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { Decision, NUM_ACTIONS } from '@keeps/bot';
+import { Belief } from '@keeps/bot';
+import { encodeObservation2 } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const [path, weights, seatArg, rArg, fromArg, toArg] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(weights!));
 const forSeat = Number(seatArg) as Seat, R = Number(rArg);

@@ -31,7 +31,7 @@ critic_replay_keys = ('critic_truth',)
 # Set by configure():
 max_game_horizon = None
 num_channels = None  # the observation size
-layout = None  # observation v2's layout (packages/learn/src/observation2.ts)
+layout = None  # observation v2's layout (packages/bot/src/observation2.ts)
 truth_layout = None  # the true state's layout (packages/learn/src/truth.ts)
 
 

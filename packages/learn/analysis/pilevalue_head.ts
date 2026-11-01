@@ -2,9 +2,9 @@
 // Plays only until both players have decided once (the starter's opening moves, by e1's policy).
 //   node pilevalue_head.ts <weights.bin> <rounds> <seed>  → one JSON line per round
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS } from '../src/actions.ts';
-import { RoundEnv, SEAT_OF_PLAYER } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS } from '@keeps/bot';
+import { RoundEnv, SEAT_OF_PLAYER } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const policy = Policy.load(readFileSync(process.argv[2]!));
 const rounds = Number(process.argv[3]);
 let x = Number(process.argv[4] ?? 1) * 7919;

@@ -3,10 +3,10 @@
 //   node facedown.ts <replay> <weights> <K> <worlds>
 import { readFileSync } from 'node:fs';
 import { apply, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import type { Belief } from '../src/belief.ts';
-import { Policy } from '../src/policy.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { BotPlayer } from '@keeps/bot';
+import type { Belief } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
+import { sampleWorld, worldModel } from '@keeps/bot';
 const [path, weights, kArg, nArg] = process.argv.slice(2);
 const lines = readFileSync(path!, 'utf8').trim().split('\n').map((l) => JSON.parse(l));
 const K = Number(kArg);

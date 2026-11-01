@@ -2,7 +2,7 @@ import { randomBytes, randomInt } from 'node:crypto';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
-import { Policy } from '@keeps/learn';
+import { Policy } from '@keeps/bot';
 import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
@@ -31,7 +31,7 @@ export interface ServerOptions {
   adminToken?: string;
   /** Settings the browser may read from /config.json (the public PostHog project key). */
   publicConfig?: { posthogKey?: string; posthogHost?: string };
-  /** The bot's trained weights (packages/learn/weights/bot.bin). Without them, there is no bot. */
+  /** The bot's trained weights (packages/bot/weights/bot.bin). Without them, there is no bot. */
   botWeights?: string;
   /** Milliseconds the bot waits before each move (default: about a second). */
   botDelay?: () => number;

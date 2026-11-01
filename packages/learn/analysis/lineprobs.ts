@@ -2,10 +2,10 @@
 // computed from the mover's own belief and view.
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS, actionName, encode } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import { Policy } from '../src/policy.ts';
+import { Decision, NUM_ACTIONS, actionName, encode } from '@keeps/bot';
+import { Belief } from '@keeps/bot';
+import { encodeObservation2 } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 const [path, weights, fromArg, toArg] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(weights!));
 const lines = readFileSync(path!, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

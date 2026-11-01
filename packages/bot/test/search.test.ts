@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { apply, newGame, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { BotPlayer } from '../src/bot.ts';
-import { searchChoose, type EvaluateJob } from '../demo/search-bot.ts';
+import { searchChoose, type EvaluateJob } from '../src/search/search.ts';
 import { randomPolicy } from './support/random-policy.ts';
 
 describe('the search', () => {

@@ -3,9 +3,9 @@
 //   node hidechoice.ts <weights> <rounds> <seed>   → JSON counts
 import { readFileSync } from 'node:fs';
 import { CARDS } from '../../engine/src/index.ts';
-import { NUM_ACTIONS, actionName, CARD } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS, actionName, CARD } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const [w, roundsArg, seedArg] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(w!));
 let x = Number(seedArg) * 7919 + 1;

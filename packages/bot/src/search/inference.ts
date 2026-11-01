@@ -9,7 +9,7 @@
 //             of their entries are nonzero), their values exactly as encoded here
 //   reply     server: float32 logits[rows × numActions], requests answered in the order sent
 import { createConnection, type Socket } from 'node:net';
-import type { Policy } from '../src/policy.ts';
+import type { Policy } from '../policy.ts';
 import { encodeRequest } from './request.ts';
 
 export { encodeRequest } from './request.ts';

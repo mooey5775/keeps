@@ -1,8 +1,8 @@
 import { createInterface } from 'node:readline';
-import { actionName, NUM_ACTIONS } from './actions.ts';
-import { observationSize, RoundEnv, type ObservationVersion } from './env.ts';
-import { encoderFingerprint } from './fingerprint.ts';
-import { LAYOUT2 } from './observation2.ts';
+import { actionName, NUM_ACTIONS } from '@keeps/bot';
+import { observationSize, RoundEnv, type ObservationVersion } from '@keeps/bot';
+import { encoderFingerprint } from '@keeps/bot';
+import { LAYOUT2 } from '@keeps/bot';
 import { TRUTH_LAYOUT } from './truth.ts';
 
 // The environment server: Python (OpenSpiel) drives heads-up rounds through it,

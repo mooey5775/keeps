@@ -1,7 +1,7 @@
 // Search bot for the demo server: Ataraxos-style update-equivalent search on top of the policy.
 //
 // At each of the bot's decisions with a real choice: sample WORLDS hidden states exactly from
-// the chance-only posterior given what the bot knows (packages/learn/src/worlds.ts), play every
+// the chance-only posterior given what the bot knows (packages/bot/src/worlds.ts), play every
 // legal command out to the end of the round in each world (the policy on both sides, in worker
 // threads), and take one damped policy-improvement step from the network's policy (see `mode`).
 import {
@@ -12,12 +12,12 @@ import {
   type GameState,
   type Seat,
   type TraceEvent,
-} from '../../engine/src/index.ts';
-import { actionName, Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief, noteObservation } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import type { BotPlayer } from '../src/bot.ts';
-import type { Policy } from '../src/policy.ts';
+} from '../../../engine/src/index.ts';
+import { actionName, Decision, NUM_ACTIONS } from '../actions.ts';
+import { Belief, noteObservation } from '../belief.ts';
+import { encodeObservation2 } from '../observation2.ts';
+import type { BotPlayer } from '../bot.ts';
+import type { Policy } from '../policy.ts';
 
 /** A setting from the environment, where there is one (not in a browser). */
 const env = (name: string): string | undefined => (globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env[name];

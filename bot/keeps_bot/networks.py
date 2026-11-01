@@ -1,7 +1,7 @@
 """Networks for the Keeps bot, as Haiku functions of an R-NaD EnvStep.
 
   mlp      R-NaD's own: an MLP torso on the flat observation (observation v1).
-  entity   for observation v2 (packages/learn/src/observation2.ts): shared MLPs
+  entity   for observation v2 (packages/bot/src/observation2.ts): shared MLPs
            over the card rows and over the pile rows, pooled by place, a residual
            trunk, and pointer-style heads: each card id is scored from that card's
            own vector, each position from that pile's (and that seat's keep and
@@ -9,7 +9,7 @@
            prompt is about, or the card and pile already chosen in this move).
 
 Both return (pi, v, log_pi, logit) like R-NaD's network, v with shape [..., 1].
-The TypeScript forward pass (packages/learn/src/policy.ts) must match this
+The TypeScript forward pass (packages/bot/src/policy.ts) must match this
 exactly; its parity test checks it against JAX.
 """
 

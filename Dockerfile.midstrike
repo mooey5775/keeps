@@ -11,12 +11,13 @@
 # comes from the same search. Its weights are baked in: export the policy first, from bot/, unsharpened (with
 # search off, add --threshold 0.2), and copy the same file to gpu03:
 #   PYTHONPATH=. .venv/bin/python -m keeps_bot.export <policy-STEP.pkl> \
-#     --out ../packages/learn/demo/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
+#     --out ../packages/bot/weights/midstrike.bin --fixture /tmp/midstrike-parity.bin
 
 FROM node:24-slim AS build
 RUN npm install -g pnpm@11.5.2
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/bot/package.json packages/bot/
 COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
@@ -31,6 +32,7 @@ FROM node:24-slim
 RUN npm install -g pnpm@11.5.2
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/bot/package.json packages/bot/
 COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
@@ -40,10 +42,11 @@ COPY packages/web/package.json packages/web/
 # The server and its dependencies, and the web package's: the demo server reuses the web client's
 # log and move-label code (packages/web/src/game) for its bot pages.
 RUN pnpm install --frozen-lockfile --prod --filter "@keeps/server..." --filter "@keeps/web..."
+COPY packages/bot/src packages/bot/src
 COPY packages/engine/src packages/engine/src
 COPY packages/learn/src packages/learn/src
 COPY packages/learn/demo/*.ts packages/learn/demo/*.html packages/learn/demo/
-COPY packages/learn/demo/weights/midstrike.bin packages/learn/demo/weights/midstrike.bin
+COPY packages/bot/weights/midstrike.bin packages/bot/weights/midstrike.bin
 COPY packages/protocol/src packages/protocol/src
 COPY packages/server/src packages/server/src
 COPY packages/table/src packages/table/src

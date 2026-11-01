@@ -2,8 +2,8 @@
 //   node demo/worlds-sweep.ts <replay.jsonl>...
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Belief } from '../src/belief.ts';
-import { sampleHistory, worldModel } from '../src/worlds.ts';
+import { Belief } from '@keeps/bot';
+import { sampleHistory, worldModel } from '@keeps/bot';
 
 let x = 99;
 const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;

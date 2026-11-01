@@ -1,4 +1,4 @@
-"""The entity network as the deployed bot runs it (TypeScript, packages/learn/src/entity.ts) against the PyTorch
+"""The entity network as the deployed bot runs it (TypeScript, packages/bot/src/entity.ts) against the PyTorch
 network VRPO trains (keeps_bot/vrpo/models.py), through the policy file between them (KPNN: models.haiku_params,
 export.write, Policy.load).
 

@@ -26,7 +26,7 @@ import {
   type Settings,
   type UndoState,
 } from '@keeps/protocol';
-import { BotPlayer, type Policy } from '@keeps/learn';
+import { BotPlayer, type Policy } from '@keeps/bot';
 import type { Tracker } from './analytics.ts';
 import type { OnlineDisputeInfo } from './dispute.ts';
 

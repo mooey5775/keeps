@@ -6,6 +6,7 @@ FROM node:24-slim AS build
 RUN npm install -g pnpm@11.5.2
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+COPY packages/bot/package.json packages/bot/
 COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
@@ -20,6 +21,7 @@ FROM node:24-slim
 RUN npm install -g pnpm@11.5.2
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/bot/package.json packages/bot/
 COPY packages/engine/package.json packages/engine/
 COPY packages/learn/package.json packages/learn/
 COPY packages/protocol/package.json packages/protocol/
@@ -28,9 +30,10 @@ COPY packages/table/package.json packages/table/
 COPY packages/web/package.json packages/web/
 # Only the server and its runtime dependencies (the engine, the bot, the protocol, ws).
 RUN pnpm install --frozen-lockfile --prod --filter "@keeps/server..."
+COPY packages/bot/src packages/bot/src
 COPY packages/engine/src packages/engine/src
 COPY packages/learn/src packages/learn/src
-COPY packages/learn/weights packages/learn/weights
+COPY packages/bot/weights/bot.bin packages/bot/weights/bot.bin
 COPY packages/protocol/src packages/protocol/src
 COPY packages/server/src packages/server/src
 COPY packages/table/src packages/table/src

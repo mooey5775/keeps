@@ -1,12 +1,4 @@
-export * from './actions.ts';
+// Research: training's side of the bot (the Python trainer drives env rounds through server.ts and self-play through
+// worker.ts; truth.ts is the true state, for a central critic) and benchmarks against simple players.
 export * from './benchmark.ts';
-export * from './belief.ts';
-export * from './bot.ts';
-export * from './entity.ts';
-export * from './env.ts';
-export * from './fingerprint.ts';
-export * from './history.ts';
 export * from './heuristics.ts';
-export * from './observation.ts';
-export * from './observation2.ts';
-export * from './policy.ts';

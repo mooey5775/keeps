@@ -2,9 +2,9 @@
 // connected (remote.ts): Node only. review.ts holds the review itself, which takes any ReviewJobs.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import type { RemoteQueue } from './remote.ts';
+import type { RemoteQueue } from '../remote/remote.ts';
 import type { ReviewJobs } from './review.ts';
-import type { ReviewJob, ReviewResult } from './review-jobs.ts';
+import type { ReviewJob, ReviewResult } from './jobs.ts';
 
 interface Task {
   id: number;
@@ -117,7 +117,7 @@ export class ReviewPool implements ReviewJobs {
 
   private spawn(): void {
     // `nice` sets the priority before node starts, so every thread of the worker has it.
-    const child = spawn('nice', ['-n', '19', process.execPath, join(import.meta.dirname, 'review-worker.ts'), this.weights], {
+    const child = spawn('nice', ['-n', '19', process.execPath, join(import.meta.dirname, 'worker.ts'), this.weights], {
       stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
     });
     const worker = { child, task: null as Task | null };

@@ -12,9 +12,9 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS } from '../../src/actions.ts';
-import { Belief } from '../../src/belief.ts';
-import { encodeObservation2, OBSERVATION2_SIZE } from '../../src/observation2.ts';
+import { Decision, NUM_ACTIONS } from '@keeps/bot';
+import { Belief } from '@keeps/bot';
+import { encodeObservation2, OBSERVATION2_SIZE } from '@keeps/bot';
 import { encodeTruth, TRUTH_SIZE } from '../../src/truth.ts';
 
 type Episode = { steps: number; player: number[]; action: number[]; legal: number[][]; lastReward: [number, number] };

@@ -18,7 +18,7 @@ const server = await createKeepsServer({
   port: 0,
   webDir,
   cardsDir: join(root, 'cards'),
-  botWeights: join(root, 'packages/learn/weights/bot.bin'),
+  botWeights: join(root, 'packages/bot/weights/bot.bin'),
   botDelay: () => 100,
 });
 const address = server.http.address();

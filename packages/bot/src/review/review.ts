@@ -13,12 +13,12 @@
 // training mode's, always come first. It's cut into small jobs, and a game's jobs are dropped the moment
 // the review can't be wanted any more (its room closes, or a new game starts there).
 // Nothing of a round is sent before it's over: the numbers show what was hidden.
-import { eventsFor, legalCommands, scores, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import type { RoundReview } from '../../protocol/src/index.ts';
+import { eventsFor, legalCommands, scores, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import type { RoundReview } from '../../../protocol/src/index.ts';
 import { describeOptions, makeNames } from '@keeps/table';
-import type { ReviewJob, ReviewResult } from './review-jobs.ts';
-import type { SearchReport } from './search-bot.ts';
-import { noteObservation } from '../src/belief.ts';
+import type { ReviewJob, ReviewResult } from './jobs.ts';
+import type { SearchReport } from '../search/search.ts';
+import { noteObservation } from '../belief.ts';
 
 /** Sample sizes (REVIEW_SCALE scales them all, for tests). */
 const SCALE = Number((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.REVIEW_SCALE ?? 1);

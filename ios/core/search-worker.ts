@@ -1,8 +1,8 @@
 // One of the app's search workers (search-pool.ts): its chunks of a search's worlds, played out in lockstep
-// (packages/learn/demo/lockstep.ts), each step's observations sent to the app's Core ML host (keeps://app/nn/forward).
-import { Policy } from '../../packages/learn/src/policy.ts';
-import { playWorlds, type WorldsJob } from '../../packages/learn/demo/lockstep.ts';
-import { encodeRequest } from '../../packages/learn/demo/request.ts';
+// (packages/bot/src/search/lockstep.ts), each step's observations sent to the app's Core ML host (keeps://app/nn/forward).
+import { Policy } from '../../packages/bot/src/policy.ts';
+import { playWorlds, type WorldsJob } from '../../packages/bot/src/search/lockstep.ts';
+import { encodeRequest } from '../../packages/bot/src/search/request.ts';
 
 export type SearchWorkerMessage = { t: 'init'; weights: ArrayBuffer } | { t: 'search'; id: number; job: WorldsJob };
 export type SearchWorkerReply =

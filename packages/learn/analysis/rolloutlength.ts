@@ -2,9 +2,9 @@
 // top move, as the rollouts play) on the same deals, decisions per round and time per decision.
 //   node rolloutlength.ts <rounds> <weights>...
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy } from '../src/policy.ts';
+import { NUM_ACTIONS } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 const [roundsArg, ...paths] = process.argv.slice(2);
 for (const path of paths) {
   const policy = Policy.load(readFileSync(path));

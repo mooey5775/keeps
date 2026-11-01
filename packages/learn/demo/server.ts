@@ -11,17 +11,17 @@ import { join } from 'node:path';
 import { CARDS, viewFor } from '../../engine/src/index.ts';
 import { logLines } from '@keeps/table';
 import { describeOptions, makeNames } from '@keeps/table';
-import { BotPlayer } from '../src/bot.ts';
-import { Policy } from '../src/policy.ts';
+import { BotPlayer } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 import type { Room, RoomHooks } from '../../server/src/room.ts';
 import { createKeepsServer } from '../../server/src/server.ts';
 import { replayFileName } from '../../server/src/replays.ts';
 import { authorized } from '../../server/src/admin.ts';
-import { RemoteAway, RemoteEvaluator, RemoteQueue } from './remote.ts';
-import { composeHooks, midstrikeHost } from './host.ts';
-import { ReviewPool } from './review-pool.ts';
-import { ALPHA, BETA, searchChoose, setSearchMode, setWorlds, WORLDS, type Evaluator, type SearchReport } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { RemoteAway, RemoteEvaluator, RemoteQueue } from '@keeps/bot/remote/remote.ts';
+import { composeHooks, midstrikeHost } from '@keeps/bot/host.ts';
+import { ReviewPool } from '@keeps/bot/review/pool.ts';
+import { ALPHA, BETA, searchChoose, setSearchMode, setWorlds, WORLDS, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
+import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 
 const root = join(import.meta.dirname, '..', '..', '..');
 // Replays, sessions.jsonl, the admin-token file (KEEPS_DATA_DIR in a container; ./data locally).
@@ -33,7 +33,8 @@ const botName = process.env.BOT ?? 'e1';
 const DISPLAY_NAME = process.env.BOT_NAME ?? 'Midstrike';
 // The admin password for /bot/: ADMIN_TOKEN, or data/admin-token (git-ignored). Without one, /bot/ is off.
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN ?? (existsSync(join(DATA, 'admin-token')) ? readFileSync(join(DATA, 'admin-token'), 'utf8').trim() : '');
-const weights = join(import.meta.dirname, 'weights', `${botName}.bin`);
+// (Midstrike's network is committed with the bot; the research networks aren't.)
+const weights = join(root, botName === 'midstrike' ? 'packages/bot/weights' : 'packages/learn/weights', `${botName}.bin`);
 // The searches' and reviews' heavy work can run on another machine (remote.ts; remote-worker.ts there): REMOTE_TOKEN
 // turns it on. That machine searches REMOTE_WORLDS worlds (512); this one WORLDS, whenever it's away or slow, unless
 // LOCAL_SEARCH=off: then this server does no search or review work at all (a small machine), and while the remote is

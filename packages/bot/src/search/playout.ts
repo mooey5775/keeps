@@ -2,11 +2,11 @@
 // both sides. A generator, so whoever drives it decides how the network runs: one observation at a time
 // (rollout-worker.ts), or many playouts in lockstep with one batched forward per step (batch-worker.ts). It
 // yields each observation the policy must read and takes back the network's logits for it.
-import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief, noteObservation } from '../src/belief.ts';
-import { encodeObservation2, OBSERVATION2_SIZE } from '../src/observation2.ts';
-import { sample, type Policy } from '../src/policy.ts';
+import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { Decision, NUM_ACTIONS } from '../actions.ts';
+import { Belief, noteObservation } from '../belief.ts';
+import { encodeObservation2, OBSERVATION2_SIZE } from '../observation2.ts';
+import { sample, type Policy } from '../policy.ts';
 
 /** What a playout asks the network: an observation, and the ids legal there. */
 export interface Ask {

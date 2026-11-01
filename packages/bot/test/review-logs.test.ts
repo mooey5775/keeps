@@ -4,9 +4,9 @@
 import { describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { isObserved, noteObservation } from '../src/belief.ts';
-import { Reviewer, type ReviewJobs } from '../demo/review.ts';
-import type { ReviewJob } from '../demo/review-jobs.ts';
-import { seeded } from '../demo/random.ts';
+import { Reviewer, type ReviewJobs } from '../src/review/review.ts';
+import type { ReviewJob } from '../src/review/jobs.ts';
+import { seeded } from '../src/random.ts';
 
 /** A pool that keeps the jobs it's given (and runs none). */
 function recordingPool(jobs: ReviewJob[]): ReviewJobs {

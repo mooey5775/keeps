@@ -20,7 +20,7 @@ const server = await createKeepsServer({
   port: 0,
   webDir,
   cardsDir: join(root, 'cards'),
-  botWeights: join(root, 'packages/learn/weights/bot.bin'),
+  botWeights: join(root, 'packages/bot/weights/bot.bin'),
   // Slow enough to catch the bot thinking.
   botDelay: () => 2500,
 });

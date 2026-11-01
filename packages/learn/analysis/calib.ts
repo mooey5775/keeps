@@ -1,9 +1,9 @@
 // e1 self-play: does the player who moves first win more, and is the value head calibrated?
 //   node calib.ts <weights.bin> <rounds> <seed>  → JSON lines: per decision (bucketed) and per round
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const policy = Policy.load(readFileSync(process.argv[2]!));
 const rounds = Number(process.argv[3]);
 let x = Number(process.argv[4] ?? 1) * 7919;

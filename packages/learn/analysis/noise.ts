@@ -2,9 +2,9 @@
 // network's raw policy puts on ids it rates under 3%, its entropy, and how often its top id has < 90%.
 //   node noise.ts <e1.bin> <vrpo.bin> <games> <seed>
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const [e1Path, vrpoPath, gamesArg, seedArg] = process.argv.slice(2);
 const nets = { e1: Policy.load(readFileSync(e1Path!)), vrpo: Policy.load(readFileSync(vrpoPath!)) };
 let x = Number(seedArg) * 7919 + 5;

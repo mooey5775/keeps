@@ -29,12 +29,12 @@ import {
   type Seat,
   type TraceEvent,
 } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { Policy } from '../src/policy.ts';
+import { BotPlayer } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 import { availableParallelism } from 'node:os';
 import { appendFileSync } from 'node:fs';
-import { searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds } from '@keeps/bot/search/search.ts';
+import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 setSearchMode(process.env.SEARCH_MODE === 'best-q' ? 'best-q' : 'damped');
 setWorlds(Number(process.env.SEARCH_WORLDS ?? 128));
 // The search's reasoning shows the bot's hand: it goes to a file, not the player's screen.

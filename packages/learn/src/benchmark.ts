@@ -1,7 +1,7 @@
 import { apply, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
-import { BotPlayer } from './bot.ts';
+import { BotPlayer } from '@keeps/bot';
 import { heuristic, type HeuristicKind } from './heuristics.ts';
-import type { Policy } from './policy.ts';
+import type { Policy } from '@keeps/bot';
 
 // Duplicate-deal matches between players of any kind (a bot policy, a
 // heuristic, a random player), in TypeScript: each deal is played twice with

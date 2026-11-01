@@ -1,4 +1,4 @@
-// The app's search: an Evaluator (packages/learn/demo/search-bot.ts) over Web Workers (search-worker.ts), the network
+// The app's search: an Evaluator (packages/bot/src/search/search.ts) over Web Workers (search-worker.ts), the network
 // in Core ML. A search's worlds go out in chunks, each with its own seed, to whichever worker has room (two at a time
 // each, so a worker always has playouts to batch): fast cores take more chunks than slow ones, so no worker count or
 // split needs tuning to a device, and the results come back in chunk order, the same whoever ran them.
@@ -7,7 +7,7 @@
 // advice for each of your decisions), the workers hold only so many chunks at once: the page's memory is bounded (all
 // at once, they took more than WebKit allows a page, and it ended the page's process). A chunk whose search is no
 // longer wanted (its position has passed) is dropped, not played.
-import { Superseded, type EvaluateJob, type Evaluator } from '../../packages/learn/demo/search-bot.ts';
+import { Superseded, type EvaluateJob, type Evaluator } from '../../packages/bot/src/search/search.ts';
 import type { SearchWorkerMessage, SearchWorkerReply } from './search-worker.ts';
 
 /** Worlds per chunk: enough playouts for a worker to batch (each world plays every candidate move). */

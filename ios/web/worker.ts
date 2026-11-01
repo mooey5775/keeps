@@ -1,8 +1,8 @@
 // A search worker for the spike: its share of a search's worlds, played out in lockstep (packages/learn/demo
 // lockstep.ts), the network run either natively (Core ML, through the app's keeps:// scheme) or here in JavaScript.
-import { Policy } from '../../packages/learn/src/policy.ts';
-import { playWorlds, type WorldsJob } from '../../packages/learn/demo/lockstep.ts';
-import { encodeRequest } from '../../packages/learn/demo/request.ts';
+import { Policy } from '../../packages/bot/src/policy.ts';
+import { playWorlds, type WorldsJob } from '../../packages/bot/src/search/lockstep.ts';
+import { encodeRequest } from '../../packages/bot/src/search/request.ts';
 
 export type WorkerMessage =
   | { t: 'init'; weights: ArrayBuffer }

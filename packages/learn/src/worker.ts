@@ -1,6 +1,6 @@
-import { NUM_ACTIONS } from './actions.ts';
-import { RoundEnv } from './env.ts';
-import { observationSize, type ObservationVersion } from './env.ts';
+import { NUM_ACTIONS } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { observationSize, type ObservationVersion } from '@keeps/bot';
 import { encodeTruth, TRUTH_SIZE } from './truth.ts';
 
 // The training worker: many heads-up rounds at once, stepped in lockstep with

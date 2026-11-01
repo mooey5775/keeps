@@ -5,7 +5,7 @@
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "${ROOT:?}"
-WEIGHTS=packages/learn/demo/weights/midstrike.bin
+WEIGHTS=packages/bot/weights/midstrike.bin
 packages/learn/node_modules/.bin/tsc -p ios/tsconfig.json
 packages/learn/node_modules/.bin/vite build --config ios/core/vite.config.mjs
 cp "$WEIGHTS" ios/build/core/

@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
-import { Policy, type BotPlayer } from '@keeps/learn';
+import { Policy, type BotPlayer } from '@keeps/bot';
 import { replay, viewFor, type Command, type GameState, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
 import type { Hint, ServerMessage } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type BotDeps, type BotTurn, type PlayedMove, type RoomDeps, type RoomMember, type Send } from '../src/room.ts';
 
-const policy = Policy.load(readFileSync(new URL('../../learn/weights/bot.bin', import.meta.url)));
+const policy = Policy.load(readFileSync(new URL('../../bot/weights/bot.bin', import.meta.url)));
 
 /** A room whose bot moves only when the test runs its scheduled move (`bot`: more of the bot's deps). */
 function botRoom(overrides: Partial<RoomDeps> = {}, bot: Partial<BotDeps> = {}) {

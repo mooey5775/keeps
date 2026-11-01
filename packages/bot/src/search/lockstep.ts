@@ -2,12 +2,12 @@
 // candidate command played out in each (playout.ts), all the playouts in lockstep: each step, every unfinished
 // playout's next observation goes to the network in one batch. The playouts are split into groups that take
 // turns, so one group's engine work overlaps the other's wait for the network.
-import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Belief, noteObservation } from '../src/belief.ts';
-import type { Policy } from '../src/policy.ts';
-import { sampleHistory, worldModel } from '../src/worlds.ts';
+import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { Belief, noteObservation } from '../belief.ts';
+import type { Policy } from '../policy.ts';
+import { sampleHistory, worldModel } from '../worlds.ts';
 import { greedyPick, playout, sampledPick, type Ask } from './playout.ts';
-import { seeded } from './random.ts';
+import { seeded } from '../random.ts';
 
 export interface WorldsJob {
   state: GameState;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { verdictOf } from '../demo/review.ts';
+import { verdictOf } from '../src/review/review.ts';
 
 function rng(seed: number) {
   let s = seed >>> 0;

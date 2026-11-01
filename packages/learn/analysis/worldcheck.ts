@@ -7,8 +7,8 @@ import {
   apply, checkInvariants, eventsFor, legalCommands, newGame, viewFor, CARDS,
   type CardId, type GameState, type Seat, type TraceEvent,
 } from '../../engine/src/index.ts';
-import { Belief } from '../src/belief.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { Belief } from '@keeps/bot';
+import { sampleWorld, worldModel } from '@keeps/bot';
 
 const rounds = Number(process.argv[2] ?? 50);
 const seed = process.argv[3] ?? 'wc';

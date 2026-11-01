@@ -8,6 +8,28 @@ importers:
 
   .: {}
 
+  packages/bot:
+    dependencies:
+      '@keeps/engine':
+        specifier: workspace:*
+        version: link:../engine
+      '@keeps/protocol':
+        specifier: workspace:*
+        version: link:../protocol
+      '@keeps/table':
+        specifier: workspace:*
+        version: link:../table
+    devDependencies:
+      '@types/node':
+        specifier: ^26.6.5
+        version: 26.6.5
+      typescript:
+        specifier: ^7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@26.6.5)(@vitest/coverage-v8@5.0.5)(vite@8.3.4(@types/node@26.6.5))
+
   packages/engine:
     devDependencies:
       '@types/node':
@@ -28,6 +50,9 @@ importers:
 
   packages/learn:
     dependencies:
+      '@keeps/bot':
+        specifier: workspace:*
+        version: link:../bot
       '@keeps/engine':
         specifier: workspace:*
         version: link:../engine
@@ -57,12 +82,12 @@ importers:
 
   packages/server:
     dependencies:
+      '@keeps/bot':
+        specifier: workspace:*
+        version: link:../bot
       '@keeps/engine':
         specifier: workspace:*
         version: link:../engine
-      '@keeps/learn':
-        specifier: workspace:*
-        version: link:../learn
       '@keeps/protocol':
         specifier: workspace:*
         version: link:../protocol

@@ -2,9 +2,9 @@
 // and how often it swaps piles when it can (Juggling in its keep, at an action decision).
 //   node juggling.ts <weights> <rounds> <seed> <raw|pp>
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS, actionName, CARD } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS, actionName, CARD } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 const [w, roundsArg, seedArg, mode] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(w!));
 let x = Number(seedArg) * 7919 + 3;

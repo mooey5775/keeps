@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { botPlayer, heuristicPlayer, match, randomPlayer, type Player } from './benchmark.ts';
-import { Policy } from './policy.ts';
+import { Policy } from '@keeps/bot';
 
 // A policy against a benchmark player, for the Python evaluator:
 //   node src/benchmark-cli.ts <weights.bin> <greedy|timer|random> <deals> [seed] [first deal]

@@ -1,10 +1,10 @@
 // The search at real pile reorders (Tithes): finds positions in e1 self-play, searches there, checks the move applies.
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { Policy } from '../src/policy.ts';
-import { searchChoose, setSearchLog, setSearchMode, setWorlds } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { BotPlayer } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds } from '@keeps/bot/search/search.ts';
+import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 setSearchMode('best-q'); setWorlds(Number(process.argv[2] ?? 16));
 const lines: string[] = []; setSearchLog((l) => lines.push(l));
 const policy = Policy.load(readFileSync(new URL('weights/e1.bin', import.meta.url)));

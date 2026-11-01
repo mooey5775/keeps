@@ -1,6 +1,6 @@
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Belief } from '../src/belief.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { Belief } from '@keeps/bot';
+import { sampleWorld, worldModel } from '@keeps/bot';
 let x = 7;
 const random = () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32;
 const build: number[] = [], sample: number[] = [], classes: number[] = [];

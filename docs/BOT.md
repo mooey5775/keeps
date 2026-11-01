@@ -115,7 +115,7 @@ Parts:
    network shape, post-processing (drop actions under 3%, round to 32nds), eval results, and the **encoder version**.
    The server refuses weights whose encoder version differs from its own, so a changed observation can't silently
    feed the network garbage.
-2. **Inference in TypeScript** (`packages/learn/src/policy.ts`): the forward pass on Float32Arrays, R-NaD's legal
+2. **Inference in TypeScript** (`packages/bot/src/policy.ts`): the forward pass on Float32Arrays, R-NaD's legal
    softmax and post-processing ported exactly, sampling. A `Bot` picks a command for a seat from the game state: its
    view and log (it rebuilds its belief from the log, so it holds no state across moves), choosing ids one at a time
    through `Decision`. The free Duplicity reveal is considered only at its own decisions, as in training.

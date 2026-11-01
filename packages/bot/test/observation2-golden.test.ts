@@ -16,7 +16,7 @@ import { Decision } from '../src/actions.ts';
 import { Belief, isObserved, noteObservation } from '../src/belief.ts';
 import { encodeObservation2 } from '../src/observation2.ts';
 import { sampleHistory, worldModel } from '../src/worlds.ts';
-import { seeded } from '../demo/random.ts';
+import { seeded } from '../src/random.ts';
 
 const GAMES = 40;
 

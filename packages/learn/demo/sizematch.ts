@@ -6,11 +6,11 @@
 // SEARCH_INFERENCE=<socket of bot/keeps_bot/serve.py>: the searches batched, the network on that GPU server.
 import { readFileSync } from 'node:fs';
 import { apply, newGame, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { Policy } from '../src/policy.ts';
-import { BatchedPool } from './batch-search.ts';
-import { searchChoose, setSearchLog, setSearchMode, setWorlds, type Evaluator } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { BotPlayer } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
+import { BatchedPool } from '@keeps/bot/search/batch-search.ts';
+import { searchChoose, setSearchLog, setSearchMode, setWorlds, type Evaluator } from '@keeps/bot/search/search.ts';
+import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 
 const [weights, aArg, bArg, dealsArg, seed, threadsArg] = process.argv.slice(2);
 setSearchMode('best-q');

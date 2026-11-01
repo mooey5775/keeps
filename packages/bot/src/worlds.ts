@@ -206,7 +206,7 @@ export function worldModel(state: GameState, me: Seat, belief: Belief, view: Pla
 }
 
 /** A world with the history that leads to it: replayed from the round's start, event for event the player's log. */
-export interface History {
+export interface WorldHistory {
   world: GameState;
   /** The round's start (the deal in it) and every command since; `rng`: chance as it stood (Legerdemain's steal), if set. */
   start: GameState;
@@ -234,7 +234,7 @@ export function sampleWorld(model: WorldModel, random: () => number): GameState 
  * kept only if it gives the player's log exactly and ends where the player sees the game now. Rejection
  * from an exact proposal over a superset is exact, and whatever the model misses costs only a retry.
  */
-export function sampleHistory(model: WorldModel, random: () => number): History {
+export function sampleHistory(model: WorldModel, random: () => number): WorldHistory {
   // A position the proposal can't reach is a bug: give up quickly (callers fall back to the network alone).
   const deadline = Date.now() + 3000;
   for (let attempt = 0; attempt < 20000 && (attempt % 64 !== 0 || Date.now() < deadline); attempt++) {
@@ -250,7 +250,7 @@ export function sampleHistory(model: WorldModel, random: () => number): History 
 }
 
 /** A history drawn from the proposal and replayed, or why it was turned down. */
-function tryHistory(model: WorldModel, random: () => number): History | string {
+function tryHistory(model: WorldModel, random: () => number): WorldHistory | string {
   const plan = samplePlan(model, random);
   const deal = model.guided ? rebuildDeal(plan, model.belief.pileOps, random, (model.guide ??= guideBounds(model))) : rebuildDeal(plan, model.belief.pileOps, random);
   if (typeof deal === 'string') return deal;
@@ -639,7 +639,7 @@ const seeded = (n: number) => ({ a: Math.imul(n + 1, 0x9e3779b1) >>> 0, b: Math.
  */
 const strict = Boolean((globalThis as { process?: { env: Record<string, string | undefined> } }).process?.env.WORLDS_STRICT);
 
-function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => number): History | string {
+function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => number): WorldHistory | string {
   const { me, opponent, log } = model;
   const start = startOf(model);
   let state = structuredClone(start.state);
@@ -666,7 +666,7 @@ function replayPlan(model: WorldModel, plan: Plan, deal: Deal, random: () => num
     while (snap + 1 < deal.snapshots.length && deal.snapshots[snap + 1]!.at - model.roundAt < at) snap++;
     return snap >= 0 ? deal.snapshots[snap]!.piles : deal.piles;
   };
-  const commands: History['commands'] = [];
+  const commands: WorldHistory['commands'] = [];
   // Each player's log in the world: the player's own is theirs, observations included; the opponent's notes theirs.
   const mine: TraceEvent[] = [...seen0];
   const theirs = eventsFor(start.events, opponent);

@@ -1,8 +1,8 @@
 // Sampler statistics on random games of two rounds: plans per accepted history, why plans are turned down, time per world.
 //   node demo/worlds-bench.ts [rounds] [bias]
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Belief } from '../src/belief.ts';
-import { sampleHistory, worldModel } from '../src/worlds.ts';
+import { Belief } from '@keeps/bot';
+import { sampleHistory, worldModel } from '@keeps/bot';
 
 const rounds = Number(process.argv[2] ?? 20);
 const bias = Number(process.argv[3] ?? 4);

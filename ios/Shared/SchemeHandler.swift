@@ -2,7 +2,7 @@ import Foundation
 import WebKit
 
 /// keeps://app/: the bundled page and its files, and the network:
-///   POST nn/forward  observations (inference protocol, packages/learn/demo/inference.ts) → float32 logits
+///   POST nn/forward  observations (inference protocol, packages/bot/src/search/inference.ts) → float32 logits
 ///   POST nn/echo     the same request answered with zeros, without the network (the bridge's own cost)
 ///   GET  nn/info     the model's metadata (its network's fingerprint and step) and the device's cores
 ///   GET  nn/stats    where the requests' time went since the last call (JSON)

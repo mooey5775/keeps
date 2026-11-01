@@ -33,7 +33,7 @@ const port = Number(process.argv[2] ?? 7777);
 const server = await createKeepsServer({
   port,
   cardsDir: join(root, 'cards'),
-  botWeights: join(root, 'packages/learn/demo/weights/midstrike.bin'),
+  botWeights: join(root, 'packages/bot/weights/midstrike.bin'),
   botName: 'Midstrike',
   botDelay: () => 300,
   extraRoutes: (req, res, path) => {

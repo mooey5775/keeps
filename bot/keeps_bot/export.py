@@ -1,9 +1,10 @@
-"""Exports a trained policy for the game server (packages/learn/src/policy.ts).
+"""Exports a trained policy for the game server (packages/bot/src/policy.ts).
 
   PYTHONPATH= .venv/bin/python -m keeps_bot.export runs/r1/policy-14500.pkl
 
-writes packages/learn/weights/bot.bin (the network) and
-packages/learn/test/fixtures/bot-parity.bin (decision points from self-play with
+writes packages/learn/weights/bot.bin (the network, among the research networks;
+one that goes into use is copied to packages/bot/weights) and
+packages/bot/test/fixtures/bot-parity.bin (decision points from self-play with
 the probabilities JAX gives them, which the TypeScript forward pass must
 reproduce).
 
@@ -43,7 +44,7 @@ from keeps_bot import selfplay
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 WEIGHTS = os.path.join(REPO, 'packages', 'learn', 'weights', 'bot.bin')
-FIXTURE = os.path.join(REPO, 'packages', 'learn', 'test', 'fixtures', 'bot-parity.bin')
+FIXTURE = os.path.join(REPO, 'packages', 'bot', 'test', 'fixtures', 'bot-parity.bin')
 
 
 def restamp(paths, fingerprint):

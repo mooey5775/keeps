@@ -5,7 +5,7 @@
 // reached, here instead (the same network on the CPU: slower, the same results), trying the server again later.
 import { readFileSync } from 'node:fs';
 import { parentPort, workerData } from 'node:worker_threads';
-import { Policy } from '../src/policy.ts';
+import { Policy } from '../policy.ts';
 import { LocalInference, SocketInference, type Inference } from './inference.ts';
 import { playWorlds, type WorldsJob } from './lockstep.ts';
 

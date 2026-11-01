@@ -9,4 +9,5 @@ bot/.venv/
 bot/.venv-torch/
 __pycache__/
 bot/runs/
-packages/learn/demo/weights/
+# Research networks (packages/bot/weights holds the ones in use: Midstrike, and the tests' small one).
+packages/learn/weights/

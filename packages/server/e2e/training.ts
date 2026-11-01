@@ -7,7 +7,7 @@ import { createKeepsServer } from '../src/server.ts';
 import { launch, open } from './browser.ts';
 
 const root = join(import.meta.dirname, '../../..');
-const weights = process.argv[2] ?? join(root, 'packages/learn/weights/bot.bin');
+const weights = process.argv[2] ?? join(root, 'packages/bot/weights/bot.bin');
 const dir = process.argv[3] ?? '/tmp/keeps-training';
 mkdirSync(dir, { recursive: true });
 

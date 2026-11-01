@@ -1,5 +1,5 @@
 import { CARD_IDS, PILE_IDS, type CardId, type GameState, type Seat } from '@keeps/engine';
-import { SEAT_OF_PLAYER } from './env.ts';
+import { SEAT_OF_PLAYER } from '@keeps/bot';
 
 // The true state of a heads-up round, for a training critic that may see
 // everything (never for a policy: it shows what no player knows, such as the

@@ -9,9 +9,9 @@
 // &workers=4,6 to compare worker counts. By default: one per core but two, as the app reports its cores (the page,
 // WebKit's own processes and Core ML's CPU-side work need the rest; on the iPhone Air, 6 workers were slower than 4).
 import type { Command, GameState, Seat, TraceEvent } from '../../packages/engine/src/index.ts';
-import { Policy } from '../../packages/learn/src/policy.ts';
-import { worldGames, type WorldsJob } from '../../packages/learn/demo/lockstep.ts';
-import { encodeRequest } from '../../packages/learn/demo/request.ts';
+import { Policy } from '../../packages/bot/src/policy.ts';
+import { worldGames, type WorldsJob } from '../../packages/bot/src/search/lockstep.ts';
+import { encodeRequest } from '../../packages/bot/src/search/request.ts';
 import type { WorkerMessage, WorkerReply } from './worker.ts';
 
 type Position = { state: GameState; me: Seat; myLog: TraceEvent[]; commands: Command[] };

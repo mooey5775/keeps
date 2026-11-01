@@ -2,8 +2,8 @@
 // review's jobs (review-jobs.ts) that come over IPC.
 //   node review-worker.ts <weights>
 import { readFileSync } from 'node:fs';
-import { Policy } from '../src/policy.ts';
-import { reviewRunner, type ReviewJob } from './review-jobs.ts';
+import { Policy } from '../policy.ts';
+import { reviewRunner, type ReviewJob } from './jobs.ts';
 
 let x = (Math.random() * 2 ** 32) >>> 0;
 const run = reviewRunner(Policy.load(readFileSync(process.argv[2]!)), () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32);

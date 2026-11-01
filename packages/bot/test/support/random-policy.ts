@@ -3,7 +3,7 @@ import { NUM_ACTIONS } from '../../src/actions.ts';
 import { encoderFingerprint } from '../../src/fingerprint.ts';
 import { LAYOUT2, OBSERVATION2_SIZE } from '../../src/observation2.ts';
 import { Policy } from '../../src/policy.ts';
-import { seeded } from '../../demo/random.ts';
+import { seeded } from '../../src/random.ts';
 
 /** A small entity network with random weights: the playouts' logic doesn't depend on what the network learned. */
 export function randomPolicy(fingerprint = encoderFingerprint(2)): Policy {

@@ -3,12 +3,12 @@
 //   node evaltrue.ts <replay> <weights> <K> <R>
 import { readFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS, actionName, encode } from '../src/actions.ts';
-import { Belief } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import { Policy, sample } from '../src/policy.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { sampleWorld, worldModel } from '../src/worlds.ts';
+import { Decision, NUM_ACTIONS, actionName, encode } from '@keeps/bot';
+import { Belief } from '@keeps/bot';
+import { encodeObservation2 } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
+import { BotPlayer } from '@keeps/bot';
+import { sampleWorld, worldModel } from '@keeps/bot';
 const [path, weights, kArg, rArg] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(weights!));
 const K = Number(kArg), R = Number(rArg);

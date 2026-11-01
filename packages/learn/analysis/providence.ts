@@ -22,8 +22,8 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { apply, legalCommands, newGame, type Command, type GameState, type NewGameOptions, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { Policy } from '../src/policy.ts';
+import { BotPlayer } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 
 const DEMO = join(import.meta.dirname, '..', 'demo');
 const MIDSTRIKE = join(DEMO, 'weights', 'midstrike.bin');
@@ -62,7 +62,7 @@ function replayed(p: Position, policy: Policy): { state: GameState; events: Trac
 
 async function positions(games: number, seed: number, out: string): Promise<void> {
   const policy = Policy.load(readFileSync(MIDSTRIKE));
-  const { seeded } = await import('../demo/random.ts');
+  const { seeded } = await import('@keeps/bot');
   const random = seeded(seed, 1);
   const kept: string[] = [];
   for (let g = 0; g < games; g++) {
@@ -90,9 +90,9 @@ async function positions(games: number, seed: number, out: string): Promise<void
 }
 
 async function reference(file: string, worlds: number, out: string, shard: number, shards: number): Promise<void> {
-  const { searchChoose, setSearchLog, setSearchMode, setWorlds } = await import('../demo/search-bot.ts');
-  const { RolloutPool } = await import('../demo/rollout-pool.ts');
-  const { BatchedPool } = await import('../demo/batch-search.ts');
+  const { searchChoose, setSearchLog, setSearchMode, setWorlds } = await import('@keeps/bot/search/search.ts');
+  const { RolloutPool } = await import('@keeps/bot/search/rollout-pool.ts');
+  const { BatchedPool } = await import('@keeps/bot/search/batch-search.ts');
   const policy = Policy.load(readFileSync(MIDSTRIKE));
   setSearchMode('best-q');
   setSearchLog(() => {});

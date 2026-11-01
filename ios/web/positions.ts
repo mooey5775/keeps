@@ -3,10 +3,10 @@
 //   node ios/web/positions.ts <weights> <out.json> [count]
 import { readFileSync, writeFileSync } from 'node:fs';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../packages/engine/src/index.ts';
-import { Decision } from '../../packages/learn/src/actions.ts';
-import { BotPlayer } from '../../packages/learn/src/bot.ts';
-import { Policy } from '../../packages/learn/src/policy.ts';
-import { seeded } from '../../packages/learn/demo/random.ts';
+import { Decision } from '../../packages/bot/src/actions.ts';
+import { BotPlayer } from '../../packages/bot/src/bot.ts';
+import { Policy } from '../../packages/bot/src/policy.ts';
+import { seeded } from '../../packages/bot/src/random.ts';
 
 const [weights, out, countArg] = process.argv.slice(2);
 if (!weights || !out) throw new Error('usage: positions.ts <weights> <out.json> [count]');

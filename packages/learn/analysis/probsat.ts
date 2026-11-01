@@ -3,11 +3,11 @@
 //   node probsat.ts <replay> <weights> <K>
 import { readFileSync } from 'node:fs';
 import { apply, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { actionName, Decision, NUM_ACTIONS } from '../src/actions.ts';
-import type { Belief } from '../src/belief.ts';
-import { BotPlayer } from '../src/bot.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import { Policy } from '../src/policy.ts';
+import { actionName, Decision, NUM_ACTIONS } from '@keeps/bot';
+import type { Belief } from '@keeps/bot';
+import { BotPlayer } from '@keeps/bot';
+import { encodeObservation2 } from '@keeps/bot';
+import { Policy } from '@keeps/bot';
 const [path, weights, kArg] = process.argv.slice(2);
 const policy = Policy.load(readFileSync(weights!));
 const lines = readFileSync(path!, 'utf8').trim().split('\n').map((l) => JSON.parse(l));

@@ -9,9 +9,9 @@
 // The true position is a draw from the decider's posterior, so averaged over many positions the
 // win-rate difference is an unbiased comparison of the two choices.
 import { readFileSync } from 'node:fs';
-import { NUM_ACTIONS, actionName } from '../src/actions.ts';
-import { RoundEnv } from '../src/env.ts';
-import { Policy, sample } from '../src/policy.ts';
+import { NUM_ACTIONS, actionName } from '@keeps/bot';
+import { RoundEnv } from '@keeps/bot';
+import { Policy, sample } from '@keeps/bot';
 
 const [e1Path, vrpoPath, gamesArg, seedArg, playoutsArg] = process.argv.slice(2);
 const e1 = Policy.load(readFileSync(e1Path!));

@@ -112,7 +112,7 @@ export class Policy {
     return legalPolicy(this.logits(obs), legal);
   }
 
-  /** raw() from logits computed elsewhere (a batched forward: packages/learn/demo/inference.ts). */
+  /** raw() from logits computed elsewhere (a batched forward: packages/bot/src/search/inference.ts). */
   rawFrom(logits: Float32Array, legal: ArrayLike<number>): Float32Array {
     return legalPolicy(logits, legal);
   }

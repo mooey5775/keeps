@@ -1,8 +1,8 @@
-"""Midstrike's network on a GPU, for the batched search (packages/learn/demo/batch-search.ts).
+"""Midstrike's network on a GPU, for the batched search (packages/bot/src/search/batch-search.ts).
 
 Loads an exported policy file (KPNN, as the TypeScript bot reads it) into the PyTorch agent VRPO trains
 (keeps_bot/vrpo/models.py, ported line for line from networks.entity) and answers batches of observations with
-the network's logits over a Unix socket; the protocol is in packages/learn/demo/inference.ts. Requests from every
+the network's logits over a Unix socket; the protocol is in packages/bot/src/search/inference.ts. Requests from every
 connection that arrive while the GPU is busy go through together, in one forward. Float32 throughout (no TF32),
 so the logits match the TypeScript forward's to float rounding.
 

@@ -5,8 +5,8 @@
 // runs in Node or in a browser alike.
 import type { GameState, Seat } from '../../engine/src/index.ts';
 import type { BotDeps, BotTurn, Room, RoomHooks, RoomMember, RunningGame } from '../../server/src/room.ts';
-import { Reviewer, type ReviewedGame, type ReviewJobs } from './review.ts';
-import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from './search-bot.ts';
+import { Reviewer, type ReviewedGame, type ReviewJobs } from './review/review.ts';
+import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from './search/search.ts';
 
 /** `pool`, its searches dropped once `wanted` says their position has passed (rather than played out for nothing). */
 const whileWanted = (pool: Evaluator, wanted: () => boolean): Evaluator => ({ evaluate: (job) => pool.evaluate({ ...job, wanted }) });

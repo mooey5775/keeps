@@ -31,7 +31,7 @@ SERVER = os.path.join(REPO, 'packages', 'learn', 'src', 'server.ts')
 
 
 # The observation version the environment servers encode (1 or 2; see
-# packages/learn/src/env.ts). Set it with set_observation() before any server starts.
+# packages/bot/src/env.ts). Set it with set_observation() before any server starts.
 OBSERVATION = 1
 
 
@@ -63,7 +63,7 @@ class Bridge:
     self.layout = info.get('layout')  # observation v2's layout (blocks and columns), else None
     self.num_actions = info['numActions']
     self.action_names = info['actionNames']
-    self.fingerprint = info['fingerprint']  # the encoder's (see packages/learn/src/fingerprint.ts)
+    self.fingerprint = info['fingerprint']  # the encoder's (see packages/bot/src/fingerprint.ts)
     self.truth_layout = info.get('truthLayout')  # the true state in the worker's `both` frames (truth.ts)
 
   def send(self, ops):

@@ -4,7 +4,7 @@
 // playout's time is the network, one observation at a time; batched on a GPU it's a small part.
 import { Worker } from 'node:worker_threads';
 import type { BatchJob } from './batch-worker.ts';
-import type { EvaluateJob, Evaluator } from './search-bot.ts';
+import type { EvaluateJob, Evaluator } from './search.ts';
 
 export class BatchedPool implements Evaluator {
   private readonly workers: Worker[];

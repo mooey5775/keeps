@@ -6,12 +6,12 @@
 // that GPU server; otherwise each thread plays its playouts one at a time (RolloutPool).
 // It must run the server's network: a job stamped with another network is refused (the server then searches itself).
 import { readFileSync } from 'node:fs';
-import { Policy } from '../src/policy.ts';
-import { ReviewPool } from './review-pool.ts';
-import type { ReviewJob, ReviewResult } from './review-jobs.ts';
-import { BatchedPool } from './batch-search.ts';
-import { type EvaluateJob, type Evaluator } from './search-bot.ts';
-import { RolloutPool } from './rollout-pool.ts';
+import { Policy } from '../policy.ts';
+import { ReviewPool } from '../review/pool.ts';
+import type { ReviewJob, ReviewResult } from '../review/jobs.ts';
+import { BatchedPool } from '../search/batch-search.ts';
+import { type EvaluateJob, type Evaluator } from '../search/search.ts';
+import { RolloutPool } from '../search/rollout-pool.ts';
 import type { RemoteKind } from './remote.ts';
 
 const [url, tokenFile, weights, searchArg, reviewArg] = process.argv.slice(2);

@@ -6,7 +6,7 @@
 // on the other machine. A server with no search of its own (LOCAL_SEARCH=off) has nothing to fall back to:
 // the search fails at once (RemoteAway), and the bot plays its network's own move; reviews wait for the remote.
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { EvaluateJob, Evaluator } from './search-bot.ts';
+import type { EvaluateJob, Evaluator } from '../search/search.ts';
 
 export type RemoteKind = 'search' | 'review';
 

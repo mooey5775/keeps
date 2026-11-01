@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Belief, noteObservation } from '../src/belief.ts';
-import { sampleHistory, worldModel, type History, type WorldModel } from '../src/worlds.ts';
+import { sampleHistory, worldModel, type WorldHistory, type WorldModel } from '../src/worlds.ts';
 
 function rng(seed: number) {
   let s = seed >>> 0;
@@ -43,7 +43,7 @@ const canon = (e: TraceEvent) => {
 };
 
 /** Replays a history on its own: the player's events must be the end of their log (observations aside). */
-function replays(h: History, me: Seat, myLog: readonly TraceEvent[]): boolean {
+function replays(h: WorldHistory, me: Seat, myLog: readonly TraceEvent[]): boolean {
   let state = h.start;
   const mine: TraceEvent[] = [];
   for (const { seat, command, rng: chance } of h.commands) {

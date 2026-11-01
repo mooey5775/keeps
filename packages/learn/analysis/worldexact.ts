@@ -5,8 +5,8 @@ import {
   apply, CARDS, eventsFor, isCoinCard, legalCommands, newGame, viewFor,
   type CardId, type GameState, type PlayerView, type Seat, type TraceEvent,
 } from '../../engine/src/index.ts';
-import { Belief, type HiddenEvent } from '../src/belief.ts';
-import { gatherFacts, revealRoles, sampleWorld, worldModel, type Facts } from '../src/worlds.ts';
+import { Belief, type HiddenEvent } from '@keeps/bot';
+import { gatherFacts, revealRoles, sampleWorld, worldModel, type Facts } from '@keeps/bot';
 
 const wanted = Number(process.argv[2] ?? 20), samples = Number(process.argv[3] ?? 4000), seed = process.argv[4] ?? 'ex';
 let x = 99991;

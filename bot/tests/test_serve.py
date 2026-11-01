@@ -27,7 +27,7 @@ from tests.test_vrpo import observations
 
 
 def sparse(rows):
-  """Observations as one request's parts (packages/learn/demo/inference.ts encodeRequest): rowEnds, values, indices."""
+  """Observations as one request's parts (packages/bot/src/search/inference.ts encodeRequest): rowEnds, values, indices."""
   nonzero = [np.flatnonzero(row) for row in rows]
   ends = np.cumsum([len(i) for i in nonzero]).astype('<u4')
   values = np.concatenate([row[i] for row, i in zip(rows, nonzero)]).astype('<f4')

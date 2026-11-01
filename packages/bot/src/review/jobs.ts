@@ -5,12 +5,12 @@
 //           of it), each played on once, or once per given first move (the same worlds for every move):
 //           `me`'s result per world and move, 1 won, 0 not.
 // Run anywhere: review-worker.ts runs them in Node processes; the app, in Web Workers.
-import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../engine/src/index.ts';
-import { Decision, NUM_ACTIONS } from '../src/actions.ts';
-import { Belief, noteObservation } from '../src/belief.ts';
-import { encodeObservation2 } from '../src/observation2.ts';
-import { sample, type Policy } from '../src/policy.ts';
-import { sampleHistory, worldModel } from '../src/worlds.ts';
+import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { Decision, NUM_ACTIONS } from '../actions.ts';
+import { Belief, noteObservation } from '../belief.ts';
+import { encodeObservation2 } from '../observation2.ts';
+import { sample, type Policy } from '../policy.ts';
+import { sampleHistory, worldModel } from '../worlds.ts';
 
 export type ReviewJob =
   | { kind: 'truth'; state: GameState; logs: [Seat, TraceEvent[]][]; first: { seat: Seat; command: Command } | null; n: number }

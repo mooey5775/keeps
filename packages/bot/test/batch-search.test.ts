@@ -8,10 +8,10 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { apply, eventsFor, legalCommands, newGame, viewFor, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision, NUM_ACTIONS } from '../src/actions.ts';
 import { OBSERVATION2_SIZE } from '../src/observation2.ts';
-import { encodeRequest, LocalInference, SocketInference } from '../demo/inference.ts';
-import { drive, playWorlds, worldGames, type WorldsJob } from '../demo/lockstep.ts';
-import { playOut } from '../demo/playout.ts';
-import { seeded } from '../demo/random.ts';
+import { encodeRequest, LocalInference, SocketInference } from '../src/search/inference.ts';
+import { drive, playWorlds, worldGames, type WorldsJob } from '../src/search/lockstep.ts';
+import { playOut } from '../src/search/playout.ts';
+import { seeded } from '../src/random.ts';
 import { randomPolicy } from './support/random-policy.ts';
 
 const policy = randomPolicy();

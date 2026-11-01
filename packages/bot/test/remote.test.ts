@@ -2,8 +2,8 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RemoteEvaluator, RemoteQueue } from '../demo/remote.ts';
-import type { EvaluateJob, Evaluator } from '../demo/search-bot.ts';
+import { RemoteEvaluator, RemoteQueue } from '../src/remote/remote.ts';
+import type { EvaluateJob, Evaluator } from '../src/search/search.ts';
 
 let server: Server | null = null;
 
