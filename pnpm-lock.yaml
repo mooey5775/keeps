@@ -91,6 +91,9 @@ importers:
       '@keeps/protocol':
         specifier: workspace:*
         version: link:../protocol
+      '@keeps/table':
+        specifier: workspace:*
+        version: link:../table
       posthog-node:
         specifier: ^5.56.2
         version: 5.56.2
@@ -98,9 +101,6 @@ importers:
         specifier: ^8.22.0
         version: 8.22.0
     devDependencies:
-      '@keeps/table':
-        specifier: workspace:*
-        version: link:../table
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5

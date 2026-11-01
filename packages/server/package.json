@@ -15,11 +15,11 @@
     "@keeps/bot": "workspace:*",
     "@keeps/engine": "workspace:*",
     "@keeps/protocol": "workspace:*",
+    "@keeps/table": "workspace:*",
     "posthog-node": "^5.56.2",
     "ws": "^8.22.0"
   },
   "devDependencies": {
-    "@keeps/table": "workspace:*",
     "@types/node": "^26.6.5",
     "@types/ws": "^8.18.2",
     "typescript": "^7.0.2",
