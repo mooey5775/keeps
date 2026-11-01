@@ -362,6 +362,9 @@ await pool.close?.();
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
+// A notice, as the website's server sends while Midstrike's search machine is away (which never happens here).
+toApp.push(JSON.stringify({ t: 'server', id: 1, message: { t: 'notice', message: "Midstrike's search machine is unavailable right now." } }));
+
 writeFileSync(join(out, 'to-app.jsonl'), toApp.join('\n') + '\n');
 
 // Choosing a move by touching the table (packages/table/src/options.ts), as the TypeScript answers it, for the app's port
@@ -396,7 +399,7 @@ const typesIn = (lines: string[], pick: (m: Record<string, unknown>) => unknown)
 const client = typesIn(fromApp, (m) => (m.t === 'client' ? (m.message as { t: string }).t : null));
 const serverTypes = typesIn(toApp, (m) => (m.t === 'server' ? (m.message as { t: string }).t : null));
 const wantClient = ['add-bot', 'back-to-lobby', 'command', 'create', 'join', 'leave', 'propose-undo', 'remove-bot', 'resume', 'settings', 'start', 'training', 'vote-undo'];
-const wantServer = ['error', 'game', 'gone', 'replaced', 'review', 'room', 'welcome'];
+const wantServer = ['error', 'game', 'gone', 'notice', 'replaced', 'review', 'room', 'welcome'];
 const unseen = [...wantClient.filter((t) => !client.has(t)).map((t) => `client ${t}`), ...wantServer.filter((t) => !serverTypes.has(t)).map((t) => `server ${t}`), ...missing()];
 const excused = [...madeEvents].filter(([, shown]) => !shown).map(([t]) => t);
 console.log(`${fromApp.length} messages to the core, ${toApp.length} from it, from 3 games and ${coverageGames} more for coverage; ${(Object.keys(KINDS) as Kind[]).map((k) => `${k}s ${seen[k].size}/${want[k].size}`).join(', ')}${excused.length ? ` (never shown to a client: ${excused.join(', ')})` : ''}`);

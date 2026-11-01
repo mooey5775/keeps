@@ -609,6 +609,8 @@ final class Game {
       problem = error.message
       // Online, before a room was ours (no such room, the server unreachable): back to the lobby, as the website does.
       if online != nil, room == nil { leave(forgetting: false) }
+    case .notice(let notice):
+      problem = notice.message
     case .welcome(let welcome):
       // Online: the seat kept, to come back to.
       if let online { keepSeat(OnlineSeat(server: online.server, code: welcome.code, token: welcome.token, name: online.name)) }

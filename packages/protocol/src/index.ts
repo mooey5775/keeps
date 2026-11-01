@@ -152,7 +152,10 @@ export type ServerMessage =
     }
   /** Games against the bot: the review of a finished round (sent again as it fills in). */
   | { t: 'review'; review: RoundReview }
+  /** Something you did was refused (a move, a room code), with why. */
   | { t: 'error'; message: string }
+  /** Something to tell the table that isn't about anything you did (the bot's search machine is away). */
+  | { t: 'notice'; message: string }
   /** The room no longer exists (e.g. a stale resume). */
   | { t: 'gone' }
   /** Your seat was resumed on another connection (another tab or device); this one is dropped. */
@@ -166,7 +169,9 @@ export const NAME_MAX = 20;
  * in a way a client built before can't read: a field removed, renamed or retyped, or a new one it must have. Rather
  * than bump it, make a new field optional, and new message kinds ones an older client can pass over.
  */
-export const PROTOCOL = 2; // 2: resigning (a new event and a new round end, which an app built before can't read)
+// 2: resigning (a new event and a new round end, which an app built before can't read). 3: notices (an app built before
+// can't pass over a message kind it doesn't know; from 3 on, the app's core does).
+export const PROTOCOL = 3;
 export const ROOM_CODE = /^[A-Z]{4}$/;
 
 /** A game's replay file (engine/src/replay.ts's format), by its room and when it started: "ABCD-2026-10-30T22-41-36-000Z.jsonl". The server and the app keep games so. */

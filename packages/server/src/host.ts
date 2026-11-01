@@ -180,6 +180,7 @@ export function composeHooks(...all: RoomHooks[]): RoomHooks {
     left: each('left'),
     disconnected: each('disconnected'),
     closing: each('closing'),
+    botFailed: each('botFailed'),
   };
   return hooks;
 }

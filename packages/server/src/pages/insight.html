@@ -42,6 +42,7 @@
   <div class="row"><h1>Bot insight</h1>
     <span class="note"><a href="spectate" style="color:inherit">spectator view</a> · room <select id="room"><option value="">follow the latest</option></select></span></div>
   <div class="sub" id="sub">Waiting for a game against the bot…</div>
+  <div class="note" id="health"></div>
 
   <div class="cards">
     <div class="card"><div class="label">Bot's chance to win: before search</div><div class="big before" id="before">–</div><div class="note">its network's own estimate (value head)</div></div>
@@ -103,7 +104,23 @@ function chart(reports) {
   svg.innerHTML = out;
 }
 
+// The bot's health (status.json): its remote machine, and its failures since the server started (each a bug).
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+async function health() {
+  let s;
+  try { s = await (await fetch('status.json')).json(); } catch { return; }
+  const parts = [];
+  if (s.remote) parts.push(`remote machine ${s.remote.connected ? 'connected' : '<span class="warn">away</span>'} (${s.remote.worlds} worlds; failed ${s.remote.failures.search} searches, ${s.remote.failures.review} reviews)`);
+  if (s.reviews) parts.push(`reviews: ${s.reviews.queued} queued, ${s.reviews.running} running${s.reviews.failed ? `, <span class="warn">${s.reviews.failed} failed</span>` : ''}`);
+  const c = s.failures.counts;
+  const bad = c.search + c.move + c.advice;
+  parts.push(bad ? `<span class="warn">bot failures: ${c.search} searches, ${c.move} moves, ${c.advice} advice</span>` : 'no bot failures');
+  document.getElementById('health').innerHTML = parts.join(' · ') +
+    s.failures.latest.slice(-5).reverse().map((f) => `<div>${esc(f.at)} · ${esc(f.room)} · ${esc(f.what)}: ${esc(f.error)}</div>`).join('');
+}
+
 async function refresh() {
+  health();
   let data;
   try { data = await (await fetch('data')).json(); } catch { return; }
   // Rooms, most recently active first; "follow the latest" unless one is pinned.

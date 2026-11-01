@@ -21,6 +21,9 @@ export interface RemoteOptions {
   backoff?: (n: number) => number;
 }
 
+/** The kinds of message the app knows. (A record, so a kind added to the protocol and not here doesn't compile.) */
+const KINDS: Record<ServerMessage['t'], true> = { welcome: true, room: true, game: true, review: true, error: true, notice: true, gone: true, replaced: true };
+
 /** The longest wait between attempts to come back. */
 const MAX_WAIT_MS = 10_000;
 
@@ -65,6 +68,8 @@ export function remoteConnection(options: RemoteOptions): { receive(message: Cli
         });
         return;
       }
+      // A kind of message newer than this app (the server updated first): passed over, as the protocol allows.
+      if (!(message.t in KINDS)) return;
       // Welcomed: from now on, coming back means taking this seat again.
       if (message.t === 'welcome') hello = { t: 'resume', code: message.code, token: message.token };
       if (message.t === 'gone' || message.t === 'replaced') stop();

@@ -124,6 +124,19 @@ describe('the app on a game server elsewhere', () => {
     expect(at(PROTOCOL).got.map((m) => m.t)).toEqual(['welcome']);
   });
 
+  it("passes over a kind of message newer than the app (the server updated first), and goes on", () => {
+    const got: ServerMessage[] = [];
+    const fake = { readyState: 1, send: () => {}, close: () => {} } as unknown as WebSocket;
+    const c = remoteConnection({ url: 'wss://keeps.example/ws', receive: (m) => got.push(m), state: () => {}, socket: () => fake });
+    c.receive({ t: 'create', name: 'Ana' });
+    fake.onopen?.(new Event('open'));
+    const say = (m: object) => fake.onmessage?.(new MessageEvent('message', { data: JSON.stringify(m) }));
+    say({ t: 'welcome', code: 'ABCD', token: 't', playerId: 'p', protocol: PROTOCOL });
+    say({ t: 'fireworks', colour: 'gold' });
+    say({ t: 'notice', message: 'Midstrike is thinking.' });
+    expect(got.map((m) => m.t)).toEqual(['welcome', 'notice']);
+  });
+
   it("says so when the server can't be reached", async () => {
     const got: ServerMessage[] = [];
     const states: LinkState[] = [];

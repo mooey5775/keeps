@@ -2,7 +2,8 @@
 // connected (remote.ts): Node only. review.ts holds the review itself, which takes any ReviewJobs.
 import { spawn, type ChildProcess } from 'node:child_process';
 import { join } from 'node:path';
-import type { RemoteQueue } from '../remote/remote.ts';
+import { RemoteAway, type RemoteQueue } from '../remote/remote.ts';
+import { throttled } from '../throttled.ts';
 import type { ReviewJobs } from './review.ts';
 import type { ReviewJob, ReviewResult } from './jobs.ts';
 
@@ -20,8 +21,9 @@ interface Task {
 
 /**
  * Worker processes at nice 19, started when first needed. Jobs are queued by group (a game) and taken in turn
- * across groups. With a remote worker connected (remote.ts), jobs go there instead, `remoteSlots` at a time;
- * one it fails goes back in the queue for the local workers, and the remote is left alone for a minute.
+ * across groups. With a remote worker connected (remote.ts), jobs go there instead, `remoteSlots` at a time. One
+ * the remote couldn't take (it went away) goes back in the queue, and the remote is left alone for a minute; one it
+ * failed has failed (a bug: counted, and logged), as one a local worker fails has.
  */
 export class ReviewPool implements ReviewJobs {
   remote: RemoteQueue | null = null;
@@ -33,7 +35,9 @@ export class ReviewPool implements ReviewJobs {
   private queues = new Map<string, Task[]>();
   private turn: string[] = [];
   private next = 0;
-  private errors = 0;
+  /** Jobs failed, here or on the remote, since the server started. */
+  private failed = 0;
+  private readonly report = throttled();
 
   private readonly size: number;
   private readonly weights: string;
@@ -91,9 +95,15 @@ export class ReviewPool implements ReviewJobs {
     return queue.length - keep.length;
   }
 
-  /** Jobs queued or running (here and remotely), for the status page and tests. */
-  load(): { queued: number; running: number; workers: number; remote: number } {
+  private fail(error: string): void {
+    this.failed++;
+    this.report(`review: a job failed (${this.failed} so far): ${error}`);
+  }
+
+  /** Jobs queued or running (here and remotely), and failed, for the status page and tests. */
+  load(): { queued: number; running: number; workers: number; remote: number; failed: number } {
     return {
+      failed: this.failed,
       queued: [...this.queues.values()].reduce((a, q) => a + q.length, 0),
       running: this.workers.filter((w) => w.task).length + this.remoteRunning,
       workers: this.workers.length,
@@ -126,15 +136,18 @@ export class ReviewPool implements ReviewJobs {
       const task = worker.task;
       worker.task = null;
       if (task && task.id === m.id && !task.cancelled) {
-        if (m.error && this.errors++ < 20) console.error(`review: a job failed: ${m.error}`);
+        if (m.error) this.fail(m.error);
         task.done(m.result ?? null);
       }
       this.pump();
     });
-    child.on('exit', () => {
+    child.on('exit', (code, signal) => {
       // A worker that dies (out of memory, killed) is replaced; its job counts as failed.
       this.workers = this.workers.filter((w) => w !== worker);
-      if (worker.task && !worker.task.cancelled) worker.task.done(null);
+      if (worker.task && !worker.task.cancelled) {
+        this.fail(`a review worker died (exit code ${code}, signal ${signal})`);
+        worker.task.done(null);
+      }
       if (this.queues.size) this.start();
       this.pump();
     });
@@ -146,14 +159,19 @@ export class ReviewPool implements ReviewJobs {
       if (!task) return;
       this.remoteRunning++;
       this.remoteTasks.add(task);
-      this.remote!.submit<ReviewResult>('review', task.job, 15 * 60_000).then(
+      this.remote!.submit<ReviewResult>('review', task.job, 15 * 60_000, { wanted: () => !task.cancelled }).then(
         (result) => {
           if (!task.cancelled) task.done(result);
         },
         (error: unknown) => {
-          if (this.errors++ < 20) console.error(`review: the remote failed a job (${error instanceof Error ? error.message : error}); doing it here`);
-          this.remoteAwayUntil = Date.now() + 60_000;
           if (task.cancelled) return;
+          if (!(error instanceof RemoteAway)) {
+            // (The queue counted and logged the remote's failure.)
+            this.failed++;
+            task.done(null);
+            return;
+          }
+          this.remoteAwayUntil = Date.now() + 60_000;
           // Back to the front of its game's queue, for the local workers.
           if (!this.queues.has(task.group)) {
             this.queues.set(task.group, []);

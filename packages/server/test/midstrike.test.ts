@@ -55,7 +55,11 @@ describe("Midstrike's admin pages", () => {
   });
 
   it('say what the bot is doing: here, no search and no remote machine', async () => {
-    expect(await (await get('/admin/bot/status.json', 'sesame')).json()).toEqual({ remote: null, reviews: null });
+    expect(await (await get('/admin/bot/status.json', 'sesame')).json()).toEqual({
+      remote: null,
+      reviews: null,
+      failures: { counts: { search: 0, move: 0, advice: 0 }, latest: [] },
+    });
     expect(await (await get('/admin/bot/spectate.json', 'sesame')).json()).toEqual({ rooms: [], room: null });
   });
 });

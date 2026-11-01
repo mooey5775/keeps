@@ -262,7 +262,8 @@ describe('the bot in a room', () => {
   it('plays the move its server works out (a search) when it comes, waits when told to, and otherwise plays its network', async () => {
     const asked: { turn: BotTurn; resolve: (c: { command: Command } | { retryAfter: number }) => void; reject: (e: Error) => void }[] = [];
     const choose = (turn: BotTurn) => new Promise<{ command: Command } | { retryAfter: number }>((resolve, reject) => asked.push({ turn, resolve, reject }));
-    const { room, runBot, waiting, saved } = botRoom({}, { choose });
+    const failures: string[] = [];
+    const { room, runBot, waiting, saved } = botRoom({ hooks: { botFailed: (_room, what, error) => failures.push(`${what}: ${error}`) } }, { choose });
     const human = join(room, 'Ana');
     room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: 'random' } });
     room.handle(human.id, { t: 'add-bot' });
@@ -322,6 +323,38 @@ describe('the bot in a room', () => {
     } finally {
       console.error = errors;
     }
+    expect(human.errors()).toEqual([]);
+    // Each failure told to the server's hooks (the admin page counts them); the network's move stood in, quietly.
+    expect(failures[0]).toMatch(/^search: its search failed \(Error: the search broke/);
+    if (failures.length > 1) expect(failures[1]).toMatch(/^search: its searched move was refused/);
+    expect(human.messages.some((m) => m.t === 'notice')).toBe(false);
+  });
+
+  it("plays a random legal move if even its network fails, and tells the table: the game isn't left stuck on it", () => {
+    const broken = Object.create(policy) as Policy;
+    broken.probabilities = () => {
+      throw new Error('the network broke');
+    };
+    const failures: string[] = [];
+    const { room, runBot, saved } = botRoom({ hooks: { botFailed: (_room, what, error) => failures.push(`${what}: ${error}`) } }, { policy: broken });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    const errors = console.error;
+    console.error = () => {};
+    try {
+      for (let step = 0; !failures.length; step++) {
+        expect(step).toBeLessThan(500);
+        const legal = human.last('game').view.legal;
+        if (human.last('game').view.prompts.some((p) => p.mine)) room.handle(human.id, { t: 'command', command: legal.find((c) => c.type !== 'reveal-duplicity')! });
+        else expect(runBot()).toBe(true);
+      }
+    } finally {
+      console.error = errors;
+    }
+    expect(failures[0]).toMatch(/^move: .*the network broke/);
+    expect(saved.at(-1)!.commands.at(-1)!.seat).not.toBe(human.last('game').view.viewer);
+    expect(human.messages.filter((m) => m.t === 'notice')).toEqual([{ t: 'notice', message: 'Bot ran into a problem and played a random move.' }]);
     expect(human.errors()).toEqual([]);
   });
 

@@ -15,7 +15,7 @@ import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 import { setSearchMode, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
 import { authorized } from './admin.ts';
 import { replayFileName } from './replays.ts';
-import type { Room, RoomHooks } from './room.ts';
+import type { BotFailure, Room, RoomHooks } from './room.ts';
 import type { ServerOptions } from './server.ts';
 
 export interface MidstrikeConfig {
@@ -62,6 +62,8 @@ export function midstrikeConfig(env: NodeJS.ProcessEnv, root: string): Midstrike
 
 /** How many of a room's latest search reports the insight page keeps. */
 const REPORTS_KEPT = 40;
+/** How many of the bot's latest failures the status page shows. */
+const FAILURES_KEPT = 20;
 
 /**
  * Midstrike, set up: what the server takes (its options for the bot, its rooms' hooks, the remote machine's and the
@@ -107,12 +109,22 @@ export function midstrike(
     onSearch: record,
   });
 
+  // The bot's failures (bugs: the room played on without what failed), for the status page.
+  const failures = { counts: { search: 0, move: 0, advice: 0 } as Record<BotFailure, number>, latest: [] as object[] };
+  const failed: RoomHooks = {
+    botFailed(room, what, error) {
+      failures.counts[what]++;
+      failures.latest.push({ at: new Date().toISOString(), room: room.code, what, error });
+      if (failures.latest.length > FAILURES_KEPT) failures.latest.shift();
+    },
+  };
+
   return {
     botWeights: config.weights,
     botName: config.name,
     botLevels: Boolean(hard),
     ...(hard ? { botPlay: host.bot } : {}),
-    roomHooks: composeHooks(sessionLog(dataDir, basename(config.weights, '.bin')), host.hooks),
+    roomHooks: composeHooks(sessionLog(dataDir, basename(config.weights, '.bin')), host.hooks, failed),
     extraRoutes: (req, res, path) => {
       if (remote?.handle(req, res, path)) return true;
       if (path !== '/admin/bot' && !path.startsWith('/admin/bot/')) return false;
@@ -123,8 +135,9 @@ export function midstrike(
       } else if (path === '/admin/bot') {
         res.writeHead(302, { location: '/admin/bot/' }).end();
       } else adminPages(req, res, path.slice('/admin/bot'.length), rooms(), reports, () => ({
-        remote: remote ? { connected: remote.connected(), worlds: config.remoteWorlds, load: remote.load() } : null,
+        remote: remote ? { connected: remote.connected(), worlds: config.remoteWorlds, load: remote.load(), failures: remote.failures } : null,
         reviews: reviewPool?.load() ?? null,
+        failures,
       }));
       return true;
     },

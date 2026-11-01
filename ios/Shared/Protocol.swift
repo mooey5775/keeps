@@ -3407,6 +3407,7 @@ public enum ServerMessage: Codable, Equatable, Sendable {
   case error(ServerMessageError)
   case game(ServerMessageGame)
   case gone
+  case notice(ServerMessageNotice)
   case replaced
   case review(ServerMessageReview)
   case room(ServerMessageRoom)
@@ -3420,6 +3421,7 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case "error": self = .error(try ServerMessageError(from: decoder))
     case "game": self = .game(try ServerMessageGame(from: decoder))
     case "gone": self = .gone
+    case "notice": self = .notice(try ServerMessageNotice(from: decoder))
     case "replaced": self = .replaced
     case "review": self = .review(try ServerMessageReview(from: decoder))
     case "room": self = .room(try ServerMessageRoom(from: decoder))
@@ -3439,6 +3441,9 @@ public enum ServerMessage: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     case .gone:
       try container.encode("gone", forKey: .tag)
+    case .notice(let value):
+      try container.encode("notice", forKey: .tag)
+      try value.encode(to: encoder)
     case .replaced:
       try container.encode("replaced", forKey: .tag)
     case .review(let value):
@@ -3459,6 +3464,7 @@ public enum ServerMessage: Codable, Equatable, Sendable {
     case .error: return "error"
     case .game: return "game"
     case .gone: return "gone"
+    case .notice: return "notice"
     case .replaced: return "replaced"
     case .review: return "review"
     case .room: return "room"
@@ -3533,6 +3539,28 @@ public struct ServerMessageGame: Codable, Equatable, Sendable {
     try container.encode(self.names, forKey: .names)
     try container.encode(self.undo, forKey: .undo)
     try container.encodeIfPresent(self.hints, forKey: .hints)
+  }
+}
+
+public struct ServerMessageNotice: Codable, Equatable, Sendable {
+  public var message: String
+
+  public init(message: String) {
+    self.message = message
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case message
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.message = try container.decode(String.self, forKey: .message)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.message, forKey: .message)
   }
 }
 

@@ -280,6 +280,10 @@ class RoomStore {
           this.set({ status: 'idle' });
         }
         return;
+      case 'notice':
+        // Shown as an error is, but about nothing this player did: a move on its way stays on its way.
+        this.set({ error: { id: ++this.errorId, message: message.message } });
+        return;
       case 'gone':
         if (this.state.code) forgetToken(this.state.code);
         this.close();

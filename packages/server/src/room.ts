@@ -78,7 +78,15 @@ export interface RoomHooks {
   disconnected?(room: Room, player: RoomMember): void;
   /** The room is about to close. */
   closing?(room: Room): void;
+  /**
+   * The bot failed (a bug), and the room played on without what failed: `search`, its move searched (its network's own
+   * move was played); `move`, its network's move too (a random legal one was played, and the table told); `advice`,
+   * training mode's search (the network advised).
+   */
+  botFailed?(room: Room, what: BotFailure, error: string): void;
 }
+
+export type BotFailure = 'search' | 'move' | 'advice';
 
 /** A player, as hooks see them. */
 export interface RoomMember {
@@ -317,9 +325,9 @@ export class Room {
     return this.settings;
   }
 
-  /** Tells the people at the table something (only the one at `seat`, if given), as an error message. */
+  /** Tells the people at the table something (only the one at `seat`, if given). */
   notify(message: string, seat?: Seat): void {
-    for (const p of this.players) if (!p.bot && (seat === undefined || p.seat === seat)) p.send?.({ t: 'error', message });
+    for (const p of this.players) if (!p.bot && (seat === undefined || p.seat === seat)) p.send?.({ t: 'notice', message });
   }
 
   /** Tells the server's hooks (RoomHooks) what happened; one that throws is logged, and the room goes on. */
@@ -656,7 +664,7 @@ export class Room {
           return;
         }
         const error = this.command(player, choice.command);
-        if (error !== null) this.playNetworkMove(game, bot, player, `its move failed (${error})`);
+        if (error !== null) this.playNetworkMove(game, bot, player, `its searched move was refused (${error})`);
       },
       (error: unknown) => {
         if (!settle()) return this.scheduleBot();
@@ -665,9 +673,12 @@ export class Room {
     );
   }
 
-  /** The bot's network's own move, played now (`why`: logged, if this stands in for a move that failed). */
+  /** The bot's network's own move, played now (`why`: if this stands in for a searched move that failed). */
   private playNetworkMove(game: Game, bot: BotPlayer, player: Player, why?: string): void {
-    if (why) console.error(`room ${this.code}: the bot ${why}; playing its network's own move instead`);
+    if (why) {
+      console.error(`room ${this.code}: the bot ${why}; playing its network's own move instead`);
+      this.tell('botFailed', this, 'search', why);
+    }
     let error: string | null;
     try {
       error = this.command(player, bot.choose(game.state, game.events));
@@ -675,8 +686,10 @@ export class Room {
       error = described(thrown);
     }
     if (error === null) return;
-    // Never leave the game stuck on the bot: log it and play any legal move.
+    // Never leave the game stuck on the bot: play any legal move, and say so.
     console.error(`room ${this.code}: the bot failed (${error}); playing a random legal move`);
+    this.tell('botFailed', this, 'move', error);
+    this.notify(`${player.name} ran into a problem and played a random move.`);
     const legal = legalCommands(game.state, bot.seat).filter((c) => c.type !== 'reveal-duplicity' && c.type !== 'next-round');
     const fallback = legal[Math.floor(this.deps.random() * legal.length)];
     if (fallback) this.command(player, fallback);
@@ -988,6 +1001,7 @@ export class Room {
         advice
           .catch((error: unknown) => {
             console.error(`room ${this.code}: training mode's search failed for seat ${seat} (the network advises instead):`, error);
+            this.tell('botFailed', this, 'advice', described(error));
             return advisor.bot.suggest(state, game.events);
           })
           .then((hints) => {
