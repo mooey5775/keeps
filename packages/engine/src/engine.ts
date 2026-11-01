@@ -31,6 +31,7 @@ import { dealGame, startRound, type NewGameOptions } from './setup.ts';
 import {
   leftOf,
   pileAtSeat,
+  SEATS,
   type GameState,
   type Op,
   type Prompt,
@@ -155,6 +156,8 @@ function validate(state: GameState, seat: Seat, command: Command): EngineError |
   if (!isObject(command) || typeof command.type !== 'string') {
     return { code: 'illegal', message: 'malformed command' };
   }
+  // Always open to a player until the game is over; never among the listed moves.
+  if (command.type === 'resign') return state.phase === 'game-over' ? { code: 'illegal', message: 'the game is over' } : null;
   if (command.type === 'answer' && (typeof command.promptId !== 'string' || !isObject(command.answer) || typeof command.answer.kind !== 'string')) {
     return { code: 'illegal', message: 'malformed answer' };
   }
@@ -190,6 +193,9 @@ function execute(ctx: Ctx, seat: Seat, command: Command): void {
       return;
     case 'reveal-duplicity':
       reveal(ctx, seat, null);
+      return;
+    case 'resign':
+      resign(ctx, seat);
       return;
     case 'answer': {
       const prompt = state.prompts.find((p) => p.id === command.promptId)!;
@@ -547,6 +553,50 @@ function checkTokenVictory(ctx: Ctx): boolean {
   const seq = tracer.emit({ type: 'round-end', reason: 'tokens', winner });
   tracer.within(seq, () => awardMark(ctx, winner));
   return true;
+}
+
+/**
+ * A player gives up the game. Their seat is a ghost from now on: their hand, their keep and the face-down cards they
+ * placed in others' keeps go to the discard (a ghost holds nothing), and whatever was under way stops, as a token
+ * victory stops it. With one player left, they win the game. Otherwise a round in play ends with no winner (no mark),
+ * and the next is dealt without them; between rounds, the next is simply dealt without them (and not started by
+ * them, if they won the last). See docs/ENGINE.md, "Resigning".
+ */
+function resign(ctx: Ctx, seat: Seat): void {
+  const { state, tracer } = ctx;
+  const seq = tracer.emit({ type: 'resign', seat });
+  tracer.within(seq, () => {
+    const hand = state.hands[seat];
+    if (hand.length > 0) tracer.emit({ type: 'discard', seat, cards: [...hand], from: 'hand' });
+    const placed: CardId[] = [...state.keeps[seat].map((c) => c.id)];
+    for (const other of SEATS) {
+      if (other === seat) continue;
+      placed.push(...state.keeps[other].filter((c) => c.faceDown?.placedBy === seat).map((c) => c.id));
+      state.keeps[other] = state.keeps[other].filter((c) => c.faceDown?.placedBy !== seat);
+    }
+    if (placed.length > 0) tracer.emit({ type: 'discard', seat, cards: placed, from: 'keep' });
+    state.discard.push(...hand, ...placed);
+    state.hands[seat] = [];
+    state.keeps[seat] = [];
+  });
+  state.config.seats[seat] = 'ghost';
+  state.stack = [];
+  state.prompts = [];
+  state.openPlays = [];
+  state.turn = null;
+  if (state.lastRoundWinner === seat) state.lastRoundWinner = null;
+  const left = SEATS.filter((s) => state.config.seats[s] === 'player');
+  if (left.length === 1) {
+    state.roundEnd = { kind: 'resign', seat };
+    state.lastRoundWinner = left[0]!;
+    state.phase = 'game-over';
+    tracer.emit({ type: 'game-over', winner: left[0]! });
+  } else if (state.phase === 'playing' || state.phase === 'post-round') {
+    state.roundEnd = { kind: 'resign', seat };
+    state.lastRoundWinner = null;
+    state.phase = 'round-over';
+    tracer.emit({ type: 'round-end', reason: 'resign', seat });
+  }
 }
 
 function awardMark(ctx: Ctx, winner: Seat): void {

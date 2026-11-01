@@ -4,9 +4,12 @@ import SwiftUI
 /// a room on the website's server, made here or joined by its code.
 struct LobbyView: View {
   let game: Game
-  @AppStorage("where") private var place = Place.phone
+  /// Where you play from: on this phone, or online (the lobby opens where you last played).
+  @AppStorage(LobbyView.placeKey) private var place = Place.phone
+  static let placeKey = "where"
   @AppStorage("server") private var serverName = OnlineServer.midstrike.name
   @State private var code = ""
+  @State private var confirmDiscard = false
   @FocusState private var coding: Bool
 
   enum Place: String { case phone, online }
@@ -132,6 +135,13 @@ struct LobbyView: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.gold)
             .foregroundStyle(Theme.background)
+            Button("Discard this game", role: .destructive) { confirmDiscard = true }
+              .font(Theme.text(.footnote))
+              .confirmationDialog("Discard the kept game?", isPresented: $confirmDiscard, titleVisibility: .visible) {
+                Button("Discard", role: .destructive) { game.discardKept() }
+              } message: {
+                Text("It can't be taken up again.")
+              }
           }
           Button {
             game.play(Game.Setup(name: playerName, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))

@@ -325,6 +325,25 @@ describe('the bot in a room', () => {
     expect(human.errors()).toEqual([]);
   });
 
+  it('lets a person resign against the bot, who wins the game: nothing more is scheduled', () => {
+    const { room, runBot, waiting } = botRoom();
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    room.handle(human.id, { t: 'command', command: { type: 'resign' } });
+    expect(human.errors()).toEqual([]);
+    const view = human.last('game').view;
+    expect(view.phase).toBe('game-over');
+    expect(view.roundEnd).toEqual({ kind: 'resign', seat: view.viewer });
+    expect(view.lastRoundWinner).not.toBe(view.viewer);
+    // (A bot move scheduled before is dropped: the game it was for has moved on.)
+    while (waiting() > 0) runBot();
+    expect(human.last('game').view.phase).toBe('game-over');
+    // (Out: their seat a ghost now, they can't resign again.)
+    room.handle(human.id, { t: 'command', command: { type: 'resign' } });
+    expect(human.errors()).toEqual(['seat 0 is not a player'.replace('0', String(view.viewer))]);
+  });
+
   it("tells a search when it's no longer wanted: advice once the decision is made, the bot's move once the game moved on", async () => {
     const asked: BotTurn[] = [];
     // Asked at once, too: a pool asks before its first chunk, while the room is still starting the search.

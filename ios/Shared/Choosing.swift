@@ -52,6 +52,7 @@ enum Choosing {
     case .answer(let answer): "prompt:\(answer.promptId)"
     case .nextRound: "next-round"
     case .revealDuplicity: "reveal-duplicity"
+    case .resign: "resign"
     }
   }
 

@@ -222,8 +222,11 @@ function shuffled<T>(cards: readonly T[]): T[] {
   return out;
 }
 
-/** A game at `level`, to `marks`, played by random legal moves (training mode on: hints); `extras` sends the rarer messages. */
-async function game(level: string, marks: number, extras: boolean, training = true): Promise<void> {
+/**
+ * A game at `level`, to `marks`, played by random legal moves (training mode on: hints); `extras` sends the rarer
+ * messages; `resignAfter`, the person resigns after that many moves (the game ends there).
+ */
+async function game(level: string, marks: number, extras: boolean, training = true, resignAfter?: number): Promise<void> {
   let id = nextId++;
   let token = '';
   let code = '';
@@ -294,6 +297,7 @@ async function game(level: string, marks: number, extras: boolean, training = tr
   }
   let sentExtras = !extras;
   let restored = false;
+  let resigned = false;
   for (let wait = 0; !over && wait < 6000; wait++) {
     await settle();
     if (!sentExtras && moves >= 6) {
@@ -317,6 +321,10 @@ async function game(level: string, marks: number, extras: boolean, training = tr
       send({ t: 'close', id: lost });
       answered.clear();
     }
+    if (resignAfter !== undefined && moves >= resignAfter && !resigned) {
+      resigned = true;
+      send({ t: 'client', id, message: { t: 'command', command: { type: 'resign' } } });
+    }
     if (extras && moves >= 12 && kept && !restored) {
       // The app closed and opened again: the game taken up from what it kept, on a new connection.
       restored = true;
@@ -339,7 +347,7 @@ async function game(level: string, marks: number, extras: boolean, training = tr
 }
 
 await game('hard', 2, true);
-await game('medium', 1, false);
+await game('medium', 1, false, true, 8);
 await game('easy', 1, false);
 // Then quick games until every kind has come up (an event the engine never shows a client excused).
 const missing = () =>

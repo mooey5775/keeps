@@ -338,7 +338,12 @@ final class TableUITests: XCTestCase {
 
   /// Seats `players` scripted players in room `code` on the test server (they play any legal move on their turns).
   private func fill(_ code: String, players: Int) {
-    let url = URL(string: "http://localhost:7777/test/fill?code=\(code)&players=\(players)")!
+    testServer("fill?code=\(code)&players=\(players)")
+  }
+
+  /// Asks the test server's test page `path` (/test/...).
+  private func testServer(_ path: String) {
+    let url = URL(string: "http://localhost:7777/test/\(path)")!
     let done = expectation(description: "seated")
     URLSession.shared.dataTask(with: url) { _, response, _ in
       XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
@@ -348,12 +353,15 @@ final class TableUITests: XCTestCase {
   }
 
   /// A room online with `others` scripted players, started: every player's seat on the table, and your turn playable.
-  private func playOnlineWith(others: Int) {
+  /// Returns the room's code.
+  @discardableResult
+  private func playOnlineWith(others: Int) -> String {
     launchOnline()
     app.buttons["Make a room"].tap()
-    let code = app.staticTexts["room's code"]
-    XCTAssertTrue(code.waitForExistence(timeout: 15), "no room")
-    fill(code.label, players: others)
+    let codeText = app.staticTexts["room's code"]
+    XCTAssertTrue(codeText.waitForExistence(timeout: 15), "no room")
+    let code = codeText.label
+    fill(code, players: others)
     XCTAssertTrue(app.staticTexts["Players (\(others + 1) of 4)"].waitForExistence(timeout: 10), "the players didn't join")
     app.buttons["Start"].tap()
     XCTAssertTrue(eventually(15) { self.yourPile.exists }, "no table")
@@ -362,13 +370,52 @@ final class TableUITests: XCTestCase {
       XCTAssertTrue(element("Robot \(i)'s keep").waitForExistence(timeout: 5), "Robot \(i) has no seat at the table")
     }
     XCTAssertTrue(element("Your keep").exists)
-    XCTAssertTrue(yourTurn(60), "your turn didn't come")
-    let before = handCards.count
-    yourPile.tap()
-    XCTAssertTrue(eventually(10) { self.handCards.count > before || self.putIntoYourKeep.exists }, "your move wasn't made")
+    // A decision of yours comes (with more players, not always a draw: another's Fiat has you claim a pile).
+    XCTAssertTrue(app.buttons["All moves"].waitForExistence(timeout: 60), "no decision of yours came")
+    return code
   }
 
   func testAGameOfThreeShowsEveryPlayer() throws { playOnlineWith(others: 2) }
+
+  func testAPlayerWhoIsAwayIsMarkedSo() throws {
+    let code = playOnlineWith(others: 2)
+    XCTAssertFalse(element("Robot 1 away").exists)
+    testServer("away?code=\(code)&name=Robot%201")
+    XCTAssertTrue(element("Robot 1 away").waitForExistence(timeout: 10), "Robot 1 isn't marked away")
+  }
+
+  func testResigningAgainstMidstrikeEndsTheGameInItsFavour() throws {
+    launch()
+    XCTAssertTrue(yourTurn())
+    app.buttons["Game menu"].tap()
+    app.buttons["Resign"].tap()
+    app.buttons["Resign"].firstMatch.tap()
+    XCTAssertTrue(app.staticTexts["You resigned: Midstrike won the game!"].waitForExistence(timeout: 10), "resigning didn't end the game")
+    XCTAssertFalse(app.alerts["Something went wrong"].exists)
+  }
+
+  func testLeavingTheTableKeepsTheGameUntilItsDiscarded() throws {
+    launch()
+    XCTAssertTrue(yourTurn())
+    yourPile.tap()
+    placeHot()
+    app.buttons["Game menu"].tap()
+    app.buttons["Leave game"].tap()
+    app.buttons["Leave"].tap()
+    // Stepped away: the game is kept.
+    let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue'")).firstMatch
+    XCTAssertTrue(resume.waitForExistence(timeout: 10), "leaving the table gave the game up")
+    resume.tap()
+    XCTAssertTrue(eventually(10) { self.yourPile.exists }, "the game didn't come back")
+    app.buttons["Game menu"].tap()
+    app.buttons["Leave game"].tap()
+    app.buttons["Leave"].tap()
+    // Discarded: gone.
+    XCTAssertTrue(resume.waitForExistence(timeout: 10))
+    app.buttons["Discard this game"].tap()
+    app.buttons["Discard"].tap()
+    XCTAssertTrue(eventually(5) { !resume.exists }, "the discarded game is still offered")
+  }
 
   func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }
 }

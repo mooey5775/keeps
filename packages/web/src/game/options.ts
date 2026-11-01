@@ -109,6 +109,8 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
   return view.legal.map((command): Option => {
     if (command.type === 'next-round') return { command, refs: [], label: 'Start the next round', cards: [] };
     if (command.type === 'reveal-duplicity') return { command, refs: [], label: 'Reveal the face-down card (Duplicity)', cards: [] };
+    // (Resigning is never among the listed moves: the table offers it apart.)
+    if (command.type === 'resign') throw new Error('resigning listed among the moves');
     const prompt = prompts.get(command.promptId);
     const answer = command.answer;
     switch (answer.kind) {

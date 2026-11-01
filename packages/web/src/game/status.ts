@@ -88,10 +88,13 @@ function othersPhrase(kind: PromptView['kind'], view: PlayerView): string {
 }
 
 export function headline(view: PlayerView, names: Names): string | null {
+  const resigned = view.roundEnd?.kind === 'resign' ? `${capital(names.seat(view.roundEnd.seat))} resigned: ` : '';
   if (view.phase === 'game-over') {
-    const winner = view.marks.findIndex((m) => m >= view.marksToWin);
-    return `${capital(names.seat(winner as 0))} won the game!`;
+    // (Won by marks, or by being the last player left.)
+    const winner = resigned ? view.lastRoundWinner! : view.marks.findIndex((m) => m >= view.marksToWin);
+    return `${resigned}${resigned ? names.seat(winner as 0) : capital(names.seat(winner as 0))} won the game!`;
   }
+  if (view.phase === 'round-over' && resigned) return `${resigned}no one wins round ${view.round}.`;
   if (view.phase === 'round-over' && view.lastRoundWinner !== null) {
     const how = view.roundEnd?.kind === 'tokens' ? 'by collecting all three Tokens' : 'with the most coins';
     return `${capital(names.seat(view.lastRoundWinner))} won round ${view.round} ${how}.`;

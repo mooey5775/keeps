@@ -166,7 +166,7 @@ export const NAME_MAX = 20;
  * in a way a client built before can't read: a field removed, renamed or retyped, or a new one it must have. Rather
  * than bump it, make a new field optional, and new message kinds ones an older client can pass over.
  */
-export const PROTOCOL = 1;
+export const PROTOCOL = 2; // 2: resigning (a new event and a new round end, which an app built before can't read)
 export const ROOM_CODE = /^[A-Z]{4}$/;
 
 /** A game's replay file (engine/src/replay.ts's format), by its room and when it started: "ABCD-2026-10-30T22-41-36-000Z.jsonl". The server and the app keep games so. */

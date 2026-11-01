@@ -178,8 +178,9 @@ final class Game {
   /// A new room with Midstrike, set up as `setup`, and its game started.
   func play(_ setup: Setup, autoplay: Int = 0) {
     leave()
-    // (This game is the one kept from now on.)
+    // (This game is the one kept from now on; the lobby opens here, where you last played.)
     unfinished = nil
+    UserDefaults.standard.set(LobbyView.Place.phone.rawValue, forKey: LobbyView.placeKey)
     feed = []
     self.setup = setup
     self.autoplay = autoplay
@@ -226,6 +227,7 @@ final class Game {
 
   private func goOnline(_ server: OnlineServer, name: String, _ hello: ClientMessage, saying: String) {
     leave(forgetting: false)
+    UserDefaults.standard.set(LobbyView.Place.online.rawValue, forKey: LobbyView.placeKey)
     feed = []
     online = Online(server: server, name: name)
     starting = saying
@@ -243,6 +245,12 @@ final class Game {
     if state == .closed, screen != .lobby { leave(forgetting: false) }
   }
 
+  /// Whether the player at `seat` is away: a person online whose connection is gone (the game waits on their moves).
+  func away(_ seat: Int) -> Bool {
+    guard online != nil, let player = room?.players.first(where: { $0.seat == seat }) else { return false }
+    return player.bot != true && !player.connected
+  }
+
   /// Your player id in the room, and whether you're its host.
   var you: String? { room?.you }
   var hosting: Bool { room?.players.first { $0.id == room?.you }?.host == true }
@@ -256,6 +264,14 @@ final class Game {
   func addBot() { if let connection { core.send(connection, .addBot) } }
   func removeBot() { if let connection { core.send(connection, .removeBot) } }
   func start() { if let connection { core.send(connection, .start) } }
+  /// Gives the game up (open at any time until it's over, so not one of the listed moves): with one other player left,
+  /// they win it; otherwise the round ends with no winner, and the game goes on without you.
+  func resign() {
+    guard let connection else { return }
+    answering = []
+    core.send(connection, .command(ClientMessageCommand(command: .resign)))
+  }
+
   /// Asks the other players to take back the last move (a game between people).
   func proposeUndo() { if let connection { core.send(connection, .proposeUndo) } }
   func voteUndo(_ accept: Bool) { if let connection { core.send(connection, .voteUndo(ClientMessageVoteUndo(accept: accept))) } }
@@ -287,6 +303,19 @@ final class Game {
     starting = "Dealing…"
     screen = .starting
     core.send(connection, .backToLobby)
+  }
+
+  /// Stepping away from the table: back to the lobby, the game kept to go back to (on the phone, Continue; online, your
+  /// seat, which the server keeps for you). Ending a game is another thing: Discard (on the phone), or resigning.
+  func stepAway() {
+    leave(forgetting: false)
+    unfinished = core.kept()?.kept
+  }
+
+  /// The game kept on the phone, given up (the lobby's Discard).
+  func discardKept() {
+    core.forgetKept()
+    unfinished = nil
   }
 
   /// Back to the lobby; the room goes (and, `forgetting`, the game kept to take up again: it was left).

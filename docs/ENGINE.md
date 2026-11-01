@@ -239,6 +239,20 @@ viewFor(state, seat | 'spectator'): PlayerView                        // step 7
 
 `reveal-duplicity` is a free command for whoever has Duplicity face-up, whenever the engine is waiting for input (outside a reveal window, which has its own reveal-or-pass answer).
 
+### Resigning
+
+`resign` is open to a player at any time until the game is over. It isn't listed in `legalCommands` (bots and the
+clients' panels choose among those); `validate` accepts it on its own terms. Its effect (`engine.ts` `resign`;
+`test/rules/resign.test.ts`):
+
+- The resigner's seat becomes a ghost (`config.seats`) for the rest of the game. A ghost holds nothing: their hand,
+  their keep, and the face-down cards they placed in others' keeps (Duplicity) go to the discard.
+- Whatever was under way stops, as a token victory stops it: the stack, prompts, open plays and the turn are cleared.
+- With one player left, they win the game (`phase: 'game-over'`, `lastRoundWinner`, `roundEnd = {kind:'resign'}`).
+- Otherwise, a round in play (`playing` or `post-round`) ends with no winner and no mark (`round-over`,
+  `roundEnd = {kind:'resign', seat}`); the next is dealt without them. Between rounds, the next round is simply dealt
+  without them, and not started by them if they won the last.
+
 `apply` never mutates its input. It works on a `structuredClone`, which is cheap for 36 cards.
 
 ## Traces

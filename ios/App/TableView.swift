@@ -13,6 +13,7 @@ struct TableView: View {
   @State private var showLog = false
   @State private var showDiscard = false
   @State private var confirmLeave = false
+  @State private var confirmResign = false
   @State private var zones = DropZones()
 
   var body: some View {
@@ -107,8 +108,18 @@ struct TableView: View {
       .sheet(isPresented: .constant(orderPrompt(view) != nil)) {
         if let prompt = orderPrompt(view) { OrderPileSheet(game: game, prompt: prompt) }
       }
-      .confirmationDialog("Leave this game?", isPresented: $confirmLeave, titleVisibility: .visible) {
-        Button("Leave", role: .destructive) { game.leave() }
+      .confirmationDialog("Resign this game?", isPresented: $confirmResign, titleVisibility: .visible) {
+        Button("Resign", role: .destructive) { game.resign() }
+      } message: {
+        Text(game.others(view).count == 1 ? "\(table.names[game.others(view)[0]]) wins the game." : "This round ends with no winner, and the game goes on without you.")
+      }
+      .confirmationDialog("Leave the table?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        Button("Leave") { game.stepAway() }
+      } message: {
+        // (Over, there's nothing to go back to.)
+        if view.phase != .gameOver {
+          Text(game.online == nil ? "The game is kept: Continue takes it up." : "Your seat is kept: the others wait for you, and Back to \(game.room?.code ?? "the room") takes you there again.")
+        }
       }
     }
   }
@@ -147,6 +158,9 @@ struct TableView: View {
           Button { game.proposeUndo() } label: { Label("Ask to undo the last move", systemImage: "arrow.uturn.backward") }
         }
         Divider()
+        if view.phase != .gameOver {
+          Button(role: .destructive) { confirmResign = true } label: { Label("Resign", systemImage: "flag") }
+        }
         Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }
         #if DEBUG
         // (For tests: the core's process ended, as iOS may end it.)
@@ -407,6 +421,10 @@ struct SeatArea: View {
         .accessibilityAddTraits(player == .none ? [] : .isButton)
         if view.turn?.seat == seat {
           Circle().fill(Theme.gold).frame(width: 7, height: 7).accessibilityLabel("Their turn")
+        }
+        if game.away(seat) {
+          Label("away", systemImage: "wifi.slash").font(Theme.text(.caption)).foregroundStyle(Theme.muted)
+            .accessibilityIdentifier("\(table.names[seat]) away")
         }
         Spacer()
         Text(marks).font(.system(size: 13)).foregroundStyle(Theme.gold).accessibilityLabel("\(Int(view.marks[seat])) marks")

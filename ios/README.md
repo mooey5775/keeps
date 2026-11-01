@@ -70,5 +70,7 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
   With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's
   replay and the app's version (also in the table's menu: a shake can't be found, and UI tests can't shake).
 
+- **Your-turn notifications**, online: a push when it's your move and the app is closed (the server sends it through
+  Apple's push service; waits for the developer account).
 - **The round review** (the website's end-of-round review, with each move's win chance and better moves). The core already makes it; the app doesn't show it yet. It should run on the phone at a reduced budget: reuse Midstrike's live searches, use smaller samples, at low priority.
 - **Before the App Store:** confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app.

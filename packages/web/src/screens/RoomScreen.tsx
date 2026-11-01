@@ -343,6 +343,18 @@ function OnlineGame({
             Undo last move…
           </button>
         )}
+        {game.view.phase !== 'game-over' && me?.seat !== null && me?.seat !== undefined && (
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Resign this game? You give it up: with one other player left, they win it; otherwise this round ends with no winner, and the game goes on without you.')) {
+                roomStore.command({ type: 'resign' });
+              }
+            }}
+          >
+            Resign…
+          </button>
+        )}
         {game.view.phase === 'game-over' && me?.host && (
           <button type="button" className="primary" onClick={() => roomStore.send({ t: 'back-to-lobby' })}>
             Back to lobby

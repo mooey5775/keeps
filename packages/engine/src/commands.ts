@@ -55,7 +55,12 @@ export type Command =
   /** Any player may start the next round once the current one is scored. */
   | { type: 'next-round' }
   /** Whoever has Duplicity face-up reveals the face-down card. Free, at any time. */
-  | { type: 'reveal-duplicity' };
+  | { type: 'reveal-duplicity' }
+  /**
+   * A player gives up the game, at any time until it's over (so it isn't listed among their moves: bots and the
+   * panel choose among those). See engine.ts resign.
+   */
+  | { type: 'resign' };
 
 export type EngineErrorCode =
   | 'unknown-prompt'

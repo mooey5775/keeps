@@ -55,7 +55,9 @@ struct DecisionPanel: View {
         Text("\(table.names[prompt.seat]) is thinking…").font(Theme.text(.callout)).italic().foregroundStyle(Theme.muted)
       }
     } else {
-      Text(prompt.text).font(Theme.text(.callout)).foregroundStyle(Theme.muted)
+      // (Waiting on someone who's away: said, so the wait isn't a mystery.)
+      Text(prompt.text + (game.away(prompt.seat) ? " (\(table.names[prompt.seat]) is away)" : ""))
+        .font(Theme.text(.callout)).foregroundStyle(Theme.muted)
     }
   }
 
