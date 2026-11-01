@@ -126,7 +126,7 @@ describe('the remote queue', () => {
   it("checks a search's shape: a malformed one is a failure, searched here if this server can", async () => {
     const queue = new RemoteQueue('secret', '1:abc');
     const url = await serve(queue);
-    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [{ type: 'resign' }, { type: 'resign' }] };
+    const job: EvaluateJob = { state: {} as never, me: 0, myLog: [], commands: [{ type: 'next-round' }, { type: 'next-round' }] };
     const alone = new RemoteEvaluator(queue, null, 2);
     let poll = (await waitingWorker(url)).job;
     const malformed = alone.evaluate(job).catch((e: unknown) => e);

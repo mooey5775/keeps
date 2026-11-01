@@ -4,6 +4,7 @@
 # (ios/Tests) run on the Mac's iOS simulator with them.
 #   ios/test.sh
 #   GOLDENS_HOST=gpu03 ios/test.sh   the games recorded there (a copy of this tree in ~/src/keeps-work), not here
+#   ONLY=TableUITests/testAGameOfFourShowsEveryPlayer ios/test.sh   one test (or class) only: KeepsTests/… or KeepsUITests/…
 # The app tested is this tree's: its core is built here too (ios/tools/build-core.sh), not whatever sync.sh last sent.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -38,12 +39,17 @@ grep -q ready ios/build/test-server.log || { cat ios/build/test-server.log; exit
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build'
 rsync -a --delete ios/App ios/Shared ios/Tests ios/UITests ios/project.yml "$MAC:src/keeps/ios/"
 rsync -a --delete ios/build/goldens ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
-command ssh -o ControlPath=none -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" <<'REMOTE'
+# (ONLY names a test without its target: the UI tests' are in KeepsUITests, the rest in KeepsTests.)
+ONLY_TESTING=""
+if [ -n "${ONLY:-}" ]; then
+  case "$ONLY" in TableUITests*) ONLY_TESTING="-only-testing:KeepsUITests/$ONLY" ;; *) ONLY_TESTING="-only-testing:KeepsTests/$ONLY" ;; esac
+fi
+command ssh -o ControlPath=none -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" "$ONLY_TESTING" <<'REMOTE'
 set -euo pipefail
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps/ios
 mkdir -p build/core
 xcodegen generate --quiet
-xcodebuild -project Keeps.xcodeproj -scheme KeepsTests -destination "platform=iOS Simulator,name=$1" -derivedDataPath build/derived-tests test 2>&1 \
+xcodebuild -project Keeps.xcodeproj -scheme KeepsTests -destination "platform=iOS Simulator,name=$1" -derivedDataPath build/derived-tests ${2:+"$2"} test 2>&1 \
   | grep -E "Test Case .*(passed|failed)|error:|XCTAssert|Executed|\*\* TEST" | sed 's/^.*Test Case/Test Case/'
 REMOTE

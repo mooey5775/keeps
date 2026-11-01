@@ -4,7 +4,7 @@
 // chance-only posterior given what the bot knows (worlds.ts), as many as the Evaluator was made
 // for, play every legal command out to the end of the round in each world (the policy on both
 // sides, in worker threads or on another machine), and choose by the rollouts (see SearchMode).
-import { legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
+import { legalCommands, viewFor, type GameState, type Move, type Seat, type TraceEvent } from '@keeps/engine';
 import { actionName, Decision, NUM_ACTIONS } from '../actions.ts';
 import type { Belief } from '../belief.ts';
 import { encodeObservation2 } from '../observation2.ts';
@@ -49,9 +49,9 @@ export interface SearchReport {
   mode: SearchMode;
   overrode: boolean;
   /** Every candidate (reveals the bot's hand): its move, policy probability, rollout win chance, chosen. */
-  moves: { move: string; policy: number; win: number; chosen: boolean; command: Command }[];
+  moves: { move: string; policy: number; win: number; chosen: boolean; command: Move }[];
   /** Every playout's result for the searching seat (+1 won, -1 not), by world, in the order of `commands` (the round review reuses them). */
-  outcomes?: { commands: Command[]; rows: number[][] };
+  outcomes?: { commands: Move[]; rows: number[][] };
 }
 const toWin = (v: number) => Math.min(1, Math.max(0, (v + 1) / 2));
 let x = 7654321;
@@ -68,7 +68,7 @@ export interface EvaluateJob {
   state: GameState;
   me: Seat;
   myLog: TraceEvent[];
-  commands: Command[];
+  commands: Move[];
   /** Whether its result is still wanted (the game hasn't moved on): a pool may drop the rest of it, with Superseded. */
   wanted?: () => boolean;
 }
@@ -141,7 +141,7 @@ export interface SearchOptions {
   /** The search's report, once it's made. */
   report?: (r: SearchReport) => void;
   /** Called once the policy's view is known, before the rollouts: each candidate with its probability. */
-  early?: (e: { before: number | null; moves: { move: string; policy: number; command: Command }[] }) => void;
+  early?: (e: { before: number | null; moves: { move: string; policy: number; command: Move }[] }) => void;
   /** Sample the move from the search policy (the bot's own play), or take its most likely (training mode's advice). */
   by?: 'sample' | 'mode';
 }
@@ -153,7 +153,7 @@ export async function searchChoose(
   events: readonly TraceEvent[],
   pool: Evaluator,
   { mode = 'best-q', report, early, by = 'sample' }: SearchOptions = {},
-): Promise<Command> {
+): Promise<Move> {
   const seat = bot.seat;
   const policy = bot.policy;
   const { view, log: myLog, belief } = bot.knowledge(state, events);
@@ -246,7 +246,7 @@ export async function searchAdvise(
   pool: Evaluator,
   /** `report`: the search's full report (training mode's advice is also the round review's). */
   { mode, report }: Pick<SearchOptions, 'mode' | 'report'> = {},
-): Promise<{ command: Command; probability: number; win?: number }[]> {
+): Promise<{ command: Move; probability: number; win?: number }[]> {
   let moves: SearchReport['moves'] = [];
   const command = await searchChoose(advisor, state, events, pool, {
     ...(mode ? { mode } : {}),

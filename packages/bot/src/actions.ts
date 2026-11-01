@@ -1,4 +1,4 @@
-import { CARD_IDS, type CardId, type Command, type PlayerView, type PromptView, type Seat } from '@keeps/engine';
+import { CARD_IDS, type CardId, type Command, type Move, type PlayerView, type PromptView, type Seat } from '@keeps/engine';
 
 // A fixed, small action space for learning: 48 integer ids. A move that has
 // several parts (play a Keep card into a keep; Acquisition's discard and side;
@@ -141,11 +141,11 @@ function keepSlot(view: PlayerView, ref: { seat: Seat; index: number }): number 
  * `complete(prefix)` is the command once the prefix spells one out.
  */
 export class Decision {
-  private readonly options: { ids: number[]; command: Command }[];
+  private readonly options: { ids: number[]; command: Move }[];
   /** Tithes: any order of these cards (the engine accepts every order, but lists only two). */
   private readonly order: { promptId: string; cards: CardId[] } | null;
 
-  constructor(view: PlayerView, legal: readonly Command[]) {
+  constructor(view: PlayerView, legal: readonly Move[]) {
     const ordering = view.prompts.find((p): p is Extract<MyPrompt, { kind: 'order-pile' }> => p.mine && p.kind === 'order-pile');
     this.order = ordering ? { promptId: ordering.id, cards: [...ordering.cards] } : null;
     this.options = this.order ? [] : legal.map((command) => ({ ids: encode(command, view), command }));
@@ -159,7 +159,7 @@ export class Decision {
     return [...ids].sort((a, b) => a - b);
   }
 
-  complete(prefix: readonly number[]): Command | null {
+  complete(prefix: readonly number[]): Move | null {
     if (this.order) {
       if (prefix.length !== this.order.cards.length) return null;
       return { type: 'answer', promptId: this.order.promptId, answer: { kind: 'order-pile', order: prefix.map((id) => CARD_IDS[id]!) } };

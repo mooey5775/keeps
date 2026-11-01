@@ -2,12 +2,16 @@
 // bridge (ios/core/bridge.ts), every message both ways recorded as the app would send and get it. ios/Tests decodes
 // each into the generated types (ios/Shared/Protocol.swift) and encodes it back, which must give the same JSON.
 //   node ios/tools/swift-types/goldens.ts <out dir>     writes from-app.jsonl and to-app.jsonl
-// Midstrike searches a few worlds here (the messages are the same at any size); its reviews run in this process, small.
+// Midstrike searches a few worlds here (the messages are the same at any size); its reviews, small, on every core.
 // Every client and server message type is sent at least once, rejected ones included. Then quick games (easy, no
 // hints) go on until every kind of event, prompt, command, answer, action and ability (the generator's list:
 // ios/build/protocol-tags.json) has come up, keeping only the messages that show something new; it fails if one
 // never does, but for events the engine never shows a client (server-only in every game played).
+// The quick games run in worker processes, one per core but two (GOLDENS_WORKERS to choose): each plays its own seeded
+// games, and sends back those that show a kind no one has seen yet; they stop once every kind has come up.
+import { fork, type ChildProcess } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 
 process.env.REVIEW_SCALE ??= '0.05';
@@ -15,19 +19,22 @@ const ROOT = join(import.meta.dirname, '..', '..', '..');
 const WEIGHTS = join(ROOT, 'packages/bot/weights/midstrike.bin');
 const out = process.argv[2];
 if (!out) throw new Error('usage: goldens.ts <out dir>');
+/** A coverage worker's number (it plays quick games only), or null: the recording itself. */
+const worker = process.argv[3] === '--coverage' ? Number(process.argv[4]) : null;
 
 const { Policy } = await import('../../../packages/bot/src/policy.ts');
 const { midstrikeHost } = await import('../../../packages/server/src/host.ts');
 const { atWorlds, setSearchLog } = await import('../../../packages/bot/src/search/search.ts');
 const { RolloutPool } = await import('../../../packages/bot/src/search/rollout-pool.ts');
-const { reviewRunner } = await import('../../../packages/bot/src/review/jobs.ts');
+const { ReviewPool } = await import('../../../packages/bot/src/review/pool.ts');
 const { LocalServer } = await import('../../core/local-server.ts');
 const { coreBridge, savedMessage } = await import('../../core/bridge.ts');
 const { composeHooks } = await import('../../../packages/server/src/host.ts');
 const { seeded } = await import('../../../packages/bot/src/random.ts');
-// Seeded throughout (deals, the room's choices, Midstrike's at easy, the moves played here), so the coverage games are
-// the same games every run: the check passes or fails the same way until the engine or the bot changes.
-const chance = seeded(2026, 1);
+// Seeded throughout (deals, the room's choices, Midstrike's at easy, the moves played here; each worker its own stream),
+// so each worker plays the same games every run. Which worker shows a kind first, and so which of its messages are
+// kept, may vary; whether every kind comes up within the games allowed doesn't.
+const chance = seeded(2026, worker === null ? 1 : worker + 2);
 let deals = 0;
 type FromApp = import('../../core/bridge.ts').FromApp;
 type ToApp = import('../../core/bridge.ts').ToApp;
@@ -48,56 +55,36 @@ console.error = (...args: unknown[]) => {
 };
 
 const policy = Policy.load(readFileSync(WEIGHTS));
-const pool = new RolloutPool(4, WEIGHTS, true);
+// (The workers' games are at easy, Midstrike's own moves: no search, so no search threads.)
+// (A thread per world: the scripted games search 8.)
+const pool = worker === null ? new RolloutPool(8, WEIGHTS, true) : null;
 setSearchLog(() => {});
 
-// The review's jobs, run here one at a time (the app runs them in Web Workers).
-let x = 12345;
-const run = reviewRunner(policy, () => (x = (Math.imul(x, 1103515245) + 12345) >>> 0) / 2 ** 32);
-type Task = { group: string; tag: number; key: string | null; job: Parameters<typeof run>[0]; done: (r: ReturnType<typeof run> | null) => void };
-let queue: Task[] = [];
+// The review's jobs, on every core but two, as the website's server runs them (ReviewPool: worker processes); the
+// coverage games skip theirs (only the scripted games' reviews are recorded): each job done at once, with nothing.
+const reviewPool = worker === null ? new ReviewPool(Math.max(1, availableParallelism() - 2), WEIGHTS) : null;
 const reviews: ReviewJobs = {
   submit(group, tag, job, done, key = null) {
-    // The coverage games skip their reviews (the scripted games' are recorded): the job's done, with nothing.
-    if (!recordAll) return void setImmediate(() => done(null));
-    queue.push({ group, tag, key, job, done });
-    setImmediate(pump);
+    if (!recordAll || !reviewPool) return void setImmediate(() => done(null));
+    reviewPool.submit(group, tag, job, done, key);
   },
-  cancel(group) {
-    const n = queue.filter((t) => t.group === group).length;
-    queue = queue.filter((t) => t.group !== group);
-    return n;
-  },
-  setAside(group, tag) {
-    const aside = queue.filter((t) => t.group === group && t.tag === tag);
-    queue = queue.filter((t) => !aside.includes(t));
-    return aside.map(({ job, done }) => ({ job, done }));
-  },
-  drop(group, key) {
-    const n = queue.filter((t) => t.group === group && t.key === key).length;
-    queue = queue.filter((t) => !(t.group === group && t.key === key));
-    return n;
-  },
+  cancel: (group) => reviewPool?.cancel(group) ?? 0,
+  setAside: (group, tag) => reviewPool?.setAside(group, tag) ?? [],
+  drop: (group, key) => reviewPool?.drop(group, key) ?? 0,
 };
-function pump(): void {
-  const task = queue.shift();
-  if (!task) return;
-  // A job that fails counts as done with nothing, as review-pool.ts has it, so the games go on; the run fails at the end.
-  let result: ReturnType<typeof run> | null = null;
-  try {
-    result = run(task.job);
-  } catch (error) {
-    console.error(`review: a job failed: ${error instanceof Error ? error.message : error}`);
-  }
-  task.done(result);
-  if (queue.length) setImmediate(pump);
-}
+/** Whether review jobs are still to do. */
+const reviewing = () => {
+  const load = reviewPool?.load();
+  return load ? load.queued + load.running > 0 : false;
+};
 
-const host = midstrikeHost({ name: 'Midstrike', search: { hard: atWorlds(pool, 8), medium: atWorlds(pool, 4) }, reviews });
+// (A worker's games are at easy, which never searches: a search there is a mistake, said so.)
+const noSearch = { evaluate: () => Promise.reject(new Error("a coverage worker's game searched: they play at easy")) };
+const host = midstrikeHost({ name: 'Midstrike', search: pool ? { hard: atWorlds(pool, 8), medium: atWorlds(pool, 4) } : { hard: noSearch, medium: noSearch }, reviews });
 
 // What must come up: every value of these tagged unions (the generator's list), where the messages hold them.
 const TAGS = JSON.parse(readFileSync(join(ROOT, 'ios/build/protocol-tags.json'), 'utf8')) as Record<string, { values: (string | boolean)[] }>;
-const KINDS = { event: 'TracePayload', prompt: 'PromptViewMine', command: 'Command', answer: 'Answer', action: 'ActionChoice', ability: 'ActionChoiceAbility' } as const;
+const KINDS = { event: 'TracePayload', prompt: 'PromptViewMine', command: 'Move', answer: 'Answer', action: 'ActionChoice', ability: 'ActionChoiceAbility' } as const;
 type Kind = keyof typeof KINDS;
 const want = Object.fromEntries(Object.entries(KINDS).map(([k, e]) => [k, new Set(TAGS[e]!.values.map(String))])) as Record<Kind, Set<string>>;
 const seen = Object.fromEntries(Object.keys(KINDS).map((k) => [k, new Set<string>()])) as Record<Kind, Set<string>>;
@@ -154,7 +141,7 @@ let recordAll = true;
 const server = new LocalServer({
   token: () => chance().toString(36).slice(2),
   id: () => chance().toString(36).slice(2, 10),
-  seed: () => `golden-${deals++}`,
+  seed: () => (worker === null ? `golden-${deals++}` : `golden-${worker}-${deals++}`),
   random: chance,
   now: Date.now,
   // The app keeps each game's replay: the core sends it after every move (recorded in the scripted games).
@@ -221,9 +208,9 @@ function shuffled<T>(cards: readonly T[]): T[] {
 
 /**
  * A game at `level`, to `marks`, played by random legal moves (training mode on: hints); `extras` sends the rarer
- * messages; `resignAfter`, the person resigns after that many moves (the game ends there).
+ * messages; `leaveAfter`, the person leaves the game after that many moves (it ends there).
  */
-async function game(level: string, marks: number, extras: boolean, training = true, resignAfter?: number): Promise<void> {
+async function game(level: string, marks: number, extras: boolean, training = true, leaveAfter?: number): Promise<void> {
   let id = nextId++;
   let token = '';
   let code = '';
@@ -282,10 +269,12 @@ async function game(level: string, marks: number, extras: boolean, training = tr
     send({ t: 'client', id, message: { t: 'add-bot' } });
     send({ t: 'client', id, message: { t: 'remove-bot' } });
     send({ t: 'client', id, message: { t: 'add-bot' } });
-    // Someone else joins and leaves (the bot only plays two: they must go for the game to start).
+    // Someone else joins (the bot only plays two: they watch), tries to take a seat (the table's full), watches, leaves.
     const other = nextId++;
     send({ t: 'connect', id: other });
     send({ t: 'client', id: other, message: { t: 'join', code, name: 'Visitor' } });
+    send({ t: 'client', id: other, message: { t: 'sit' } });
+    send({ t: 'client', id: other, message: { t: 'watch' } });
     send({ t: 'client', id: other, message: { t: 'leave' } });
     send({ t: 'close', id: other });
     send({ t: 'client', id, message: { t: 'settings', settings: { marksToWin: marks, firstPlayer: 'random', botLevel: level as 'hard' } } });
@@ -294,7 +283,7 @@ async function game(level: string, marks: number, extras: boolean, training = tr
   }
   let sentExtras = !extras;
   let restored = false;
-  let resigned = false;
+  let left = false;
   for (let wait = 0; !over && wait < 6000; wait++) {
     await settle();
     if (!sentExtras && moves >= 6) {
@@ -318,9 +307,10 @@ async function game(level: string, marks: number, extras: boolean, training = tr
       send({ t: 'close', id: lost });
       answered.clear();
     }
-    if (resignAfter !== undefined && moves >= resignAfter && !resigned) {
-      resigned = true;
-      send({ t: 'client', id, message: { t: 'command', command: { type: 'resign' } } });
+    if (leaveAfter !== undefined && moves >= leaveAfter && !left) {
+      left = true;
+      // (Leaving the room leaves the game: its last messages come before the room lets go of this connection.)
+      send({ t: 'client', id, message: { t: 'leave' } });
     }
     if (extras && moves >= 12 && kept && !restored) {
       // The app closed and opened again: the game taken up from what it kept, on a new connection.
@@ -335,27 +325,87 @@ async function game(level: string, marks: number, extras: boolean, training = tr
   if (!over) throw new Error(`the ${level} game didn't end`);
   if (!sentExtras) throw new Error(`the ${level} game ended before the rarer messages were sent`);
   if (extras && !restored) throw new Error(`the ${level} game ended before it was taken up again`);
-  // The last round's review: its jobs run here, after the game.
-  for (let wait = 0; queue.length && wait < 3000; wait++) await settle();
+  // The last round's review: its jobs finish after the game.
+  for (let wait = 0; reviewing() && wait < 3000; wait++) await settle();
   await settle();
   if (extras) send({ t: 'client', id, message: { t: 'back-to-lobby' } });
   send({ t: 'close', id });
   listeners.delete(listener);
 }
 
-await game('hard', 2, true);
-await game('medium', 1, false, true, 8);
-await game('easy', 1, false);
-// Then quick games until every kind has come up (an event the engine never shows a client excused).
+// Every kind that hasn't come up yet (an event the engine never shows a client excused).
 const missing = () =>
   (Object.keys(KINDS) as Kind[]).flatMap((k) => [...want[k]].filter((v) => !seen[k].has(v) && !(k === 'event' && madeEvents.get(v) === false)).map((v) => `${k} ${v}`));
+/** What a worker and the recording tell each other: the kinds seen, the events made, and (from a worker) a game's messages that showed something new. */
+type News = { seen: Record<Kind, string[]>; made: [string, boolean][]; fromApp?: string[]; toApp?: string[]; problems?: string[]; games?: number };
+const news = (): News => ({ seen: Object.fromEntries((Object.keys(KINDS) as Kind[]).map((k) => [k, [...seen[k]]])) as Record<Kind, string[]>, made: [...madeEvents] });
+const learn = (n: News) => {
+  for (const k of Object.keys(KINDS) as Kind[]) for (const v of n.seen[k]) seen[k].add(v);
+  for (const [t, shown] of n.made) madeEvents.set(t, (madeEvents.get(t) ?? false) || shown);
+};
+
+if (worker !== null) {
+  // A worker: quick games until told to stop (or out of games), each one's new messages sent back.
+  recordAll = false;
+  process.on('message', (n: News) => learn(n));
+  const limit = Number(process.argv[5]);
+  let reported = 0;
+  for (let played = 1; played <= limit; played++) {
+    const [a, b] = [fromApp.length, toApp.length];
+    await game('easy', 1, false, false);
+    if (fromApp.length > a || toApp.length > b || problems.length) {
+      // (The recording may have stopped the workers already: nothing more to tell it.)
+      if (!process.connected) break;
+      process.send!({ ...news(), fromApp: fromApp.slice(a), toApp: toApp.slice(b), problems: problems.splice(0), games: played - reported } satisfies News);
+      reported = played;
+    }
+  }
+  process.exit(0);
+}
+
+const began = Date.now();
+const took = () => `${((Date.now() - began) / 1000).toFixed(0)} s`;
+// The scripted games, side by side (rooms of their own; their messages interleave in the recording).
+await Promise.all([game('hard', 2, true), game('medium', 1, false, true, 8), game('easy', 1, false)]);
+console.log(`scripted games: ${took()}`);
+// Then quick games, in the workers, until every kind has come up. (After the scripted games, not beside them: those are
+// the longer, and share the cores badly.)
 recordAll = false;
 let coverageGames = 0;
-for (; missing().length && coverageGames < 3000; coverageGames++) {
-  await game('easy', 1, false, false);
-  if ((coverageGames + 1) % 25 === 0) console.log(`${coverageGames + 1} coverage games: still to come up: ${missing().join(', ')}`);
+if (missing().length) {
+  const count = Number(process.env.GOLDENS_WORKERS ?? Math.max(1, availableParallelism() - 2));
+  const workers: ChildProcess[] = [];
+  await new Promise<void>((resolve) => {
+    let running = count;
+    const stop = () => {
+      for (const w of workers) w.kill();
+      resolve();
+    };
+    for (let i = 0; i < count; i++) {
+      const w = fork(import.meta.filename, [out, '--coverage', String(i), String(Math.ceil(3000 / count))], { execArgv: process.execArgv });
+      workers.push(w);
+      w.send(news());
+      w.on('message', (n: News) => {
+        coverageGames += n.games ?? 0;
+        problems.push(...(n.problems ?? []));
+        learn({ seen: { event: [], prompt: [], command: [], answer: [], action: [], ability: [] }, made: n.made });
+        // Kept only if they still show something new here (another worker may have shown it first).
+        for (const line of n.fromApp ?? []) if (observe(JSON.parse(line) as FromApp)) fromApp.push(line);
+        for (const line of n.toApp ?? []) if (observe(JSON.parse(line) as ToApp)) toApp.push(line);
+        if (!missing().length) return stop();
+        for (const other of workers) other.connected && other.send(news());
+      });
+      w.on('exit', () => --running === 0 && resolve());
+      // (Told something just as it finished its games, or was stopped: nothing to tell it any more.)
+      w.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EPIPE' && error.code !== 'ERR_IPC_CHANNEL_CLOSED') throw error;
+      });
+    }
+  });
 }
-await pool.close?.();
+console.log(`coverage: ${took()}`);
+await pool?.close();
+reviewPool?.close();
 
 mkdirSync(out, { recursive: true });
 writeFileSync(join(out, 'from-app.jsonl'), fromApp.join('\n') + '\n');
@@ -395,11 +445,11 @@ writeFileSync(join(out, 'choosing.jsonl'), choosing.join('\n') + '\n');
 const typesIn = (lines: string[], pick: (m: Record<string, unknown>) => unknown) => new Set(lines.map((l) => pick(JSON.parse(l))).filter(Boolean) as string[]);
 const client = typesIn(fromApp, (m) => (m.t === 'client' ? (m.message as { t: string }).t : null));
 const serverTypes = typesIn(toApp, (m) => (m.t === 'server' ? (m.message as { t: string }).t : null));
-const wantClient = ['add-bot', 'back-to-lobby', 'command', 'create', 'join', 'leave', 'propose-undo', 'remove-bot', 'resume', 'settings', 'start', 'training', 'vote-undo'];
+const wantClient = ['add-bot', 'back-to-lobby', 'command', 'create', 'join', 'leave', 'propose-undo', 'remove-bot', 'resume', 'settings', 'sit', 'start', 'training', 'vote-undo', 'watch'];
 const wantServer = ['error', 'game', 'gone', 'notice', 'replaced', 'review', 'room', 'welcome'];
 const unseen = [...wantClient.filter((t) => !client.has(t)).map((t) => `client ${t}`), ...wantServer.filter((t) => !serverTypes.has(t)).map((t) => `server ${t}`), ...missing()];
 const excused = [...madeEvents].filter(([, shown]) => !shown).map(([t]) => t);
-console.log(`${fromApp.length} messages to the core, ${toApp.length} from it, from 3 games and ${coverageGames} more for coverage; ${(Object.keys(KINDS) as Kind[]).map((k) => `${k}s ${seen[k].size}/${want[k].size}`).join(', ')}${excused.length ? ` (never shown to a client: ${excused.join(', ')})` : ''}`);
+console.log(`${fromApp.length} messages to the core, ${toApp.length} from it, from 3 games and at least ${coverageGames} more for coverage (in parallel); ${(Object.keys(KINDS) as Kind[]).map((k) => `${k}s ${seen[k].size}/${want[k].size}`).join(', ')}${excused.length ? ` (never shown to a client: ${excused.join(', ')})` : ''}`);
 if (problems.length) {
   logError(`${problems.length} problem(s) while recording (above): the first, ${problems[0]}`);
   process.exit(1);

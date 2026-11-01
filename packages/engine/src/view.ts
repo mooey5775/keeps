@@ -1,5 +1,5 @@
 import type { CardId } from './cards.ts';
-import type { Command } from './commands.ts';
+import type { Move } from './commands.ts';
 import { clone } from './context.ts';
 import { duplicityHolder } from './duplicity.ts';
 import { legalCommands } from './engine.ts';
@@ -68,8 +68,8 @@ export interface PlayerView {
   prompts: PromptView[];
   /** Who may reveal Duplicity's face-down card, if there is one. */
   duplicityHolder: Seat | null;
-  /** Commands you may send right now. */
-  legal: Command[];
+  /** The moves you may send right now. */
+  legal: Move[];
 }
 
 export function viewFor(state: GameState, viewer: Viewer): PlayerView {

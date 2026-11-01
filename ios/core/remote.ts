@@ -111,10 +111,8 @@ export function remoteConnection(options: RemoteOptions): { receive(message: Cli
       pending.push(message);
     },
     close: () => {
-      if (closed) return;
-      // Leaving: said to the server (a seated player keeps their seat to come back to), then gone.
-      if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ t: 'leave' } satisfies ClientMessage));
-      stop();
+      // (As a dropped connection: the seat is kept. Leaving the room is a message of its own, `leave`, sent first.)
+      if (!closed) stop();
     },
   };
 }

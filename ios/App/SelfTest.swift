@@ -84,7 +84,7 @@ final class SelfTest {
           if case .orderPile(let order) = prompt {
             guard answered.insert(order.id).inserted else { return }
             myMoves += 1
-            core.send(id, .command(ClientMessageCommand(command: .answer(CommandAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards.shuffled())))))))
+            core.send(id, .command(ClientMessageCommand(command: .answer(MoveAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards.shuffled())))))))
             return
           }
         }

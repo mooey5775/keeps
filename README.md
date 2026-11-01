@@ -29,6 +29,7 @@ For development, `pnpm dev` runs the server and the Vite dev server together. Op
 
 - **Rooms:** no accounts. The first player in a room is the host, who picks the marks needed to win and who starts, then starts the game with 2 to 4 players. Seats are random. With fewer than four players, the empty seats keep their piles as "ghosts".
 - **Reconnecting:** each browser keeps a token per room, so reloading or losing the connection puts you back in your seat. Late joiners watch as spectators.
+- **Leaving:** not being at the table (a closed tab, a dead battery) keeps your seat, and the others see you as away. Leaving is for good: in a game still going, you resign (with two players, the other wins; with more, the round ends and the rest play on), and the host role passes to the next person. The host can end a game at any time, taking everyone back to the lobby. The iOS app holds one game at a time: starting another leaves the one it holds.
 - **Undo:** any player can propose undoing the last move. It happens if everyone else who is connected agrees. It's for misclicks: it works within the current round only.
 - **Playing:** click a card, pile or keep to see what you can do with it, then click a target. The side panel always lists every option as a button.
 

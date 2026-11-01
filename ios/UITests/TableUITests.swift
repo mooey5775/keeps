@@ -277,9 +277,16 @@ final class TableUITests: XCTestCase {
     online.tap()
   }
 
+  /// A game an earlier test left the phone holding (it holds one at a time), left when the lobby asks: going on.
+  private func leaveWhatsHeld() {
+    let go = app.buttons["Leave it and go on"]
+    if go.waitForExistence(timeout: 2) { go.tap() }
+  }
+
   /// A room made online with Midstrike in it, and the game started: its code.
   private func startOnlineGameAgainstMidstrike() -> String {
     app.buttons["Make a room"].tap()
+    leaveWhatsHeld()
     let code = app.staticTexts["room's code"]
     XCTAssertTrue(code.waitForExistence(timeout: 15), "no room")
     let name = code.label
@@ -335,6 +342,7 @@ final class TableUITests: XCTestCase {
     field.tap()
     field.typeText("zzzz")
     app.buttons["Join"].tap()
+    leaveWhatsHeld()
     let alert = app.alerts["Something went wrong"]
     XCTAssertTrue(alert.waitForExistence(timeout: 10), "joining a room that isn't there said nothing")
     XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS 'ZZZZ'")).firstMatch.exists)
@@ -362,6 +370,7 @@ final class TableUITests: XCTestCase {
   private func playOnlineWith(others: Int) -> String {
     launchOnline()
     app.buttons["Make a room"].tap()
+    leaveWhatsHeld()
     let codeText = app.staticTexts["room's code"]
     XCTAssertTrue(codeText.waitForExistence(timeout: 15), "no room")
     let code = codeText.label
@@ -388,37 +397,43 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(element("Robot 1 away").waitForExistence(timeout: 10), "Robot 1 isn't marked away")
   }
 
-  func testResigningAgainstMidstrikeEndsTheGameInItsFavour() throws {
+  func testLeavingAGameAgainstMidstrikeGivesItUp() throws {
     launch()
     XCTAssertTrue(yourTurn())
     app.buttons["Game menu"].tap()
-    app.buttons["Resign"].tap()
-    app.buttons["Resign"].firstMatch.tap()
-    XCTAssertTrue(app.staticTexts["You resigned: Midstrike won the game!"].waitForExistence(timeout: 10), "resigning didn't end the game")
+    app.buttons["Leave game"].tap()
+    // Said first: leaving gives the game up.
+    XCTAssertTrue(app.staticTexts["Midstrike wins the game."].waitForExistence(timeout: 5), "leaving didn't say what it gives up")
+    app.buttons["Leave"].tap()
+    // Gone for good: nothing to continue.
+    XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10), "leaving didn't go back to the lobby")
+    XCTAssertFalse(app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue'")).firstMatch.exists, "the game left is still offered")
     XCTAssertFalse(app.alerts["Something went wrong"].exists)
   }
 
-  func testLeavingTheTableKeepsTheGameUntilItsDiscarded() throws {
+  func testAGameKeptWhenTheAppClosedIsLeftBeforeAnotherStarts() throws {
     launch()
     XCTAssertTrue(yourTurn())
     yourPile.tap()
     placeHot()
-    app.buttons["Game menu"].tap()
-    app.buttons["Leave game"].tap()
-    app.buttons["Leave"].tap()
-    // Stepped away: the game is kept.
+    // Closed (as a dead battery would): the game is kept.
+    app.terminate()
+    app.launchEnvironment["KEEPS_PLAY"] = nil
+    app.launch()
+    let here = app.buttons["On this phone"]
+    XCTAssertTrue(here.waitForExistence(timeout: 30))
+    here.tap()
     let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue'")).firstMatch
-    XCTAssertTrue(resume.waitForExistence(timeout: 10), "leaving the table gave the game up")
-    resume.tap()
-    XCTAssertTrue(eventually(10) { self.yourPile.exists }, "the game didn't come back")
+    XCTAssertTrue(resume.waitForExistence(timeout: 30), "the lobby doesn't offer the kept game")
+    // Another game: the phone holds one at a time, so the kept one is left first (asked).
+    app.buttons["New game"].tap()
+    app.buttons["Leave it and go on"].tap()
+    XCTAssertTrue(eventually(30) { self.yourPile.exists }, "the new game didn't start")
     app.buttons["Game menu"].tap()
     app.buttons["Leave game"].tap()
     app.buttons["Leave"].tap()
-    // Discarded: gone.
-    XCTAssertTrue(resume.waitForExistence(timeout: 10))
-    app.buttons["Discard this game"].tap()
-    app.buttons["Discard"].tap()
-    XCTAssertTrue(eventually(5) { !resume.exists }, "the discarded game is still offered")
+    XCTAssertTrue(app.buttons["Play"].waitForExistence(timeout: 10))
+    XCTAssertFalse(resume.exists, "a game left is still offered")
   }
 
   func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }

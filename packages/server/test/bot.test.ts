@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { Policy, type BotPlayer } from '@keeps/bot';
-import { replay, viewFor, type Command, type GameState, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
+import { replay, viewFor, type Command, type Move, type GameState, type ReplayLog, type Seat, type TraceEvent } from '@keeps/engine';
 import type { Hint, ServerMessage } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type BotDeps, type BotTurn, type PlayedMove, type RoomDeps, type RoomMember, type Send } from '../src/room.ts';
@@ -122,15 +122,21 @@ describe('the bot in a room', () => {
     room.handle(guest.id, { t: 'add-bot' });
     expect(guest.errors()).toEqual(['Only the host can add the bot.']);
     room.handle(host.id, { t: 'add-bot' });
-    expect(host.errors()).toEqual(['The bot only plays two-player games.']);
+    expect(host.errors()).toEqual(['The bot only plays two-player games: ask the others to watch.']);
+    // Ben watches instead: the bot can come in.
+    room.handle(guest.id, { t: 'watch' });
+    room.handle(host.id, { t: 'add-bot' });
+    expect(host.errors()).toHaveLength(1);
 
-    // Someone joins after the bot: the game can't start until one of them goes.
+    // Someone joins after the bot: they watch, and the game starts with the two.
     const solo = botRoom();
     const a = join(solo.room, 'Ana');
     solo.room.handle(a.id, { t: 'add-bot' });
-    join(solo.room, 'Ben');
+    const ben = join(solo.room, 'Ben');
+    expect(ben.last('room').room.players.find((p) => p.name === 'Ben')!.watching).toBe(true);
     solo.room.handle(a.id, { t: 'start' });
-    expect(a.errors()).toEqual(['The bot only plays two-player games.']);
+    expect(a.errors()).toEqual([]);
+    expect(a.last('room').room.phase).toBe('game');
   });
 
   it('leaves with the last person in the lobby, and never hosts', () => {
@@ -358,25 +364,32 @@ describe('the bot in a room', () => {
     expect(human.errors()).toEqual([]);
   });
 
-  it('lets a person resign against the bot, who wins the game: nothing more is scheduled', () => {
+  it('lets a person leave a game against the bot: it wins, and leaves with them (nothing more is scheduled)', () => {
     const { room, runBot, waiting, saved } = botRoom();
     const human = join(room, 'Ana');
     room.handle(human.id, { t: 'add-bot' });
     room.handle(human.id, { t: 'start' });
-    // (With a field resigning hasn't: the replay has it as the engine writes it.)
-    room.handle(human.id, { t: 'command', command: { type: 'resign', because: 'bored' } as Command });
+    const seat = human.last('game').view.viewer;
+    room.handle(human.id, { t: 'leave' });
     expect(human.errors()).toEqual([]);
-    expect(JSON.stringify(saved.at(-1)!.commands.at(-1)!.command)).toBe('{"type":"resign"}');
-    const view = human.last('game').view;
-    expect(view.phase).toBe('game-over');
-    expect(view.roundEnd).toEqual({ kind: 'resign', seat: view.viewer });
-    expect(view.lastRoundWinner).not.toBe(view.viewer);
-    // (A bot move scheduled before is dropped: the game it was for has moved on.)
-    while (waiting() > 0) runBot();
     expect(human.last('game').view.phase).toBe('game-over');
-    // (Out: their seat a ghost now, they can't resign again.)
-    room.handle(human.id, { t: 'command', command: { type: 'resign' } });
-    expect(human.errors()).toEqual(['seat 0 is not a player'.replace('0', String(view.viewer))]);
+    expect(human.last('game').view.lastRoundWinner).not.toBe(seat);
+    expect(saved.at(-1)!.commands.at(-1)).toEqual({ seat, command: { type: 'leave' } });
+    expect(room.members).toEqual([]);
+    while (waiting() > 0) runBot();
+    expect(saved.at(-1)!.commands.at(-1)!.command).toEqual({ type: 'leave' });
+  });
+
+  it('takes no leaving as a move: a client leaves the game by leaving the room', () => {
+    const { room, saved } = botRoom();
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    const moves = saved.at(-1)!.commands.length;
+    room.handle(human.id, { t: 'command', command: { type: 'leave' } as unknown as Move });
+    expect(human.errors()).toEqual(['That is not a move: to leave the game, leave the room.']);
+    expect(saved.at(-1)!.commands).toHaveLength(moves);
+    expect(human.last('game').view.phase).toBe('playing');
   });
 
   it("tells a search when it's no longer wanted: advice once the decision is made, the bot's move once the game moved on", async () => {
@@ -494,7 +507,8 @@ describe('the bot in a room', () => {
         for (; at < log.commands.length; at++) {
           await tick();
           const { seat: mover, command } = log.commands[at]!;
-          if (mover === seat) restored.handle(you.id, { t: 'command', command });
+          // (The person's moves, as they made them: a game played out here, no one leaving it.)
+          if (mover === seat) restored.handle(you.id, { t: 'command', command: command as Move });
           else expect(rest.runBot(), `game ${seed}, from ${k}: the bot's move ${at}`).toBe(true);
           expect(you.errors()).toEqual([]);
         }

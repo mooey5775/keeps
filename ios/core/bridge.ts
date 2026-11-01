@@ -11,6 +11,7 @@ import {
   headline,
   hintChance,
   hintLabel,
+  leaving,
   logLines,
   makeNames,
   natoSpelling,
@@ -76,6 +77,8 @@ export interface TableText {
   shown: { title: string; cards: ShownCard[] } | null;
   /** Training mode's hints, labelled as the options are (the first is the move the bot would play). */
   hints: { label: string; chance: string }[] | null;
+  /** What leaving the game now gives up, for its confirmation (null: nothing, as the game is over). */
+  leaving: string | null;
 }
 
 export type ToApp =
@@ -164,5 +167,6 @@ function tableText(message: Extract<ServerMessage, { t: 'game' }>, names: Names,
     prompts: view.prompts.map((p) => ({ seat: p.seat, mine: p.mine, text: promptText(p, view, names) })),
     shown: shownCards(view, names),
     hints: message.hints ? message.hints.map((h) => ({ label: hintLabel(h, options), chance: hintChance(h) })) : null,
+    leaving: leaving(view, names),
   };
 }

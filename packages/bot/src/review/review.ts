@@ -243,8 +243,8 @@ export class Reviewer {
     if (!g) return;
     const playing = before.phase === 'playing' || before.phase === 'post-round';
     const logs = this.follow(g, events, newEvents, playing ? { state: before, seat } : null);
-    // (Resigning is no move to judge: the round, or the game, ends there.)
-    if (!playing || command.type === 'resign') return;
+    // (Leaving is no move to judge: the round, or the game, ends there.)
+    if (!playing || command.type === 'leave') return;
     const round = g.rounds.get(before.round) ?? this.newRound(g, before.round);
     const live = after.phase === 'playing' || after.phase === 'post-round';
     const move: MoveData = {

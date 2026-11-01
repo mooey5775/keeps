@@ -70,9 +70,9 @@ export type TracePayload =
   | { type: 'trigger'; kind: TriggerKind; seat: Seat; source: CardId }
   | { type: 'round-end'; reason: 'empty-pile'; ender: Seat }
   | { type: 'round-end'; reason: 'tokens'; winner: Seat }
-  | { type: 'round-end'; reason: 'resign'; seat: Seat }
-  /** A player gave up the game: their seat is a ghost from now on. */
-  | { type: 'resign'; seat: Seat }
+  | { type: 'round-end'; reason: 'left'; seat: Seat }
+  /** A player left the game, giving it up: their seat is a ghost from now on. */
+  | { type: 'left'; seat: Seat }
   /** Scores in half-coins; null for ghost seats. */
   | { type: 'score'; scores: (number | null)[]; winner: Seat; tiedWith: Seat[] }
   | { type: 'mark'; seat: Seat; marks: number }
@@ -317,9 +317,9 @@ export function describe(payload: TracePayload): string {
         ? `ROUND END: ${seatLabel(payload.ender)} drew from an empty pile`
         : payload.reason === 'tokens'
           ? `ROUND END: token victory for ${seatLabel(payload.winner)}`
-          : `ROUND END: ${seatLabel(payload.seat)} resigned; no one wins the round`;
-    case 'resign':
-      return `${seatLabel(payload.seat)} resigns: out of the game`;
+          : `ROUND END: ${seatLabel(payload.seat)} left; no one wins the round`;
+    case 'left':
+      return `${seatLabel(payload.seat)} leaves the game`;
     case 'score': {
       const scores = payload.scores
         .map((s, seat) => (s === null ? null : `${seatLabel(seat as Seat)}=${coinsLabel(s)}`))

@@ -1,4 +1,4 @@
-import { eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
+import { eventsFor, legalCommands, viewFor, type GameState, type Move, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision, NUM_ACTIONS } from './actions.ts';
 import { Belief, noteObservation } from './belief.ts';
 import { encodeObservation } from './observation.ts';
@@ -43,7 +43,7 @@ export class BotPlayer {
   }
 
   /** The command the bot plays now, given every event of the game so far. */
-  choose(state: GameState, events: readonly TraceEvent[]): Command {
+  choose(state: GameState, events: readonly TraceEvent[]): Move {
     const view = this.observe(state, events);
     const decision = new Decision(view, legalCommands(state, this.seat));
     const prefix: number[] = [];
@@ -68,7 +68,7 @@ export class BotPlayer {
    * the same way, so a seat it advises keeps the belief it would have if it were playing there.
    * A pile reorder (Tithes) lists no commands: the advice is then the network's own order.
    */
-  suggest(state: GameState, events: readonly TraceEvent[]): { command: Command; probability: number }[] {
+  suggest(state: GameState, events: readonly TraceEvent[]): { command: Move; probability: number }[] {
     if (!this.wantsToMove(state)) return [];
     const view = this.observe(state, events);
     const decision = new Decision(view, legalCommands(state, this.seat));

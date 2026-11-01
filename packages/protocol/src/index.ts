@@ -1,4 +1,4 @@
-import type { Command, PlayerView, Seat, TraceEvent } from '@keeps/engine';
+import type { Move, PlayerView, Seat, TraceEvent } from '@keeps/engine';
 
 // Messages between the browser and the server, over one WebSocket.
 
@@ -25,10 +25,15 @@ export interface RoomPlayer {
   name: string;
   connected: boolean;
   host: boolean;
-  /** Seat at the table once a game starts; null in the lobby or for spectators. */
+  /** Seat at the table once a game starts; null in the lobby or while watching. */
   seat: Seat | null;
   /** A computer player (two-player games only). */
   bot?: boolean;
+  /**
+   * Watching, not playing (dealt into no game): joined a full table, or a game under way. In the lobby a watcher may
+   * take a free seat (`sit`), and a player may watch instead (`watch`).
+   */
+  watching?: boolean;
 }
 
 export interface RoomSummary {
@@ -48,7 +53,7 @@ export interface RoomSummary {
 
 /** Training mode: a move and how likely the bot's network is to play it in your seat. */
 export interface Hint {
-  command: Command;
+  command: Move;
   probability: number;
   /** When the bot searched your move (played it out in sampled deals): its chance of winning the round with it, 0..1. */
   win?: number;
@@ -118,15 +123,29 @@ export type ClientMessage =
   | { t: 'resume'; code: string; token: string; client?: string }
   | { t: 'settings'; settings: Settings }
   | { t: 'start' }
-  | { t: 'command'; command: Command }
+  /** A move (leaving the game is no move: `leave`). */
+  | { t: 'command'; command: Move }
   | { t: 'propose-undo' }
   | { t: 'vote-undo'; accept: boolean }
+  /** Host only: everyone returns to the lobby. Before the game is over, it ends it (no one wins). */
   | { t: 'back-to-lobby' }
   /** Host, in the lobby: add a bot player (the room must be for two). */
   | { t: 'add-bot' }
   | { t: 'remove-bot' }
   /** Training mode on or off: in games against the bot, its suggestion for each of your moves. */
   | { t: 'training'; on: boolean }
+  /** In the lobby, watching: take a free seat at the table. */
+  | { t: 'sit' }
+  /**
+   * In the lobby: watch instead of playing. `player`: the host moving someone who's away to watching (their seat
+   * freed; they may take one again when back).
+   */
+  | { t: 'watch'; player?: string }
+  /**
+   * Leave the room for good (going away without it, your seat is kept for you). Seated in a game still going, you leave
+   * it, giving it up (the engine's `leave`): with two players the other wins; with more, the round ends and the rest
+   * play on. A host's role passes on.
+   */
   | { t: 'leave' };
 
 export type ServerMessage =
@@ -170,8 +189,10 @@ export const NAME_MAX = 20;
  * than bump it, make a new field optional, and new message kinds ones an older client can pass over.
  */
 // 2: resigning (a new event and a new round end, which an app built before can't read). 3: notices (an app built before
-// can't pass over a message kind it doesn't know; from 3 on, the app's core does).
-export const PROTOCOL = 3;
+// can't pass over a message kind it doesn't know; from 3 on, the app's core does). 4: leaving the room leaves the game
+// (resigning is gone: it's leaving now, a new command, event and round end; an app built before left to step away),
+// and the host may take everyone back to the lobby before the game is over.
+export const PROTOCOL = 4;
 export const ROOM_CODE = /^[A-Z]{4}$/;
 
 /** A game's replay file (engine/src/replay.ts's format), by its room and when it started: "ABCD-2026-10-30T22-41-36-000Z.jsonl". The server and the app keep games so. */

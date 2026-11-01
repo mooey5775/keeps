@@ -24,6 +24,11 @@ export interface ServerOptions {
   idleRoomMs?: number;
   /** Rooms where nobody has done anything are closed after this long, even with people connected (a forgotten tab). */
   abandonedRoomMs?: number;
+  /**
+   * Rooms with a game in progress are kept this long without a move instead, connected or not: its players may be away
+   * a while (a dead battery, a weekend) and come back to their seats.
+   */
+  gameRoomMs?: number;
   /** Free space on the replay disk (tests fake a full disk with this). */
   diskSpace?: (dir: string) => DiskSpace | null;
   /** Product analytics (PostHog in production). */
@@ -214,10 +219,12 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
 
   const idleMs = options.idleRoomMs ?? 2 * 60 * 60 * 1000;
   const abandonedMs = options.abandonedRoomMs ?? 6 * 60 * 60 * 1000;
+  const gameMs = options.gameRoomMs ?? 3 * 24 * 60 * 60 * 1000;
   const sweepNow = (now = Date.now()) => {
     for (const [code, room] of rooms) {
       const idle = now - room.lastActivity;
-      if ((room.connectedCount === 0 && idle > idleMs) || idle > abandonedMs) {
+      const playing = room.runningGame !== null && room.runningGame.state.phase !== 'game-over';
+      if (playing ? idle > gameMs : (room.connectedCount === 0 && idle > idleMs) || idle > abandonedMs) {
         room.close();
         rooms.delete(code);
       }

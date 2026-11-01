@@ -14,7 +14,7 @@ final class ChoosingTests: XCTestCase {
     }
     struct Result: Decodable {
       var kind: String
-      var command: Command?
+      var command: Move?
       var picked: [String]?
     }
     var options: [Option]
@@ -61,11 +61,11 @@ final class ChoosingTests: XCTestCase {
   /// from; but any order of a pile's cards, though the legal moves list only the pile as it is and reversed.
   func testAMoveGoesOnlyForADecisionStillOpen() {
     let cards = Array(CardId.allCases.prefix(3))
-    let order = { (cards: [CardId]) in Command.answer(CommandAnswer(promptId: "p7", answer: .orderPile(AnswerOrderPile(order: cards)))) }
+    let order = { (cards: [CardId]) in Move.answer(MoveAnswer(promptId: "p7", answer: .orderPile(AnswerOrderPile(order: cards)))) }
     let legal = [order(cards), order(cards.reversed()), .revealDuplicity]
     XCTAssertTrue(Choosing.answersOpen(order([cards[1], cards[0], cards[2]]), legal), "a pile's own order was refused")
     XCTAssertTrue(Choosing.answersOpen(.revealDuplicity, legal))
-    let draw = Command.answer(CommandAnswer(promptId: "p5", answer: .action(AnswerAction(choice: .draw))))
+    let draw = Move.answer(MoveAnswer(promptId: "p5", answer: .action(AnswerAction(choice: .draw))))
     XCTAssertFalse(Choosing.answersOpen(draw, legal), "a move for a decision already answered went")
     XCTAssertFalse(Choosing.answersOpen(.nextRound, legal))
   }

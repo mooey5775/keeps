@@ -1,4 +1,4 @@
-import type { Command, PlayerView, TraceEvent } from '@keeps/engine';
+import type { Command, Move, PlayerView, TraceEvent } from '@keeps/engine';
 import type { ClientMessage, Hint, RoomSummary, RoundReview, ServerMessage, Settings, UndoState } from '@keeps/protocol';
 import { useSyncExternalStore } from 'react';
 import { markReloadedFor, onServerBuild, PAGE_BUILD, reloadedFor } from './build.ts';
@@ -24,7 +24,8 @@ export interface RoomState {
   game: NetGame | null;
   /** Games against the bot: the reviews of this game's finished rounds, by round. */
   reviews: RoundReview[];
-  error: { id: number; message: string } | null;
+  /** The last thing to show the player: an error, or (`notice`) something the room says that isn't wrong at all. */
+  error: { id: number; message: string; notice?: true } | null;
 }
 
 const initial: RoomState = { status: 'idle', code: null, playerId: null, room: null, game: null, reviews: [], error: null };
@@ -167,7 +168,7 @@ class RoomStore {
     this.socket?.send(JSON.stringify(message));
   }
 
-  command(command: Command): void {
+  command(command: Move): void {
     const key = decision(command);
     if (this.answering.has(key)) return;
     this.answering.add(key);
@@ -178,11 +179,11 @@ class RoomStore {
     this.send({ t: 'settings', settings });
   }
 
-  /** Leaves the room and closes the connection. */
+  /** Leaves the room for good (in a game still going, resigning) and closes the connection. */
   leave(): void {
     if (this.state.code) {
       this.send({ t: 'leave' });
-      if (this.state.room?.phase !== 'game') forgetToken(this.state.code);
+      forgetToken(this.state.code);
     }
     this.close();
     this.state = initial;
@@ -281,8 +282,8 @@ class RoomStore {
         }
         return;
       case 'notice':
-        // Shown as an error is, but about nothing this player did: a move on its way stays on its way.
-        this.set({ error: { id: ++this.errorId, message: message.message } });
+        // Shown where an error is, but not as one, and about nothing this player did: a move on its way stays on its way.
+        this.set({ error: { id: ++this.errorId, message: message.message, notice: true } });
         return;
       case 'gone':
         if (this.state.code) forgetToken(this.state.code);

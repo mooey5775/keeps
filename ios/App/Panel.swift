@@ -337,7 +337,7 @@ struct OrderPileSheet: View {
       .toolbar {
         ToolbarItem(placement: .confirmationAction) {
           Button("Done") {
-            game.send(.answer(CommandAnswer(promptId: prompt.id, answer: .orderPile(AnswerOrderPile(order: order)))))
+            game.send(.answer(MoveAnswer(promptId: prompt.id, answer: .orderPile(AnswerOrderPile(order: order)))))
           }
           .bold()
         }

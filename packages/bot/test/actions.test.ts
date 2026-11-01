@@ -77,7 +77,7 @@ describe('action ids', () => {
       turn: 0,
     });
     const seat: Seat = 0;
-    const use = legalCommands(start, seat).find((c) => c.type === 'answer' && c.answer.kind === 'action' && c.answer.choice.action === 'ability') as Command;
+    const use = legalCommands(start, seat).find((c) => c.type === 'answer' && c.answer.kind === 'action' && c.answer.choice.action === 'ability')!;
     const decision = new Decision(viewFor(start, seat), [use]);
     expect(decision.next([])).toEqual([CARD('tithes')]);
     expect(decision.complete([CARD('tithes')])).toBe(use);

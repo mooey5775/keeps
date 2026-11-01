@@ -5,6 +5,7 @@ import {
   type Answer,
   type Command,
   type EngineError,
+  type Move,
 } from './commands.ts';
 import { abilityCost, legalAbilities, useAbility } from './abilities.ts';
 import { retributionSeats, spendActions } from './actions.ts';
@@ -91,10 +92,10 @@ export function apply(state: GameState, seat: Seat, command: Command, { trusted 
  * A legal command as the engine writes it: a client may order its keys otherwise (the app's Swift does) or add others
  * (validate checks what it reads, not what else is there), and events copy parts of it (an action's choice, a keep
  * pair's references), so the log would depend on who sent the move. The engine's own when it lists it; the answers too
- * many to list (validate checked them field by field) and resigning, rebuilt from the fields they have.
+ * many to list (validate checked them field by field) and leaving, rebuilt from the fields they have.
  */
 function asWritten(state: GameState, seat: Seat, command: Command): Command {
-  if (command.type === 'resign') return { type: 'resign' };
+  if (command.type === 'leave') return { type: 'leave' };
   const wanted = canonical(command);
   const listed = legalCommands(state, seat).find((c) => canonical(c) === wanted);
   if (listed) return listed;
@@ -108,12 +109,12 @@ function asWritten(state: GameState, seat: Seat, command: Command): Command {
 }
 
 /** Every command `seat` may send right now. */
-export function legalCommands(state: GameState, seat: Seat): Command[] {
+export function legalCommands(state: GameState, seat: Seat): Move[] {
   if (state.config.seats[seat] !== 'player') return [];
   if (state.phase === 'round-over') return [{ type: 'next-round' }];
   const commands = state.prompts
     .filter((p) => p.seat === seat)
-    .flatMap((p) => legalAnswers(state, p).map((answer): Command => ({ type: 'answer', promptId: p.id, answer })));
+    .flatMap((p) => legalAnswers(state, p).map((answer): Move => ({ type: 'answer', promptId: p.id, answer })));
   if (canReveal(state, seat)) commands.push({ type: 'reveal-duplicity' });
   return commands;
 }
@@ -176,7 +177,7 @@ function validate(state: GameState, seat: Seat, command: Command): EngineError |
     return { code: 'illegal', message: 'malformed command' };
   }
   // Always open to a player until the game is over; never among the listed moves.
-  if (command.type === 'resign') return state.phase === 'game-over' ? { code: 'illegal', message: 'the game is over' } : null;
+  if (command.type === 'leave') return state.phase === 'game-over' ? { code: 'illegal', message: 'the game is over' } : null;
   if (command.type === 'answer' && (typeof command.promptId !== 'string' || !isObject(command.answer) || typeof command.answer.kind !== 'string')) {
     return { code: 'illegal', message: 'malformed answer' };
   }
@@ -213,8 +214,8 @@ function execute(ctx: Ctx, seat: Seat, command: Command): void {
     case 'reveal-duplicity':
       reveal(ctx, seat, null);
       return;
-    case 'resign':
-      resign(ctx, seat);
+    case 'leave':
+      leave(ctx, seat);
       return;
     case 'answer': {
       const prompt = state.prompts.find((p) => p.id === command.promptId)!;
@@ -575,15 +576,15 @@ function checkTokenVictory(ctx: Ctx): boolean {
 }
 
 /**
- * A player gives up the game. Their seat is a ghost from now on: their hand, their keep and the face-down cards they
+ * A player leaves the game, giving it up. Their seat is a ghost from now on: their hand, their keep and the face-down cards they
  * placed in others' keeps go to the discard (a ghost holds nothing), and whatever was under way stops, as a token
  * victory stops it. With one player left, they win the game. Otherwise a round in play ends with no winner (no mark),
  * and the next is dealt without them; between rounds, the next is simply dealt without them (and not started by
- * them, if they won the last). See docs/ENGINE.md, "Resigning".
+ * them, if they won the last). See docs/ENGINE.md, "Leaving".
  */
-function resign(ctx: Ctx, seat: Seat): void {
+function leave(ctx: Ctx, seat: Seat): void {
   const { state, tracer } = ctx;
-  const seq = tracer.emit({ type: 'resign', seat });
+  const seq = tracer.emit({ type: 'left', seat });
   tracer.within(seq, () => {
     const hand = state.hands[seat];
     if (hand.length > 0) tracer.emit({ type: 'discard', seat, cards: [...hand], from: 'hand' });
@@ -606,15 +607,15 @@ function resign(ctx: Ctx, seat: Seat): void {
   if (state.lastRoundWinner === seat) state.lastRoundWinner = null;
   const left = SEATS.filter((s) => state.config.seats[s] === 'player');
   if (left.length === 1) {
-    state.roundEnd = { kind: 'resign', seat };
+    state.roundEnd = { kind: 'left', seat };
     state.lastRoundWinner = left[0]!;
     state.phase = 'game-over';
     tracer.emit({ type: 'game-over', winner: left[0]! });
   } else if (state.phase === 'playing' || state.phase === 'post-round') {
-    state.roundEnd = { kind: 'resign', seat };
+    state.roundEnd = { kind: 'left', seat };
     state.lastRoundWinner = null;
     state.phase = 'round-over';
-    tracer.emit({ type: 'round-end', reason: 'resign', seat });
+    tracer.emit({ type: 'round-end', reason: 'left', seat });
   }
 }
 

@@ -113,6 +113,8 @@ final class Game {
   private(set) var lastSearch: ToAppSearch?
   /// Something went wrong (shown until dismissed).
   var problem: String?
+  /// Something the room tells the table that isn't wrong at all (someone ended the game; you're the host now).
+  var notice: String?
   /// The card shown large while a finger holds it (a long press; letting go only puts it away).
   var preview: CardId?
 
@@ -162,7 +164,7 @@ final class Game {
     guard screen != .lobby else { return unfinished = core.kept()?.kept }
     if ends.count >= Self.endsAllowed {
       // (Something in this game ends it each time: taking it up again would only end it again.)
-      leave(forgetting: false)
+      closeTable(forgetting: false)
       unfinished = core.kept()?.kept
       problem = "The game's engine stopped \(ends.count) times in a row, so it wasn't started again. Your game is kept: Continue takes it up."
       ends = []
@@ -171,7 +173,7 @@ final class Game {
     } else if online == nil, core.kept() != nil {
       resume()
     } else {
-      leave(forgetting: false)
+      closeTable(forgetting: false)
     }
   }
 
@@ -179,7 +181,7 @@ final class Game {
 
   /// A new room with Midstrike, set up as `setup`, and its game started.
   func play(_ setup: Setup, autoplay: Int = 0) {
-    leave()
+    closeTable()
     // (This game is the one kept from now on; the lobby opens here, where you last played.)
     unfinished = nil
     UserDefaults.standard.set(LobbyView.Place.phone.rawValue, forKey: LobbyView.placeKey)
@@ -197,7 +199,7 @@ final class Game {
   /// The game kept unfinished, taken up where it was: the table as it was, Midstrike knowing what it knew.
   func resume(autoplay: Int = 0) {
     guard let found = core.kept() else { return unfinished = nil }
-    leave(forgetting: false)
+    closeTable(forgetting: false)
     self.autoplay = autoplay
     let record = found.kept.game
     let you = record.seats.first { $0.bot != true }
@@ -228,7 +230,7 @@ final class Game {
   }
 
   private func goOnline(_ server: OnlineServer, name: String, _ hello: ClientMessage, saying: String) {
-    leave(forgetting: false)
+    closeTable(forgetting: false)
     UserDefaults.standard.set(LobbyView.Place.online.rawValue, forKey: LobbyView.placeKey)
     feed = []
     online = Online(server: server, name: name)
@@ -244,7 +246,7 @@ final class Game {
   private func linked(_ state: LinkState, on id: Int) {
     guard connection == id else { return }
     online?.link = state
-    if state == .closed, screen != .lobby { leave(forgetting: false) }
+    if state == .closed, screen != .lobby { closeTable(forgetting: false) }
   }
 
   /// Whether the player at `seat` is away: a person online whose connection is gone (the game waits on their moves).
@@ -266,12 +268,42 @@ final class Game {
   func addBot() { if let connection { core.send(connection, .addBot) } }
   func removeBot() { if let connection { core.send(connection, .removeBot) } }
   func start() { if let connection { core.send(connection, .start) } }
-  /// Gives the game up (open at any time until it's over, so not one of the listed moves): with one other player left,
-  /// they win it; otherwise the round ends with no winner, and the game goes on without you.
-  func resign() {
-    guard let connection else { return }
-    answering = []
-    core.send(connection, .command(ClientMessageCommand(command: .resign)))
+  /// Watching: take a free seat at the table (in the room's lobby).
+  func sit() { if let connection { core.send(connection, .sit) } }
+  /// Watch instead of playing; the host may move someone who's away (`player`) to watching, freeing their seat.
+  func watch(_ player: String? = nil) { if let connection { core.send(connection, .watch(ClientMessageWatch(player: player))) } }
+  /// Leaving the game for good: the room is told, and nothing is kept to go back to. Seated in a game still going, you
+  /// resign (what that gives up, the core says: `table.leaving`). Not being at the table otherwise (the app closed or
+  /// ended) keeps your seat, as a dead battery would.
+  func leaveGame() {
+    if let connection { core.send(connection, .leave) }
+    closeTable()
+  }
+
+  /// The host's: everyone back to the room's lobby, the game ended first if it isn't over (no one wins).
+  func endGame() {
+    if let connection, hosting { core.send(connection, .backToLobby) }
+  }
+
+  /// The game the phone holds, while it's not at the table (one at a time): a seat online, or a game kept on the phone.
+  var held: String? {
+    if let seat = onlineSeat { return "room \(seat.code)" }
+    if unfinished != nil { return "your game against Midstrike" }
+    return nil
+  }
+
+  /// The game held, given up (to start another: the phone holds one at a time). Online, its room is told you've left
+  /// (you resign there, and your seat goes to no one); on the phone, the kept game is discarded.
+  func giveUpHeld() {
+    if let seat = onlineSeat {
+      keepSeat(nil)
+      var id = 0
+      // (The seat taken again, then left; closed once the server has answered, so both are sent.)
+      id = core.connect(server: seat.server.socket) { [core] _ in core.close(id) }
+      core.send(id, .resume(ClientMessageResume(code: seat.code, token: seat.token)))
+      core.send(id, .leave)
+    }
+    if unfinished != nil { discardKept() }
   }
 
   /// Asks the other players to take back the last move (a game between people).
@@ -307,21 +339,15 @@ final class Game {
     core.send(connection, .backToLobby)
   }
 
-  /// Stepping away from the table: back to the lobby, the game kept to go back to (on the phone, Continue; online, your
-  /// seat, which the server keeps for you). Ending a game is another thing: Discard (on the phone), or resigning.
-  func stepAway() {
-    leave(forgetting: false)
-    unfinished = core.kept()?.kept
-  }
-
   /// The game kept on the phone, given up (the lobby's Discard).
   func discardKept() {
     core.forgetKept()
     unfinished = nil
   }
 
-  /// Back to the lobby; the room goes (and, `forgetting`, the game kept to take up again: it was left).
-  func leave(forgetting: Bool = true) {
+  /// Back to the lobby, the connection closed as a crash would close it (the room keeps your seat); `forgetting`, the
+  /// game kept to take up again goes too (it was left, or is over).
+  private func closeTable(forgetting: Bool = true) {
     if forgetting, online != nil {
       keepSeat(nil)
     } else if forgetting, game != nil {
@@ -505,7 +531,7 @@ final class Game {
   /// Sends a move of yours; returns whether it went. Only an answer to a decision open in the position shown, and only
   /// one answer each (see Choosing.answersOpen).
   @discardableResult
-  func send(_ command: Command) -> Bool {
+  func send(_ command: Move) -> Bool {
     picked = []
     guard let connection, let game, Choosing.answersOpen(command, game.view.legal), answering.insert(Choosing.decision(command)).inserted
     else { return false }
@@ -608,18 +634,18 @@ final class Game {
       answering = []
       problem = error.message
       // Online, before a room was ours (no such room, the server unreachable): back to the lobby, as the website does.
-      if online != nil, room == nil { leave(forgetting: false) }
+      if online != nil, room == nil { closeTable(forgetting: false) }
     case .notice(let notice):
-      problem = notice.message
+      self.notice = notice.message
     case .welcome(let welcome):
       // Online: the seat kept, to come back to.
       if let online { keepSeat(OnlineSeat(server: online.server, code: welcome.code, token: welcome.token, name: online.name)) }
     case .gone:
       if online != nil { problem = "That room is gone." }
-      leave()
+      closeTable()
     case .replaced:
       if online != nil { problem = "Your seat was taken on another device." }
-      leave()
+      closeTable()
     case .review:
       break
     }
@@ -648,7 +674,7 @@ final class Game {
     for prompt in view.prompts {
       if case .mine(.orderPile(let order)) = prompt {
         autoplay -= 1
-        send(.answer(CommandAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards)))))
+        send(.answer(MoveAnswer(promptId: order.id, answer: .orderPile(AnswerOrderPile(order: order.cards)))))
         return
       }
     }

@@ -13,7 +13,7 @@ struct TableView: View {
   @State private var showLog = false
   @State private var showDiscard = false
   @State private var confirmLeave = false
-  @State private var confirmResign = false
+  @State private var confirmEnd = false
   @State private var zones = DropZones()
 
   var body: some View {
@@ -59,7 +59,7 @@ struct TableView: View {
             // What Midstrike just did, rising from above your hand and fading.
             Feed(lines: game.feed).padding(.horizontal, 16)
             hand(view, width: large).padding(.horizontal, 16).padding(.bottom, 6)
-            DecisionPanel(game: game, view: view, table: table, leave: { confirmLeave = true })
+            DecisionPanel(game: game, view: view, table: table, leave: leave)
           }
           .background(alignment: .bottom) { Theme.background.ignoresSafeArea() }
         }
@@ -108,20 +108,23 @@ struct TableView: View {
       .sheet(isPresented: .constant(orderPrompt(view) != nil)) {
         if let prompt = orderPrompt(view) { OrderPileSheet(game: game, prompt: prompt) }
       }
-      .confirmationDialog("Resign this game?", isPresented: $confirmResign, titleVisibility: .visible) {
-        Button("Resign", role: .destructive) { game.resign() }
+      // Leaving is for good: in a game still going, you resign (the core says what that gives up).
+      .confirmationDialog("Leave the game?", isPresented: $confirmLeave, titleVisibility: .visible) {
+        Button("Leave", role: .destructive) { game.leaveGame() }
       } message: {
-        Text(game.others(view).count == 1 ? "\(table.names[game.others(view)[0]]) wins the game." : "This round ends with no winner, and the game goes on without you.")
+        if let leaving = table.leaving { Text(leaving) }
       }
-      .confirmationDialog("Leave the table?", isPresented: $confirmLeave, titleVisibility: .visible) {
-        Button("Leave") { game.stepAway() }
+      .confirmationDialog("End the game for everyone?", isPresented: $confirmEnd, titleVisibility: .visible) {
+        Button("End game", role: .destructive) { game.endGame() }
       } message: {
-        // (Over, there's nothing to go back to.)
-        if view.phase != .gameOver {
-          Text(game.online == nil ? "The game is kept: Continue takes it up." : "Your seat is kept: the others wait for you, and Back to \(game.room?.code ?? "the room") takes you there again.")
-        }
+        Text("No one wins, and everyone goes back to the room.")
       }
     }
+  }
+
+  /// Leaving: asked first when it gives something up (in a game still going, you resign); once it's over, at once.
+  private func leave() {
+    if game.table?.leaving != nil { confirmLeave = true } else { game.leaveGame() }
   }
 
   private func orderPrompt(_ view: PlayerView) -> PromptViewMineOrderPile? {
@@ -158,10 +161,11 @@ struct TableView: View {
           Button { game.proposeUndo() } label: { Label("Ask to undo the last move", systemImage: "arrow.uturn.backward") }
         }
         Divider()
-        if view.phase != .gameOver {
-          Button(role: .destructive) { confirmResign = true } label: { Label("Resign", systemImage: "flag") }
+        // (The host, online: everyone back to the room. On the phone, leaving is the way out.)
+        if game.online != nil, game.hosting, view.phase != .gameOver {
+          Button(role: .destructive) { confirmEnd = true } label: { Label("End game", systemImage: "stop.circle") }
         }
-        Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }
+        Button(role: .destructive) { leave() } label: { Label("Leave game", systemImage: "xmark.circle") }
         #if DEBUG
         // (For tests: the core's process ended, as iOS may end it.)
         if ProcessInfo.processInfo.environment["KEEPS_TEST_HOOKS"] != nil {

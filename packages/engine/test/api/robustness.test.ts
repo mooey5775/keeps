@@ -321,8 +321,8 @@ describe('serialization', () => {
     const listed = legalCommands(start, 0).find((c) => JSON.stringify(c) === JSON.stringify({ type: 'answer', promptId, answer: { kind: 'action', choice: { action: 'play', card: 'chalice', target: 2 } } }))!;
     expect(JSON.stringify(ok(apply(start, 0, reordered)).command)).toBe(JSON.stringify(listed));
 
-    // Resigning, with a field it doesn't have: as written, without it.
-    expect(JSON.stringify(ok(apply(start, 1, { type: 'resign', why: 'tired' } as unknown as Command)).command)).toBe('{"type":"resign"}');
+    // Leaving, with a field it doesn't have: as written, without it.
+    expect(JSON.stringify(ok(apply(start, 1, { type: 'leave', why: 'tired' } as unknown as Command)).command)).toBe('{"type":"leave"}');
 
     // Tithes' order (too many to list), keys reversed and a field more.
     const tithes = act(buildPosition({ keeps: { 0: ['tithes'] }, piles: { 0: ['chalice', 'blunder', 'dagger'] }, turn: 0 }), 0, { action: 'ability', card: 'tithes' }).state;

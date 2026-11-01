@@ -1,4 +1,4 @@
-import { CARDS, coinsLabel, type CardId, type Command, type PlayerView, type PromptView, type Seat, type TraceEvent } from '@keeps/engine';
+import { CARDS, coinsLabel, type CardId, type Move, type PlayerView, type PromptView, type Seat, type TraceEvent } from '@keeps/engine';
 import type { Hint } from '@keeps/protocol';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Card } from './Card.tsx';
@@ -17,7 +17,7 @@ export interface GameTableProps {
   log: readonly TraceEvent[];
   /** Player names by seat (null for ghosts). */
   names: (string | null)[];
-  onCommand: (command: Command) => void;
+  onCommand: (command: Move) => void;
   /** Extra controls for the side panel (undo, leave, …). */
   side?: ReactNode;
   /** Training mode: the bot's suggestion for your current decision, most likely first. */
@@ -54,7 +54,7 @@ export function GameTable({ view, log, names, onCommand, side, header, bottom, b
   }, [optionsKey]);
 
   const glow = clickable(options, picked);
-  const send = (command: Command) => {
+  const send = (command: Move) => {
     setPicked([]);
     setShowDiscard(false);
     onCommand(command);
@@ -283,7 +283,7 @@ function OptionsPanel({
   view: PlayerView;
   options: Option[];
   picked: Ref[];
-  onSend: (c: Command) => void;
+  onSend: (c: Move) => void;
   onPick: (r: Ref) => void;
   onClear: () => void;
 }) {
@@ -329,7 +329,7 @@ function groupCards(options: Option[], ref: Ref): CardId[] {
   return first.filter((c) => members.every((o) => o.cards.includes(c)));
 }
 
-function OrderPile({ prompt, onSend }: { prompt: Extract<PromptView, { kind: 'order-pile'; mine: true }>; onSend: (c: Command) => void }) {
+function OrderPile({ prompt, onSend }: { prompt: Extract<PromptView, { kind: 'order-pile'; mine: true }>; onSend: (c: Move) => void }) {
   const [order, setOrder] = useState<CardId[]>(prompt.cards);
   const move = (i: number, by: number) => {
     const next = [...order];

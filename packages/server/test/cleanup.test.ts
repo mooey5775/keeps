@@ -96,6 +96,26 @@ describe('rooms end', () => {
     expect(server.rooms.has(code)).toBe(false);
   });
 
+  it('a room with a game in progress waits 3 days for its players to come back, connected or not', async () => {
+    const { server, base } = await start();
+    const { client, code } = await host(base);
+    const guest = new Client(base);
+    await guest.open();
+    guest.send({ t: 'join', code, name: 'Guest' });
+    await guest.next('welcome');
+    client.send({ t: 'start' });
+    await client.next('game');
+    client.socket.close();
+    guest.socket.close();
+    await Promise.all([client.closed, guest.closed]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    server.sweep(Date.now() + 2.9 * 24 * HOUR);
+    expect(server.rooms.has(code)).toBe(true);
+    server.sweep(Date.now() + 3.1 * 24 * HOUR);
+    expect(server.rooms.has(code)).toBe(false);
+  });
+
   it('a room nobody has touched in 6 hours is closed even with a tab still open, and that tab is told and disconnected', async () => {
     const { server, base } = await start();
     const { client, code } = await host(base);

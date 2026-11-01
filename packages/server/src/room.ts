@@ -190,6 +190,11 @@ interface Player {
   bot: boolean;
   /** Training mode: in games against the bot, the bot's suggestion for each of this player's moves. */
   training: boolean;
+  /**
+   * Watching, not playing: dealt into no game. Someone who joins a full table, or a game under way, watches; in the
+   * lobby, a watcher may take a free seat (`sit`), and a player may watch instead (`watch`).
+   */
+  watching: boolean;
 }
 
 /** A room as the admin page shows it. */
@@ -229,6 +234,8 @@ interface Game {
    * (empty while it is still being worked out).
    */
   advisors: Map<Seat, { bot: BotPlayer; advice: { state: GameState; hints: Hint[] } | null }>;
+  /** Who sat where when it was dealt (null: a ghost seat): the log and the end keep naming a player who has left. */
+  names: (string | null)[];
 }
 
 export class Room {
@@ -266,7 +273,7 @@ export class Room {
     for (const { seat, name, bot = false, training = false } of saved.seats) {
       if (bot && !deps.bot) throw new Error(`room ${code}: the saved game has the bot, and this server doesn't`);
       const host = !bot && !room.players.some((p) => p.host);
-      const player: Player = { id: deps.id(), name, token: deps.token(), host, seat, send: null, ip: null, client: null, joinedAt: deps.now(), bot, training };
+      const player: Player = { id: deps.id(), name, token: deps.token(), host, seat, send: null, ip: null, client: null, joinedAt: deps.now(), bot, training, watching: false };
       room.players.push(player);
       if (!bot) tokens.set(seat, player.token);
     }
@@ -295,6 +302,16 @@ export class Room {
 
   get playerCount(): number {
     return this.players.length;
+  }
+
+  /** The players (not the watchers), the bot included. */
+  private get playing(): Player[] {
+    return this.players.filter((p) => !p.watching);
+  }
+
+  /** How many play at most: four, or two with the bot. */
+  private get seats(): number {
+    return this.players.some((p) => p.bot) ? 2 : 4;
   }
 
   /** When the running game started (it names the game's replay file), or null. */
@@ -369,14 +386,17 @@ export class Room {
       joinedAt: this.deps.now(),
       bot: false,
       training: false,
+      // (A game under way, or a full table: watching.)
+      watching: this.game !== null || this.playing.length >= this.seats,
     };
     this.players.push(player);
     this.touch();
     if (player.host) this.track('room_created', player);
-    this.track('player_joined', player, { spectator: this.game !== null, players: this.players.length });
+    this.track('player_joined', player, { watching: player.watching, players: this.playing.length });
     send(this.welcome(player));
     this.broadcastRoom();
     if (this.game) this.sendGame(player, true);
+    else if (player.watching) player.send?.({ t: 'notice', message: 'The table is full: you are watching. Take a seat when one frees up.' });
     return player;
   }
 
@@ -443,7 +463,7 @@ export class Room {
           const first: unknown = message.settings.firstPlayer;
           const chosen =
             typeof first === 'object' && first !== null && 'player' in first && typeof first.player === 'string' ? this.find(first.player) : undefined;
-          if (first !== 'random' && !chosen) return 'Invalid first player.';
+          if (first !== 'random' && (!chosen || chosen.watching)) return 'Invalid first player.';
           const level: unknown = message.settings.botLevel;
           if (level !== undefined && !(this.deps.bot?.levels && BOT_LEVELS.includes(level as BotLevel))) return 'Invalid difficulty.';
           this.settings = {
@@ -457,6 +477,8 @@ export class Room {
       case 'start':
         return this.start(player);
       case 'command':
+        // (Moves only: a client leaves the game by leaving the room, `leave`. The engine checks the rest of what's sent.)
+        if ((message.command as { type?: unknown } | null)?.type === 'leave') return 'That is not a move: to leave the game, leave the room.';
         return this.command(player, message.command);
       case 'propose-undo':
         return this.proposeUndo(player);
@@ -471,19 +493,44 @@ export class Room {
         if (player.training !== was) this.tell('trainingChanged', this, this.member(player));
         return null;
       }
-      case 'back-to-lobby':
+      // The host takes everyone back to the lobby: after the game, or ending it first (no one wins).
+      case 'back-to-lobby': {
         if (!player.host) return 'Only the host can do that.';
         if (!this.game) return null;
-        if (this.game.state.phase !== 'game-over') return 'The game is still going.';
+        const ended = this.game.state.phase !== 'game-over';
+        if (ended) this.track('game_ended', player, { round: this.game.state.round });
         this.cancelBot();
         this.game = null;
         for (const p of this.players) p.seat = null;
         this.broadcastRoom();
+        if (ended) for (const p of this.players) if (p !== player) p.send?.({ t: 'notice', message: `${player.name} ended the game.` });
         return null;
+      }
       case 'leave':
         this.leave(player);
         this.tell('left', this, this.member(player));
         return null;
+      case 'sit':
+        if (this.game) return 'Wait for the game to end to take a seat.';
+        if (!player.watching) return null;
+        if (this.playing.length >= this.seats) return 'The table is full.';
+        player.watching = false;
+        this.broadcastRoom();
+        return null;
+      case 'watch': {
+        if (this.game) return 'The game has started: to stop playing, leave it.';
+        const target = message.player === undefined || message.player === player.id ? player : this.find(String(message.player));
+        if (!target || target.bot) return 'There is no such player.';
+        if (target !== player) {
+          if (!player.host) return 'Only the host can do that.';
+          if (target.send) return `${target.name} is here: only someone away can be moved to watching.`;
+        }
+        target.watching = true;
+        // (A watcher doesn't go first: back to a random first player.)
+        if (this.settings.firstPlayer !== 'random' && this.settings.firstPlayer.player === target.id) this.settings = { ...this.settings, firstPlayer: 'random' };
+        this.broadcastRoom();
+        return null;
+      }
       case 'add-bot':
         return this.addBot(player);
       case 'remove-bot':
@@ -504,14 +551,15 @@ export class Room {
   private start(player: Player): string | null {
     if (!player.host) return 'Only the host can start the game.';
     if (this.game) return 'The game has already started.';
-    const count = this.players.length;
+    const playing = this.playing;
+    const count = playing.length;
     if (count < 2 || count > 4) return 'Keeps needs 2 to 4 players.';
-    if (count !== 2 && this.players.some((p) => p.bot)) return 'The bot only plays two-player games.';
+    if (count !== 2 && playing.some((p) => p.bot)) return 'The bot only plays two-player games.';
 
     const seed = this.deps.seed();
     const preview = newGame({ players: count as 2 | 3 | 4, seed, marksToWin: this.settings.marksToWin });
     const seats = playerSeats(preview.state);
-    const shuffled = [...this.players];
+    const shuffled = [...playing];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(this.deps.random() * (i + 1));
       [shuffled[i], shuffled[j]] = [shuffled[j]!, shuffled[i]!];
@@ -556,7 +604,8 @@ export class Room {
     const advisors: Game['advisors'] = new Map(
       bots.length ? this.players.filter((p) => !p.bot && p.seat !== null).map((p) => [p.seat!, { bot: new BotPlayer(this.deps.bot!.policy, p.seat!), advice: null }]) : [],
     );
-    return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors };
+    const names = [0, 1, 2, 3].map((s) => this.playerAt(s as Seat)?.name ?? null);
+    return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors, names };
   }
 
   private command(player: Player, sent: Command): string | null {
@@ -583,7 +632,8 @@ export class Room {
   private record(game: Game, seat: Seat, command: Command, state: GameState, events: TraceEvent[]): void {
     const before = game.state;
     const newRound = state.round !== before.round;
-    game.history = newRound ? [] : [...game.history, { state: before, events: game.events.length }];
+    // (Nor is leaving undone: the seat is a ghost now, and its player has left the room.)
+    game.history = newRound || command.type === 'leave' ? [] : [...game.history, { state: before, events: game.events.length }];
     game.state = state;
     game.events = [...game.events, ...events];
     game.log.commands.push({ seat, command });
@@ -598,7 +648,7 @@ export class Room {
     if (this.game) return 'The game has already started.';
     if (!this.deps.bot) return "The bot isn't available on this server.";
     if (this.players.some((p) => p.bot)) return 'The bot is already here.';
-    if (this.players.length >= 2) return 'The bot only plays two-player games.';
+    if (this.playing.length >= 2) return 'The bot only plays two-player games: ask the others to watch.';
     this.players.push({
       id: this.deps.id(),
       name: this.uniqueName(this.deps.bot.name ?? 'Bot'),
@@ -611,6 +661,7 @@ export class Room {
       joinedAt: this.deps.now(),
       bot: true,
       training: false,
+      watching: false,
     });
     this.track('bot_added', player);
     this.broadcastRoom();
@@ -818,24 +869,37 @@ export class Room {
 
   // -- Membership ------------------------------------------------------------
 
+  /**
+   * A player leaving the room for good (going away without leaving keeps their seat: disconnect). One seated in a game
+   * still going leaves it first (the engine's leave: two players, the other wins; more, the round ends and the rest
+   * play on).
+   */
   private leave(player: Player): void {
-    if (this.game && player.seat !== null) {
-      // A seated player can't leave a running game; they just disconnect and may resume.
-      player.send = null;
-    } else {
-      this.remove(player);
-      // A bot doesn't stay in a lobby without people.
-      if (!this.game && this.players.every((p) => p.bot)) for (const bot of [...this.players]) this.remove(bot);
+    const game = this.game;
+    if (game && player.seat !== null && game.state.phase !== 'game-over' && game.state.config.seats[player.seat] === 'player') {
+      const error = this.command(player, { type: 'leave' });
+      if (error !== null) throw new Error(`room ${this.code}: ${player.name} couldn't leave the game: ${error}`);
+    }
+    this.remove(player);
+    // A bot doesn't stay in a room without people.
+    if (this.players.every((p) => p.bot)) {
+      this.cancelBot();
+      for (const bot of [...this.players]) this.remove(bot);
     }
     this.broadcastRoom();
     if (this.game?.undo) this.settleUndo();
   }
 
-  /** Takes a player out of the lobby, passing on the host role and the first-player choice. */
+  /** Takes a player out of the room, passing on the host role (to someone connected, if anyone is) and the first-player choice. */
   private remove(player: Player): void {
     this.players = this.players.filter((p) => p !== player);
-    const next = this.players.find((p) => !p.bot);
-    if (player.host && next) next.host = true;
+    // (Someone connected and playing, else connected and watching, else anyone.)
+    const people = this.players.filter((p) => !p.bot);
+    const next = people.find((p) => p.send && !p.watching) ?? people.find((p) => p.send) ?? people[0];
+    if (player.host && next) {
+      next.host = true;
+      this.notify(`${next.name} is the host now.`);
+    }
     // The chosen first player is gone: back to a random one.
     if (this.settings.firstPlayer !== 'random' && this.settings.firstPlayer.player === player.id) {
       this.settings = { ...this.settings, firstPlayer: 'random' };
@@ -928,6 +992,7 @@ export class Room {
       host: p.host,
       seat: p.seat,
       ...(p.bot ? { bot: true } : {}),
+      ...(p.watching ? { watching: true } : {}),
     }));
     return {
       code: this.code,
@@ -955,7 +1020,7 @@ export class Room {
     const game = this.game;
     if (!game || !player.send) return;
     const viewer = player.seat ?? 'spectator';
-    const names = [0, 1, 2, 3].map((s) => this.players.find((p) => p.seat === s)?.name ?? null);
+    const names = game.names;
     player.send({
       t: 'game',
       view: viewFor(game.state, viewer),

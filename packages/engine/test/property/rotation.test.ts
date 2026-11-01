@@ -133,8 +133,8 @@ function projection(view: PlayerView, map: (s: Seat) => Seat) {
       view.roundEnd &&
       (view.roundEnd.kind === 'tokens'
         ? { kind: 'tokens', winner: map(view.roundEnd.winner) }
-        : view.roundEnd.kind === 'resign'
-          ? { kind: 'resign', seat: map(view.roundEnd.seat) }
+        : view.roundEnd.kind === 'left'
+          ? { kind: 'left', seat: map(view.roundEnd.seat) }
           : { kind: 'empty-pile', ender: map(view.roundEnd.enderSeat) }),
     lastRoundWinner: view.lastRoundWinner === null ? null : map(view.lastRoundWinner),
     piles: at(view.piles, (p) => p.position).map((p) => ({ size: p.size, top: p.top })),

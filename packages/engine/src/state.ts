@@ -87,8 +87,8 @@ export interface TurnState {
 export type RoundEnd =
   | { kind: 'empty-pile'; enderSeat: Seat }
   | { kind: 'tokens'; winner: Seat }
-  /** A player resigned: the round ended with no winner (or the game, with one player left: lastRoundWinner). */
-  | { kind: 'resign'; seat: Seat };
+  /** A player left: the round ended with no winner (or the game, with one player left: lastRoundWinner). */
+  | { kind: 'left'; seat: Seat };
 
 /** Grants actions to a seat. See docs/ENGINE.md, "Turns and actions". */
 export interface ActionFrameOp {

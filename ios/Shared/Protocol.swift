@@ -848,9 +848,11 @@ public enum ClientMessage: Codable, Equatable, Sendable {
   case removeBot
   case resume(ClientMessageResume)
   case settings(ClientMessageSettings)
+  case sit
   case start
   case training(ClientMessageTraining)
   case voteUndo(ClientMessageVoteUndo)
+  case watch(ClientMessageWatch)
 
   private enum Tag: String, CodingKey { case tag = "t" }
 
@@ -867,9 +869,11 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     case "remove-bot": self = .removeBot
     case "resume": self = .resume(try ClientMessageResume(from: decoder))
     case "settings": self = .settings(try ClientMessageSettings(from: decoder))
+    case "sit": self = .sit
     case "start": self = .start
     case "training": self = .training(try ClientMessageTraining(from: decoder))
     case "vote-undo": self = .voteUndo(try ClientMessageVoteUndo(from: decoder))
+    case "watch": self = .watch(try ClientMessageWatch(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "ClientMessage: no case \(other)")
     }
   }
@@ -902,6 +906,8 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     case .settings(let value):
       try container.encode("settings", forKey: .tag)
       try value.encode(to: encoder)
+    case .sit:
+      try container.encode("sit", forKey: .tag)
     case .start:
       try container.encode("start", forKey: .tag)
     case .training(let value):
@@ -909,6 +915,9 @@ public enum ClientMessage: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     case .voteUndo(let value):
       try container.encode("vote-undo", forKey: .tag)
+      try value.encode(to: encoder)
+    case .watch(let value):
+      try container.encode("watch", forKey: .tag)
       try value.encode(to: encoder)
     }
   }
@@ -926,17 +935,19 @@ public enum ClientMessage: Codable, Equatable, Sendable {
     case .removeBot: return "remove-bot"
     case .resume: return "resume"
     case .settings: return "settings"
+    case .sit: return "sit"
     case .start: return "start"
     case .training: return "training"
     case .voteUndo: return "vote-undo"
+    case .watch: return "watch"
     }
   }
 }
 
 public struct ClientMessageCommand: Codable, Equatable, Sendable {
-  public var command: Command
+  public var command: Move
 
-  public init(command: Command) {
+  public init(command: Move) {
     self.command = command
   }
 
@@ -946,7 +957,7 @@ public struct ClientMessageCommand: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.command = try container.decode(Command.self, forKey: .command)
+    self.command = try container.decode(Move.self, forKey: .command)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -1117,75 +1128,25 @@ public struct ClientMessageVoteUndo: Codable, Equatable, Sendable {
   }
 }
 
-public enum Command: Codable, Equatable, Sendable {
-  case answer(CommandAnswer)
-  case nextRound
-  case resign
-  case revealDuplicity
+public struct ClientMessageWatch: Codable, Equatable, Sendable {
+  public var player: String?
 
-  private enum Tag: String, CodingKey { case tag = "type" }
-
-  public init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: Tag.self)
-    switch try container.decode(String.self, forKey: .tag) {
-    case "answer": self = .answer(try CommandAnswer(from: decoder))
-    case "next-round": self = .nextRound
-    case "resign": self = .resign
-    case "reveal-duplicity": self = .revealDuplicity
-    case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "Command: no case \(other)")
-    }
-  }
-
-  public func encode(to encoder: Encoder) throws {
-    var container = encoder.container(keyedBy: Tag.self)
-    switch self {
-    case .answer(let value):
-      try container.encode("answer", forKey: .tag)
-      try value.encode(to: encoder)
-    case .nextRound:
-      try container.encode("next-round", forKey: .tag)
-    case .resign:
-      try container.encode("resign", forKey: .tag)
-    case .revealDuplicity:
-      try container.encode("reveal-duplicity", forKey: .tag)
-    }
-  }
-
-  /** The case's "type", as the JSON has it. */
-  public var caseTag: String {
-    switch self {
-    case .answer: return "answer"
-    case .nextRound: return "next-round"
-    case .resign: return "resign"
-    case .revealDuplicity: return "reveal-duplicity"
-    }
-  }
-}
-
-public struct CommandAnswer: Codable, Equatable, Sendable {
-  public var promptId: String
-  public var answer: Answer
-
-  public init(promptId: String, answer: Answer) {
-    self.promptId = promptId
-    self.answer = answer
+  public init(player: String? = nil) {
+    self.player = player
   }
 
   private enum CodingKeys: String, CodingKey {
-    case promptId
-    case answer
+    case player
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.promptId = try container.decode(String.self, forKey: .promptId)
-    self.answer = try container.decode(Answer.self, forKey: .answer)
+    self.player = try container.decodeIfPresent(String.self, forKey: .player)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(self.promptId, forKey: .promptId)
-    try container.encode(self.answer, forKey: .answer)
+    try container.encodeIfPresent(self.player, forKey: .player)
   }
 }
 
@@ -1512,11 +1473,11 @@ public struct GameRecordSettings: Codable, Equatable, Sendable {
 }
 
 public struct Hint: Codable, Equatable, Sendable {
-  public var command: Command
+  public var command: Move
   public var probability: Double
   public var win: Double?
 
-  public init(command: Command, probability: Double, win: Double? = nil) {
+  public init(command: Move, probability: Double, win: Double? = nil) {
     self.command = command
     self.probability = probability
     self.win = win
@@ -1530,7 +1491,7 @@ public struct Hint: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.command = try container.decode(Command.self, forKey: .command)
+    self.command = try container.decode(Move.self, forKey: .command)
     self.probability = try container.decode(Double.self, forKey: .probability)
     self.win = try container.decodeIfPresent(Double.self, forKey: .win)
   }
@@ -1694,8 +1655,75 @@ public struct LogLine: Codable, Equatable, Sendable {
   }
 }
 
+public enum Move: Codable, Equatable, Sendable {
+  case answer(MoveAnswer)
+  case nextRound
+  case revealDuplicity
+
+  private enum Tag: String, CodingKey { case tag = "type" }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: Tag.self)
+    switch try container.decode(String.self, forKey: .tag) {
+    case "answer": self = .answer(try MoveAnswer(from: decoder))
+    case "next-round": self = .nextRound
+    case "reveal-duplicity": self = .revealDuplicity
+    case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "Move: no case \(other)")
+    }
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: Tag.self)
+    switch self {
+    case .answer(let value):
+      try container.encode("answer", forKey: .tag)
+      try value.encode(to: encoder)
+    case .nextRound:
+      try container.encode("next-round", forKey: .tag)
+    case .revealDuplicity:
+      try container.encode("reveal-duplicity", forKey: .tag)
+    }
+  }
+
+  /** The case's "type", as the JSON has it. */
+  public var caseTag: String {
+    switch self {
+    case .answer: return "answer"
+    case .nextRound: return "next-round"
+    case .revealDuplicity: return "reveal-duplicity"
+    }
+  }
+}
+
+public struct MoveAnswer: Codable, Equatable, Sendable {
+  public var promptId: String
+  public var answer: Answer
+
+  public init(promptId: String, answer: Answer) {
+    self.promptId = promptId
+    self.answer = answer
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case promptId
+    case answer
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.promptId = try container.decode(String.self, forKey: .promptId)
+    self.answer = try container.decode(Answer.self, forKey: .answer)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.promptId, forKey: .promptId)
+    try container.encode(self.answer, forKey: .answer)
+  }
+}
+
 public struct Option: Codable, Equatable, Sendable {
-  public var command: Command
+  public var command: Move
   public var refs: [String]
   public var label: String
   public var drags: [Drag]?
@@ -1703,7 +1731,7 @@ public struct Option: Codable, Equatable, Sendable {
   public var starts: [String]?
   public var groups: [String]?
 
-  public init(command: Command, refs: [String], label: String, drags: [Drag]? = nil, cards: [CardId], starts: [String]? = nil, groups: [String]? = nil) {
+  public init(command: Move, refs: [String], label: String, drags: [Drag]? = nil, cards: [CardId], starts: [String]? = nil, groups: [String]? = nil) {
     self.command = command
     self.refs = refs
     self.label = label
@@ -1725,7 +1753,7 @@ public struct Option: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.command = try container.decode(Command.self, forKey: .command)
+    self.command = try container.decode(Move.self, forKey: .command)
     self.refs = try container.decode([String].self, forKey: .refs)
     self.label = try container.decode(String.self, forKey: .label)
     self.drags = try container.decodeIfPresent([Drag].self, forKey: .drags)
@@ -1846,9 +1874,9 @@ public struct PlayerView: Codable, Equatable, Sendable {
   public var scores: [Double?]
   public var prompts: [PromptView]
   public var duplicityHolder: Int?
-  public var legal: [Command]
+  public var legal: [Move]
 
-  public init(viewer: Viewer, seats: [SeatKind], marksToWin: Double, marks: [Double], round: Double, turnNumber: Double, phase: Phase, turn: PlayerViewTurn? = nil, frame: PlayerViewFrame? = nil, startingSeat: Int? = nil, lastRoundWinner: Int? = nil, roundEnd: RoundEnd? = nil, piles: [PileView], hands: [PlayerViewHandsElement], keeps: [PlayerViewKeepsElement], discard: [CardId], scores: [Double?], prompts: [PromptView], duplicityHolder: Int? = nil, legal: [Command]) {
+  public init(viewer: Viewer, seats: [SeatKind], marksToWin: Double, marks: [Double], round: Double, turnNumber: Double, phase: Phase, turn: PlayerViewTurn? = nil, frame: PlayerViewFrame? = nil, startingSeat: Int? = nil, lastRoundWinner: Int? = nil, roundEnd: RoundEnd? = nil, piles: [PileView], hands: [PlayerViewHandsElement], keeps: [PlayerViewKeepsElement], discard: [CardId], scores: [Double?], prompts: [PromptView], duplicityHolder: Int? = nil, legal: [Move]) {
     self.viewer = viewer
     self.seats = seats
     self.marksToWin = marksToWin
@@ -1915,7 +1943,7 @@ public struct PlayerView: Codable, Equatable, Sendable {
     self.scores = try container.decode([Double?].self, forKey: .scores)
     self.prompts = try container.decode([PromptView].self, forKey: .prompts)
     self.duplicityHolder = try container.decode(Int?.self, forKey: .duplicityHolder)
-    self.legal = try container.decode([Command].self, forKey: .legal)
+    self.legal = try container.decode([Move].self, forKey: .legal)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -3002,14 +3030,16 @@ public struct RoomPlayer: Codable, Equatable, Sendable {
   public var host: Bool
   public var seat: Int?
   public var bot: Bool?
+  public var watching: Bool?
 
-  public init(id: String, name: String, connected: Bool, host: Bool, seat: Int? = nil, bot: Bool? = nil) {
+  public init(id: String, name: String, connected: Bool, host: Bool, seat: Int? = nil, bot: Bool? = nil, watching: Bool? = nil) {
     self.id = id
     self.name = name
     self.connected = connected
     self.host = host
     self.seat = seat
     self.bot = bot
+    self.watching = watching
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -3019,6 +3049,7 @@ public struct RoomPlayer: Codable, Equatable, Sendable {
     case host
     case seat
     case bot
+    case watching
   }
 
   public init(from decoder: Decoder) throws {
@@ -3029,6 +3060,7 @@ public struct RoomPlayer: Codable, Equatable, Sendable {
     self.host = try container.decode(Bool.self, forKey: .host)
     self.seat = try container.decode(Int?.self, forKey: .seat)
     self.bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
+    self.watching = try container.decodeIfPresent(Bool.self, forKey: .watching)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -3039,6 +3071,7 @@ public struct RoomPlayer: Codable, Equatable, Sendable {
     try container.encode(self.host, forKey: .host)
     if let value = self.seat { try container.encode(value, forKey: .seat) } else { try container.encodeNil(forKey: .seat) }
     try container.encodeIfPresent(self.bot, forKey: .bot)
+    try container.encodeIfPresent(self.watching, forKey: .watching)
   }
 }
 
@@ -3106,7 +3139,7 @@ public enum RoomSummaryPhase: String, Codable, Equatable, Sendable, CaseIterable
 
 public enum RoundEnd: Codable, Equatable, Sendable {
   case emptyPile(RoundEndEmptyPile)
-  case resign(RoundEndResign)
+  case left(RoundEndLeft)
   case tokens(RoundEndTokens)
 
   private enum Tag: String, CodingKey { case tag = "kind" }
@@ -3115,7 +3148,7 @@ public enum RoundEnd: Codable, Equatable, Sendable {
     let container = try decoder.container(keyedBy: Tag.self)
     switch try container.decode(String.self, forKey: .tag) {
     case "empty-pile": self = .emptyPile(try RoundEndEmptyPile(from: decoder))
-    case "resign": self = .resign(try RoundEndResign(from: decoder))
+    case "left": self = .left(try RoundEndLeft(from: decoder))
     case "tokens": self = .tokens(try RoundEndTokens(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "RoundEnd: no case \(other)")
     }
@@ -3127,8 +3160,8 @@ public enum RoundEnd: Codable, Equatable, Sendable {
     case .emptyPile(let value):
       try container.encode("empty-pile", forKey: .tag)
       try value.encode(to: encoder)
-    case .resign(let value):
-      try container.encode("resign", forKey: .tag)
+    case .left(let value):
+      try container.encode("left", forKey: .tag)
       try value.encode(to: encoder)
     case .tokens(let value):
       try container.encode("tokens", forKey: .tag)
@@ -3140,7 +3173,7 @@ public enum RoundEnd: Codable, Equatable, Sendable {
   public var caseTag: String {
     switch self {
     case .emptyPile: return "empty-pile"
-    case .resign: return "resign"
+    case .left: return "left"
     case .tokens: return "tokens"
     }
   }
@@ -3168,7 +3201,7 @@ public struct RoundEndEmptyPile: Codable, Equatable, Sendable {
   }
 }
 
-public struct RoundEndResign: Codable, Equatable, Sendable {
+public struct RoundEndLeft: Codable, Equatable, Sendable {
   public var seat: Int
 
   public init(seat: Int) {
@@ -3764,8 +3797,9 @@ public struct TableText: Codable, Equatable, Sendable {
   public var prompts: [TableTextPromptsElement]
   public var shown: TableTextShown?
   public var hints: [TableTextHintsElement]?
+  public var leaving: String?
 
-  public init(names: [String], possessive: [String], coins: [String], headline: String? = nil, prompts: [TableTextPromptsElement], shown: TableTextShown? = nil, hints: [TableTextHintsElement]? = nil) {
+  public init(names: [String], possessive: [String], coins: [String], headline: String? = nil, prompts: [TableTextPromptsElement], shown: TableTextShown? = nil, hints: [TableTextHintsElement]? = nil, leaving: String? = nil) {
     self.names = names
     self.possessive = possessive
     self.coins = coins
@@ -3773,6 +3807,7 @@ public struct TableText: Codable, Equatable, Sendable {
     self.prompts = prompts
     self.shown = shown
     self.hints = hints
+    self.leaving = leaving
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -3783,6 +3818,7 @@ public struct TableText: Codable, Equatable, Sendable {
     case prompts
     case shown
     case hints
+    case leaving
   }
 
   public init(from decoder: Decoder) throws {
@@ -3794,6 +3830,7 @@ public struct TableText: Codable, Equatable, Sendable {
     self.prompts = try container.decode([TableTextPromptsElement].self, forKey: .prompts)
     self.shown = try container.decode(TableTextShown?.self, forKey: .shown)
     self.hints = try container.decode([TableTextHintsElement]?.self, forKey: .hints)
+    self.leaving = try container.decode(String?.self, forKey: .leaving)
   }
 
   public func encode(to encoder: Encoder) throws {
@@ -3805,6 +3842,7 @@ public struct TableText: Codable, Equatable, Sendable {
     try container.encode(self.prompts, forKey: .prompts)
     if let value = self.shown { try container.encode(value, forKey: .shown) } else { try container.encodeNil(forKey: .shown) }
     if let value = self.hints { try container.encode(value, forKey: .hints) } else { try container.encodeNil(forKey: .hints) }
+    if let value = self.leaving { try container.encode(value, forKey: .leaving) } else { try container.encodeNil(forKey: .leaving) }
   }
 }
 
@@ -4234,6 +4272,7 @@ public enum TracePayload: Codable, Equatable, Sendable {
   case give(TracePayloadGive)
   case keepSwap(TracePayloadKeepSwap)
   case lastLaugh(TracePayloadLastLaugh)
+  case left(TracePayloadLeft)
   case look(TracePayloadLook)
   case lookHands(TracePayloadLookHands)
   case mark(TracePayloadMark)
@@ -4251,7 +4290,6 @@ public enum TracePayload: Codable, Equatable, Sendable {
   case placeOnPile(TracePayloadPlaceOnPile)
   case play(TracePayloadPlay)
   case prompt(TracePayloadPrompt)
-  case resign(TracePayloadResign)
   case reveal(TracePayloadReveal)
   case revealCard(TracePayloadRevealCard)
   case roundEnd(TracePayloadRoundEnd)
@@ -4280,6 +4318,7 @@ public enum TracePayload: Codable, Equatable, Sendable {
     case "give": self = .give(try TracePayloadGive(from: decoder))
     case "keep-swap": self = .keepSwap(try TracePayloadKeepSwap(from: decoder))
     case "last-laugh": self = .lastLaugh(try TracePayloadLastLaugh(from: decoder))
+    case "left": self = .left(try TracePayloadLeft(from: decoder))
     case "look": self = .look(try TracePayloadLook(from: decoder))
     case "look-hands": self = .lookHands(try TracePayloadLookHands(from: decoder))
     case "mark": self = .mark(try TracePayloadMark(from: decoder))
@@ -4297,7 +4336,6 @@ public enum TracePayload: Codable, Equatable, Sendable {
     case "place-on-pile": self = .placeOnPile(try TracePayloadPlaceOnPile(from: decoder))
     case "play": self = .play(try TracePayloadPlay(from: decoder))
     case "prompt": self = .prompt(try TracePayloadPrompt(from: decoder))
-    case "resign": self = .resign(try TracePayloadResign(from: decoder))
     case "reveal": self = .reveal(try TracePayloadReveal(from: decoder))
     case "reveal-card": self = .revealCard(try TracePayloadRevealCard(from: decoder))
     case "round-end": self = .roundEnd(try TracePayloadRoundEnd(from: decoder))
@@ -4346,6 +4384,9 @@ public enum TracePayload: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     case .lastLaugh(let value):
       try container.encode("last-laugh", forKey: .tag)
+      try value.encode(to: encoder)
+    case .left(let value):
+      try container.encode("left", forKey: .tag)
       try value.encode(to: encoder)
     case .look(let value):
       try container.encode("look", forKey: .tag)
@@ -4397,9 +4438,6 @@ public enum TracePayload: Codable, Equatable, Sendable {
       try value.encode(to: encoder)
     case .prompt(let value):
       try container.encode("prompt", forKey: .tag)
-      try value.encode(to: encoder)
-    case .resign(let value):
-      try container.encode("resign", forKey: .tag)
       try value.encode(to: encoder)
     case .reveal(let value):
       try container.encode("reveal", forKey: .tag)
@@ -4453,6 +4491,7 @@ public enum TracePayload: Codable, Equatable, Sendable {
     case .give: return "give"
     case .keepSwap: return "keep-swap"
     case .lastLaugh: return "last-laugh"
+    case .left: return "left"
     case .look: return "look"
     case .lookHands: return "look-hands"
     case .mark: return "mark"
@@ -4470,7 +4509,6 @@ public enum TracePayload: Codable, Equatable, Sendable {
     case .placeOnPile: return "place-on-pile"
     case .play: return "play"
     case .prompt: return "prompt"
-    case .resign: return "resign"
     case .reveal: return "reveal"
     case .revealCard: return "reveal-card"
     case .roundEnd: return "round-end"
@@ -4836,6 +4874,28 @@ public struct TracePayloadKeepSwapB: Codable, Equatable, Sendable {
 }
 
 public struct TracePayloadLastLaugh: Codable, Equatable, Sendable {
+  public var seat: Int
+
+  public init(seat: Int) {
+    self.seat = seat
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case seat
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.seat, forKey: .seat)
+  }
+}
+
+public struct TracePayloadLeft: Codable, Equatable, Sendable {
   public var seat: Int
 
   public init(seat: Int) {
@@ -5393,28 +5453,6 @@ public struct TracePayloadPrompt: Codable, Equatable, Sendable {
   }
 }
 
-public struct TracePayloadResign: Codable, Equatable, Sendable {
-  public var seat: Int
-
-  public init(seat: Int) {
-    self.seat = seat
-  }
-
-  private enum CodingKeys: String, CodingKey {
-    case seat
-  }
-
-  public init(from decoder: Decoder) throws {
-    let container = try decoder.container(keyedBy: CodingKeys.self)
-    self.seat = try container.decode(Int.self, forKey: .seat)
-  }
-
-  public func encode(to encoder: Encoder) throws {
-    var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(self.seat, forKey: .seat)
-  }
-}
-
 public struct TracePayloadReveal: Codable, Equatable, Sendable {
   public var seat: Int
   public var keep: Int
@@ -5476,7 +5514,7 @@ public struct TracePayloadRevealCard: Codable, Equatable, Sendable {
 
 public enum TracePayloadRoundEnd: Codable, Equatable, Sendable {
   case emptyPile(TracePayloadRoundEndEmptyPile)
-  case resign(TracePayloadRoundEndResign)
+  case left(TracePayloadRoundEndLeft)
   case tokens(TracePayloadRoundEndTokens)
 
   private enum Tag: String, CodingKey { case tag = "reason" }
@@ -5485,7 +5523,7 @@ public enum TracePayloadRoundEnd: Codable, Equatable, Sendable {
     let container = try decoder.container(keyedBy: Tag.self)
     switch try container.decode(String.self, forKey: .tag) {
     case "empty-pile": self = .emptyPile(try TracePayloadRoundEndEmptyPile(from: decoder))
-    case "resign": self = .resign(try TracePayloadRoundEndResign(from: decoder))
+    case "left": self = .left(try TracePayloadRoundEndLeft(from: decoder))
     case "tokens": self = .tokens(try TracePayloadRoundEndTokens(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "TracePayloadRoundEnd: no case \(other)")
     }
@@ -5497,8 +5535,8 @@ public enum TracePayloadRoundEnd: Codable, Equatable, Sendable {
     case .emptyPile(let value):
       try container.encode("empty-pile", forKey: .tag)
       try value.encode(to: encoder)
-    case .resign(let value):
-      try container.encode("resign", forKey: .tag)
+    case .left(let value):
+      try container.encode("left", forKey: .tag)
       try value.encode(to: encoder)
     case .tokens(let value):
       try container.encode("tokens", forKey: .tag)
@@ -5510,7 +5548,7 @@ public enum TracePayloadRoundEnd: Codable, Equatable, Sendable {
   public var caseTag: String {
     switch self {
     case .emptyPile: return "empty-pile"
-    case .resign: return "resign"
+    case .left: return "left"
     case .tokens: return "tokens"
     }
   }
@@ -5538,7 +5576,7 @@ public struct TracePayloadRoundEndEmptyPile: Codable, Equatable, Sendable {
   }
 }
 
-public struct TracePayloadRoundEndResign: Codable, Equatable, Sendable {
+public struct TracePayloadRoundEndLeft: Codable, Equatable, Sendable {
   public var seat: Int
 
   public init(seat: Int) {

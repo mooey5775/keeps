@@ -1,4 +1,4 @@
-import { CARDS, type PlayerView, type PromptView } from '@keeps/engine';
+import { CARDS, type PlayerView, type PromptView, type Seat } from '@keeps/engine';
 import type { Names } from './options.ts';
 
 // One-line descriptions of what's happening: what you need to decide, or
@@ -88,19 +88,32 @@ function othersPhrase(kind: PromptView['kind'], view: PlayerView): string {
 }
 
 export function headline(view: PlayerView, names: Names): string | null {
-  const resigned = view.roundEnd?.kind === 'resign' ? `${capital(names.seat(view.roundEnd.seat))} resigned: ` : '';
+  const leaver = view.roundEnd?.kind === 'left' ? `${capital(names.seat(view.roundEnd.seat))} left: ` : '';
   if (view.phase === 'game-over') {
     // (Won by marks, or by being the last player left.)
-    const winner = resigned ? view.lastRoundWinner! : view.marks.findIndex((m) => m >= view.marksToWin);
-    return `${resigned}${resigned ? names.seat(winner as 0) : capital(names.seat(winner as 0))} won the game!`;
+    const winner = leaver ? view.lastRoundWinner! : view.marks.findIndex((m) => m >= view.marksToWin);
+    return `${leaver}${leaver ? names.seat(winner as 0) : capital(names.seat(winner as 0))} won the game!`;
   }
-  if (view.phase === 'round-over' && resigned) return `${resigned}no one wins round ${view.round}.`;
+  if (view.phase === 'round-over' && leaver) return `${leaver}no one wins round ${view.round}.`;
   if (view.phase === 'round-over' && view.lastRoundWinner !== null) {
     const how = view.roundEnd?.kind === 'tokens' ? 'by collecting all three Tokens' : 'with the most coins';
     return `${capital(names.seat(view.lastRoundWinner))} won round ${view.round} ${how}.`;
   }
   if (view.phase === 'post-round') return 'The round is over. Last chances before scoring…';
   return null;
+}
+
+/**
+ * What leaving the game now gives up, for the confirmation before it (seated in a game still going). Null when leaving
+ * gives up nothing (watching, or the game is over).
+ */
+export function leaving(view: PlayerView, names: Names): string | null {
+  const me = view.viewer;
+  if (me === 'spectator' || view.phase === 'game-over' || view.seats[me] !== 'player') return null;
+  const others = ([0, 1, 2, 3] as Seat[]).filter((s) => s !== me && view.seats[s] === 'player');
+  return others.length === 1
+    ? `${capital(names.seat(others[0]!))} wins the game.`
+    : 'This round ends with no winner, and the game goes on without you.';
 }
 
 export const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

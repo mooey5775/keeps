@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { DisputeButton } from '../game/Dispute.tsx';
 import { GameTable } from '../game/GameTable.tsx';
 import { RoundReviewView } from '../game/RoundReview.tsx';
-import { natoSpelling } from '@keeps/table';
+import { leaving, makeNames, natoSpelling } from '@keeps/table';
 import { browserToken, otherTabInRoom, roomStore, tabToken, useRoomState, type NetGame } from '../net/store.ts';
 import { navigate } from '../router.ts';
 import { rememberName, savedName } from './Home.tsx';
@@ -133,16 +133,19 @@ function JoinForm({ code, error }: { code: string; error: string | null }) {
   );
 }
 
-function Lobby({ room, error }: { room: RoomSummary; error: { message: string } | null }) {
+function Lobby({ room, error }: { room: RoomSummary; error: { message: string; notice?: true } | null }) {
   const me = room.players.find((p) => p.id === room.you);
   const host = me?.host ?? false;
   const hostName = room.players.find((p) => p.host)?.name ?? 'the host';
   const link = `${location.origin}/r/${room.code}`;
   const [copied, setCopied] = useState(false);
-  const count = room.players.length;
+  // Who plays (the bot included) and who watches: dealt into no game, they may take a free seat.
+  const playing = room.players.filter((p) => !p.watching);
+  const watching = room.players.filter((p) => p.watching);
+  const count = playing.length;
   const hasBot = room.players.some((p) => p.bot);
-  // The bot only plays two-player games: no open seats to fill.
-  const emptySeats = hasBot ? 0 : Math.max(0, 4 - count);
+  const seats = hasBot ? 2 : 4;
+  const emptySeats = Math.max(0, seats - count);
   const { marksToWin, firstPlayer } = room.settings;
   const botLevel = room.settings.botLevel ?? 'hard';
   const levels = hasBot && room.botLevels;
@@ -175,10 +178,10 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
 
       <section>
         <h3>
-          Players <span className="count">{count} of {hasBot ? 2 : 4}</span>
+          Players <span className="count">{count} of {seats}</span>
         </h3>
         <ul className="players">
-          {room.players.map((p) => (
+          {playing.map((p) => (
             <li key={p.id}>
               <span className={`dot ${p.connected ? 'on' : 'off'}`} title={p.connected ? 'connected' : 'disconnected'} />
               {p.name}
@@ -188,6 +191,16 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
               {p.bot && host && (
                 <button type="button" className="link remove-bot" onClick={() => roomStore.send({ t: 'remove-bot' })}>
                   remove
+                </button>
+              )}
+              {p.id === room.you && !p.bot && (
+                <button type="button" className="link" onClick={() => roomStore.send({ t: 'watch' })}>
+                  watch instead
+                </button>
+              )}
+              {host && !p.bot && !p.connected && (
+                <button type="button" className="link" onClick={() => roomStore.send({ t: 'watch', player: p.id })}>
+                  move to watching
                 </button>
               )}
             </li>
@@ -204,7 +217,27 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
             Add the bot
           </button>
         )}
-        {hasBot && <p className="hint">The bot only plays two-player games.{count > 2 ? ' Remove it, or one of the others must leave, to start.' : ''}</p>}
+        {hasBot && <p className="hint">The bot only plays two-player games: anyone else watches.</p>}
+        {watching.length > 0 && (
+          <>
+            <h3>Watching</h3>
+            <ul className="players">
+              {watching.map((p) => (
+                <li key={p.id}>
+                  <span className={`dot ${p.connected ? 'on' : 'off'}`} title={p.connected ? 'connected' : 'disconnected'} />
+                  {p.name}
+                  {p.host && <span className="badge">host</span>}
+                  {p.id === room.you && <span className="badge">you</span>}
+                  {p.id === room.you && emptySeats > 0 && (
+                    <button type="button" className="link" onClick={() => roomStore.send({ t: 'sit' })}>
+                      take a seat
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </section>
 
       <section>
@@ -240,7 +273,7 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
                 onChange={(e) => roomStore.settings({ ...room.settings, firstPlayer: e.target.value === 'random' ? 'random' : { player: e.target.value } })}
               >
                 <option value="random">Random</option>
-                {room.players.map((p) => (
+                {playing.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                     {p.id === room.you ? ' (you)' : ''}
@@ -260,16 +293,15 @@ function Lobby({ room, error }: { room: RoomSummary; error: { message: string } 
       <section className="lobby-start">
         {host ? (
           <>
-            <button type="button" className="primary" disabled={count < 2 || count > 4 || (hasBot && count !== 2)} onClick={() => roomStore.send({ t: 'start' })}>
+            <button type="button" className="primary" disabled={count < 2} onClick={() => roomStore.send({ t: 'start' })}>
               Start the game
             </button>
             {count < 2 && <p className="hint">Waiting for at least one more player to join.</p>}
-            {count > 4 && <p className="hint">Keeps is for at most four players.</p>}
           </>
         ) : (
           <p>Waiting for {hostName} to start the game.</p>
         )}
-        {error && <p className="error">{error.message}</p>}
+        {error && <p className={error.notice ? 'hint' : 'error'}>{error.message}</p>}
       </section>
 
       <button
@@ -295,7 +327,7 @@ function OnlineGame({
   room: RoomSummary;
   game: NetGame;
   reviews: RoundReview[];
-  error: { id: number; message: string } | null;
+  error: { id: number; message: string; notice?: true } | null;
 }) {
   const me = room.players.find((p) => p.id === room.you);
   // Games against the bot: each finished round's review, opened from the side panel.
@@ -312,7 +344,7 @@ function OnlineGame({
   const side = (
     <div className="room-controls">
       {error && (
-        <p className="error" key={error.id}>
+        <p className={error.notice ? 'hint' : 'error'} key={error.id}>
           {error.message}{' '}
           <button type="button" className="link" onClick={() => roomStore.dismissError()}>
             dismiss
@@ -343,23 +375,33 @@ function OnlineGame({
             Undo last move…
           </button>
         )}
-        {game.view.phase !== 'game-over' && me?.seat !== null && me?.seat !== undefined && (
+        {me?.host && game.view.phase !== 'game-over' && (
           <button
             type="button"
             onClick={() => {
-              if (window.confirm('Resign this game? You give it up: with one other player left, they win it; otherwise this round ends with no winner, and the game goes on without you.')) {
-                roomStore.command({ type: 'resign' });
-              }
+              if (window.confirm('End the game for everyone? No one wins, and everyone goes back to the lobby.')) roomStore.send({ t: 'back-to-lobby' });
             }}
           >
-            Resign…
+            End game…
           </button>
         )}
-        {game.view.phase === 'game-over' && me?.host && (
+        {me?.host && game.view.phase === 'game-over' && (
           <button type="button" className="primary" onClick={() => roomStore.send({ t: 'back-to-lobby' })}>
             Back to lobby
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => {
+            // (Seated in a game still going, you resign: said first. Closing the tab instead keeps your seat.)
+            const resigning = leaving(game.view, makeNames(game.names, game.view.viewer));
+            if (resigning && !window.confirm(`Leave the game? ${resigning}`)) return;
+            roomStore.leave();
+            navigate('/');
+          }}
+        >
+          {leaving(game.view, makeNames(game.names, game.view.viewer)) ? 'Leave game…' : 'Leave room'}
+        </button>
       </div>
       {canTrain && (
         <div className="training-switch">

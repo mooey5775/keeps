@@ -26,7 +26,7 @@ struct RoomView: View {
       }
       .safeAreaInset(edge: .top) { linkBanner }
       .confirmationDialog("Leave the room?", isPresented: $confirmLeave, titleVisibility: .visible) {
-        Button("Leave", role: .destructive) { game.leave() }
+        Button("Leave", role: .destructive) { game.leaveGame() }
       }
     }
   }
@@ -66,25 +66,51 @@ struct RoomView: View {
     .frame(maxWidth: .infinity)
   }
 
+  /// Who plays (the bot included) and who watches (a full table, or come during a game): in the lobby, a watcher takes a
+  /// free seat, and a player may watch instead; the host may move someone away to watching.
   private func players(_ room: RoomSummary) -> some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Players (\(room.players.count) of 4)").font(Theme.text(.subheadline)).foregroundStyle(Theme.muted)
-      ForEach(room.players, id: \.id) { player in
+    let playing = room.players.filter { $0.watching != true }
+    let watching = room.players.filter { $0.watching == true }
+    let seats = room.players.contains { $0.bot == true } ? 2 : 4
+    return VStack(alignment: .leading, spacing: 10) {
+      Text("Players (\(playing.count) of \(seats))").font(Theme.text(.subheadline)).foregroundStyle(Theme.muted)
+      ForEach(playing, id: \.id) { player in
         HStack(spacing: 10) {
-          Circle().fill(player.connected ? Color.green.opacity(0.8) : Theme.muted.opacity(0.5)).frame(width: 8, height: 8)
-            .accessibilityHidden(true)
-          Text(player.name + (player.id == room.you ? " (you)" : "")).font(Theme.text(.body)).foregroundStyle(Theme.text)
-          Spacer()
-          if player.bot == true { tag("bot") }
-          if player.host { tag("host") }
-          if !player.connected { tag("away") }
+          row(player, room)
+          if player.id == room.you, player.bot != true { small("Watch instead") { game.watch() } }
+          if game.hosting, player.bot != true, !player.connected { small("Move to watching") { game.watch(player.id) } }
         }
-        .accessibilityElement(children: .combine)
+      }
+      if !watching.isEmpty {
+        Text("Watching").font(Theme.text(.subheadline)).foregroundStyle(Theme.muted).padding(.top, 6)
+        ForEach(watching, id: \.id) { player in
+          HStack(spacing: 10) {
+            row(player, room)
+            if player.id == room.you, playing.count < seats { small("Take a seat") { game.sit() } }
+          }
+        }
       }
     }
     .padding(16)
     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
     .environment(\.colorScheme, .dark)
+  }
+
+  private func row(_ player: RoomPlayer, _ room: RoomSummary) -> some View {
+    HStack(spacing: 10) {
+      Circle().fill(player.connected ? Color.green.opacity(0.8) : Theme.muted.opacity(0.5)).frame(width: 8, height: 8)
+        .accessibilityHidden(true)
+      Text(player.name + (player.id == room.you ? " (you)" : "")).font(Theme.text(.body)).foregroundStyle(Theme.text)
+      Spacer()
+      if player.bot == true { tag("bot") }
+      if player.host { tag("host") }
+      if !player.connected { tag("away") }
+    }
+    .accessibilityElement(children: .combine)
+  }
+
+  private func small(_ label: String, _ action: @escaping () -> Void) -> some View {
+    Button(label, action: action).font(Theme.text(.caption)).tint(Theme.gold)
   }
 
   private func tag(_ text: String) -> some View {
@@ -110,7 +136,7 @@ struct RoomView: View {
         Spacer()
         Picker("First turn", selection: Binding(get: { first(room) }, set: { id in update(room) { $0.firstPlayer = id.isEmpty ? .random : .object(SettingsFirstPlayerObject(player: id)) } })) {
           Text("Random").tag("")
-          ForEach(room.players, id: \.id) { Text($0.name).tag($0.id) }
+          ForEach(room.players.filter { $0.watching != true }, id: \.id) { Text($0.name).tag($0.id) }
         }
         .tint(Theme.gold)
       }
@@ -126,7 +152,7 @@ struct RoomView: View {
         Button(botIn ? "Remove Midstrike" : "Add Midstrike") { botIn ? game.removeBot() : game.addBot() }
           .font(Theme.text(.body))
           .tint(Theme.gold)
-          .disabled(!botIn && room.players.count >= 2)
+          .disabled(!botIn && room.players.filter { $0.watching != true }.count >= 2)
       }
     }
     .padding(16)
@@ -155,8 +181,8 @@ struct RoomView: View {
         .buttonStyle(.borderedProminent)
         .tint(Theme.gold)
         .foregroundStyle(Theme.background)
-        .disabled(room.players.count < 2)
-        if room.players.count < 2 {
+        .disabled(room.players.filter { $0.watching != true }.count < 2)
+        if room.players.filter({ $0.watching != true }).count < 2 {
           Text("Waiting for someone to join.").font(Theme.text(.footnote)).foregroundStyle(Theme.muted)
         }
       } else {

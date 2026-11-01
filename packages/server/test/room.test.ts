@@ -1,4 +1,4 @@
-import type { ActionChoice, Command, ReplayLog, Seat } from '@keeps/engine';
+import type { ActionChoice, Move, ReplayLog, Seat } from '@keeps/engine';
 import { PROTOCOL, type ClientMessage, type ServerMessage, type Settings } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type RoomDeps, type Send } from '../src/room.ts';
@@ -78,7 +78,7 @@ function step(room: Room, clients: Client[]): Client {
   return actor;
 }
 
-function actionCommand(client: Client, choice: ActionChoice): Command {
+function actionCommand(client: Client, choice: ActionChoice): Move {
   const prompt = client.game().view.prompts.find((p) => p.mine && p.kind === 'action')!;
   return { type: 'answer', promptId: prompt.id, answer: { kind: 'action', choice } };
 }
@@ -396,24 +396,131 @@ describe('leaving and the lobby', () => {
     expect(guest.last('room').room.players.map((p) => [p.name, p.host])).toEqual([['G', true]]);
   });
 
-  it('a seated player who leaves a running game keeps their seat', () => {
+  it('a seated player who goes away without leaving keeps their seat (a dead battery, a closed tab)', () => {
     const { room, clients } = startedGame(2);
-    send(room, clients[0]!, { t: 'leave' });
+    room.disconnect(clients[0]!.id, clients[0]!.send);
     const players = clients[1]!.last('room').room.players;
     expect(players).toHaveLength(2);
     expect(players.find((p) => p.id === clients[0]!.id)!.connected).toBe(false);
+    expect(clients[1]!.game().view.phase).toBe('playing');
   });
 
-  it('only returns to the lobby when the game is over', () => {
-    const { room, clients } = startedGame(2);
-    send(room, clients[0]!, { t: 'back-to-lobby' });
-    expect(clients[0]!.errors()).toEqual(['The game is still going.']);
+  it('leaving a game of two gives it up: the other player wins, and is the host now', () => {
+    const { room, clients, saved } = startedGame(2);
+    const [host, guest] = clients as [Client, Client];
+    const hostSeat = host.seat;
+    send(room, host, { t: 'leave' });
+    const view = guest.game().view;
+    expect(view.phase).toBe('game-over');
+    expect(view.lastRoundWinner).toBe(guest.seat);
+    expect(saved.at(-1)!.commands.at(-1)).toEqual({ seat: hostSeat, command: { type: 'leave' } });
+    // Out of the room; the game still names them.
+    expect(guest.last('room').room.players.map((p) => [p.name, p.host])).toEqual([['P2', true]]);
+    expect(guest.game().names[hostSeat]).toBe('P1');
+    expect(guest.messages).toContainEqual({ t: 'notice', message: 'P2 is the host now.' });
+    expect(host.messages).not.toContainEqual({ t: 'notice', message: 'P2 is the host now.' });
+  });
+
+  it('leaving a game of three ends the round, and the others play on without them; it cannot be undone', () => {
+    const { room, clients } = startedGame(3);
+    const [, leaver, other] = clients as [Client, Client, Client];
+    const seat = leaver.seat;
+    step(room, clients);
+    send(room, leaver, { t: 'leave' });
+    expect(other.game().view.phase).toBe('round-over');
+    expect(other.game().view.roundEnd).toEqual({ kind: 'left', seat });
+    expect(other.game().undo.available).toBe(false);
+    expect(other.last('room').room.players.map((p) => p.name)).toEqual(['P1', 'P3']);
+    send(room, other, { t: 'command', command: { type: 'next-round' } });
+    expect(other.errors()).toEqual([]);
+    expect(other.game().view.round).toBe(2);
+    expect(other.game().view.seats[seat]).toBe('ghost');
+    expect(other.game().names[seat]).toBe('P2');
+  });
+
+  it('the host can end a game before it is over: everyone back to the lobby, and told', () => {
+    const { room, clients } = startedGame(3);
+    const [host, guest] = clients as [Client, Client];
+    send(room, guest, { t: 'back-to-lobby' });
+    expect(guest.errors()).toEqual(['Only the host can do that.']);
+    send(room, host, { t: 'back-to-lobby' });
+    expect(host.errors()).toEqual([]);
+    expect(guest.last('room').room.phase).toBe('lobby');
+    expect(guest.last('room').room.players.every((p) => p.seat === null)).toBe(true);
+    expect(guest.messages).toContainEqual({ t: 'notice', message: 'P1 ended the game.' });
+    expect(host.messages.some((m) => m.t === 'notice')).toBe(false);
   });
 
   it('rejects room-level messages from players already in a room', () => {
     const { room, clients } = startedGame(2);
     send(room, clients[0]!, { t: 'join', code: 'ABCD', name: 'again' });
     expect(clients[0]!.errors()).toEqual(['You are already in a room.']);
+  });
+});
+
+describe('players and watchers', () => {
+  const roles = (c: Client) => c.last('room').room.players.map((p) => `${p.name}${p.watching ? ' (watching)' : ''}`);
+
+  it('a fifth person in the lobby watches, and the four play', () => {
+    const { room } = makeRoom();
+    const clients = ['A', 'B', 'C', 'D', 'E'].map((n) => join(room, n));
+    const fifth = clients[4]!;
+    expect(roles(fifth)).toEqual(['A', 'B', 'C', 'D', 'E (watching)']);
+    expect(fifth.messages).toContainEqual({ t: 'notice', message: 'The table is full: you are watching. Take a seat when one frees up.' });
+    send(room, clients[0]!, { t: 'start' });
+    expect(clients[0]!.errors()).toEqual([]);
+    expect(fifth.game().view.viewer).toBe('spectator');
+    expect(fifth.last('room').room.players.find((p) => p.name === 'E')!.seat).toBeNull();
+  });
+
+  it('someone joining a game under way watches, and stays a watcher back in the lobby until they take a seat', () => {
+    const { room, clients } = startedGame(2);
+    const late = join(room, 'Late');
+    expect(roles(late)).toEqual(['P1', 'P2', 'Late (watching)']);
+    send(room, late, { t: 'sit' });
+    expect(late.errors()).toEqual(['Wait for the game to end to take a seat.']);
+    send(room, clients[0]!, { t: 'back-to-lobby' });
+    expect(roles(late)).toEqual(['P1', 'P2', 'Late (watching)']);
+    send(room, late, { t: 'sit' });
+    expect(late.errors()).toHaveLength(1); // (only the refusal during the game)
+    expect(roles(late)).toEqual(['P1', 'P2', 'Late']);
+  });
+
+  it('a watcher takes a free seat, not a full one; a player may watch instead', () => {
+    const { room } = makeRoom();
+    const clients = ['A', 'B', 'C', 'D', 'E'].map((n) => join(room, n));
+    const [a, , , , e] = clients as [Client, Client, Client, Client, Client];
+    send(room, e, { t: 'sit' });
+    expect(e.errors()).toEqual(['The table is full.']);
+    send(room, a, { t: 'settings', settings: { marksToWin: 3, firstPlayer: { player: a.id } } });
+    send(room, a, { t: 'watch' });
+    expect(a.last('room').room.settings.firstPlayer).toBe('random');
+    send(room, e, { t: 'sit' });
+    expect(e.errors()).toHaveLength(1); // (only the refusal while it was full)
+    expect(roles(e)).toEqual(['A (watching)', 'B', 'C', 'D', 'E']);
+  });
+
+  it('the host moves someone away to watching, freeing their seat; not someone who is here', () => {
+    const { room } = makeRoom();
+    const [host, away, here] = ['H', 'Gone', 'Here'].map((n) => join(room, n)) as [Client, Client, Client];
+    room.disconnect(away.id, away.send);
+    send(room, here, { t: 'watch', player: away.id });
+    expect(here.errors()).toEqual(['Only the host can do that.']);
+    send(room, host, { t: 'watch', player: here.id });
+    expect(host.errors()).toEqual(['Here is here: only someone away can be moved to watching.']);
+    send(room, host, { t: 'watch', player: away.id });
+    expect(host.errors()).toHaveLength(1); // (only the refusal above)
+    expect(roles(host)).toEqual(['H', 'Gone (watching)', 'Here']);
+    send(room, host, { t: 'start' });
+    expect(host.game().view.seats.filter((k) => k === 'player')).toHaveLength(2);
+  });
+
+  it('with the bot, the table is for two: a second person watches', () => {
+    const { room } = makeRoom({ bot: { policy: undefined as never, schedule: () => () => {}, delay: () => 0 } });
+    const host = join(room, 'H');
+    send(room, host, { t: 'add-bot' });
+    const guest = join(room, 'G');
+    expect(roles(guest)).toEqual(['H', 'Bot', 'G (watching)']);
   });
 });
 

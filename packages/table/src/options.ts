@@ -1,4 +1,4 @@
-import { abilityCost, acquisitionOrder, CARDS, rotatedFrom, rotatedTo, type CardId, type Command, type PlayerView, type Seat } from '@keeps/engine';
+import { abilityCost, acquisitionOrder, CARDS, rotatedFrom, rotatedTo, type CardId, type Move, type PlayerView, type Seat } from '@keeps/engine';
 
 // Labels describe moves; they never re-derive a rule. Anything a label
 // predicts (which pile you'll get, what an ability costs) comes from an
@@ -48,7 +48,7 @@ export interface Drag {
 }
 
 export interface Option {
-  command: Command;
+  command: Move;
   refs: Ref[];
   label: string;
   /** How the move is made by carrying something (none: only by touching). */
@@ -109,8 +109,6 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
   return view.legal.map((command): Option => {
     if (command.type === 'next-round') return { command, refs: [], label: 'Start the next round', cards: [] };
     if (command.type === 'reveal-duplicity') return { command, refs: [], label: 'Reveal the face-down card (Duplicity)', cards: [] };
-    // (Resigning is never among the listed moves: the table offers it apart.)
-    if (command.type === 'resign') throw new Error('resigning listed among the moves');
     const prompt = prompts.get(command.promptId);
     const answer = command.answer;
     switch (answer.kind) {
@@ -439,7 +437,7 @@ export function panelItems(options: Option[], picked: Ref[]): PanelItem[] {
 }
 
 export type ClickResult =
-  | { kind: 'send'; command: Command }
+  | { kind: 'send'; command: Move }
   | { kind: 'pick'; picked: Ref[] }
   | { kind: 'ignore' };
 

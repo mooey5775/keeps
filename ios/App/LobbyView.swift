@@ -8,7 +8,9 @@ struct LobbyView: View {
   @AppStorage(LobbyView.placeKey) private var place = Place.phone
   static let placeKey = "where"
   @State private var code = ""
-  @State private var confirmDiscard = false
+  /// Asking whether to leave the game the phone holds (it holds one at a time), and what's done once it's left.
+  @State private var confirmHeld = false
+  @State private var then: (() -> Void)?
   @FocusState private var coding: Bool
 
   enum Place: String { case phone, online }
@@ -135,16 +137,11 @@ struct LobbyView: View {
             .buttonStyle(.borderedProminent)
             .tint(Theme.gold)
             .foregroundStyle(Theme.background)
-            Button("Discard this game", role: .destructive) { confirmDiscard = true }
+            Button("Leave this game", role: .destructive) { leaveHeld() }
               .font(Theme.text(.footnote))
-              .confirmationDialog("Discard the kept game?", isPresented: $confirmDiscard, titleVisibility: .visible) {
-                Button("Discard", role: .destructive) { game.discardKept() }
-              } message: {
-                Text("It can't be taken up again.")
-              }
           }
           Button {
-            game.play(Game.Setup(name: playerName, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random))
+            goOn { game.play(Game.Setup(name: playerName, level: BotLevel(rawValue: level) ?? .hard, marks: marks, first: .init(rawValue: first) ?? .random)) }
           } label: {
             Text(game.unfinished == nil ? "Play" : "New game").font(Theme.heading(game.unfinished == nil ? 30 : 24)).frame(maxWidth: .infinity).padding(.vertical, 6)
           }
@@ -152,6 +149,20 @@ struct LobbyView: View {
           .tint(game.unfinished == nil ? Theme.gold : Theme.panel)
           .foregroundStyle(game.unfinished == nil ? Theme.background : Theme.gold)
         }
+        .modifier(HeldDialog(game: game, isPresented: $confirmHeld, then: $then))
+  }
+
+  /// `action`, once the game the phone holds is left (it holds one at a time): asked first.
+  private func goOn(_ action: @escaping () -> Void) {
+    guard game.held != nil else { return action() }
+    then = action
+    confirmHeld = true
+  }
+
+  /// The game the phone holds, left (asked first).
+  private func leaveHeld() {
+    then = nil
+    confirmHeld = true
   }
 
   // MARK: Online
@@ -163,7 +174,7 @@ struct LobbyView: View {
   /// side in weight (neither is the main way: it depends on who's asking whom).
   private var onlineButtons: some View {
     VStack(spacing: 12) {
-      // The room you were in when you left, or the app closed: your seat is kept there.
+      // The room you were in when the app closed: your seat is kept there.
       if let seat = game.onlineSeat {
         Button { game.rejoin() } label: {
           VStack(spacing: 2) {
@@ -176,6 +187,8 @@ struct LobbyView: View {
         .buttonStyle(.borderedProminent)
         .tint(Theme.gold)
         .foregroundStyle(Theme.background)
+        Button("Leave this game", role: .destructive) { leaveHeld() }
+          .font(Theme.text(.footnote))
       }
       HStack(spacing: 8) {
         TextField("Room code", text: $code, prompt: Text("Room code").foregroundStyle(Theme.muted))
@@ -197,9 +210,10 @@ struct LobbyView: View {
           .disabled(roomCode.count != 4)
       }
       Text("or").font(Theme.text(.footnote)).italic().foregroundStyle(Theme.muted)
-      Button("Make a room") { game.host(on: server, name: playerName) }
+      Button("Make a room") { goOn { game.host(on: server, name: playerName) } }
         .buttonStyle(WayIn(fill: Theme.panel, text: Theme.gold))
     }
+    .modifier(HeldDialog(game: game, isPresented: $confirmHeld, then: $then))
   }
 
   /// The height of the ways in online: joining and making a room, alike.
@@ -211,7 +225,8 @@ struct LobbyView: View {
   private func joinRoom() {
     guard roomCode.count == 4 else { return }
     coding = false
-    game.join(on: server, code: roomCode, name: playerName)
+    let code = roomCode
+    goOn { game.join(on: server, code: code, name: playerName) }
   }
 
   /// A kept game, in a few words: "Against Hard Midstrike, first to 3".
@@ -254,5 +269,28 @@ private struct WayIn: ButtonStyle {
       .background(fill.opacity(enabled ? (configuration.isPressed ? 0.8 : 1) : 0.35), in: Capsule())
       .opacity(enabled ? 1 : 0.6)
       .contentShape(Capsule())
+  }
+}
+
+/// Leaving the game the phone holds (it holds one at a time), said first: you resign there. With `then`, what you asked
+/// for goes on once it's left (another game started, made or joined).
+private struct HeldDialog: ViewModifier {
+  let game: Game
+  @Binding var isPresented: Bool
+  @Binding var then: (() -> Void)?
+
+  func body(content: Content) -> some View {
+    content.confirmationDialog("Leave \(game.held ?? "the game")?", isPresented: $isPresented, titleVisibility: .visible) {
+      Button(then == nil ? "Leave" : "Leave it and go on", role: .destructive) {
+        game.giveUpHeld()
+        then?()
+        then = nil
+      }
+      Button("Cancel", role: .cancel) { then = nil }
+    } message: {
+      Text(then == nil
+        ? "Your seat goes: in a game still going, you resign."
+        : "The phone holds one game at a time. Your seat there goes: in a game still going, you resign.")
+    }
   }
 }

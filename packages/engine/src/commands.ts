@@ -57,10 +57,13 @@ export type Command =
   /** Whoever has Duplicity face-up reveals the face-down card. Free, at any time. */
   | { type: 'reveal-duplicity' }
   /**
-   * A player gives up the game, at any time until it's over (so it isn't listed among their moves: bots and the
-   * panel choose among those). See engine.ts resign.
+   * A player leaves the game, giving it up, at any time until it's over: the room's `leave`, never a move (not among a
+   * player's moves, legalCommands; a client's `command` carries a Move). See engine.ts leave.
    */
-  | { type: 'resign' };
+  | { type: 'leave' };
+
+/** A player's move: any command but leaving the game (which is the room's to send, when they leave it). */
+export type Move = Exclude<Command, { type: 'leave' }>;
 
 export type EngineErrorCode =
   | 'unknown-prompt'

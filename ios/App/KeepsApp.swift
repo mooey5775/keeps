@@ -90,6 +90,9 @@ struct RootView: View {
     }
     // The card being held, shown over everything: the table, and any sheet over it.
     .background(PreviewWindow(game: game))
+    .alert(game.notice ?? "", isPresented: Binding(get: { game.notice != nil && game.problem == nil }, set: { if !$0 { game.notice = nil } })) {
+      Button("OK") { game.notice = nil }
+    }
     .alert("Something went wrong", isPresented: Binding(get: { game.problem != nil }, set: { if !$0 { game.problem = nil } })) {
       Button("OK") { game.problem = nil }
     } message: {

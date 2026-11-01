@@ -18,7 +18,7 @@ enum Choosing {
 
   enum Touch: Equatable {
     /// The move.
-    case send(Command)
+    case send(Move)
     /// The elements touched so far (touching one again lets it go).
     case pick([String])
     /// Nothing to do with that element.
@@ -47,12 +47,11 @@ enum Choosing {
   }
 
   /// The decision a command answers: its prompt, or the command itself (next round, Duplicity's reveal).
-  static func decision(_ command: Command) -> String {
+  static func decision(_ command: Move) -> String {
     switch command {
     case .answer(let answer): "prompt:\(answer.promptId)"
     case .nextRound: "next-round"
     case .revealDuplicity: "reveal-duplicity"
-    case .resign: "resign"
     }
   }
 
@@ -60,7 +59,7 @@ enum Choosing {
   /// not yet redrawn for the next position answers one already answered. Not whether it's a legal answer (that's the
   /// engine's to say, and it says so loudly): a pile's order is any order of its cards, though its legal moves list
   /// only two.
-  static func answersOpen(_ command: Command, _ legal: [Command]) -> Bool {
+  static func answersOpen(_ command: Move, _ legal: [Move]) -> Bool {
     let wanted = decision(command)
     return legal.contains { decision($0) == wanted }
   }
