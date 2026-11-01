@@ -85,6 +85,16 @@ export interface EvaluateJob {
   myLog: TraceEvent[];
   commands: Command[];
   n: number;
+  /** Whether its result is still wanted (the game hasn't moved on): a pool may drop the rest of it, with Superseded. */
+  wanted?: () => boolean;
+}
+
+/** A search dropped because the position it was for has passed. */
+export class Superseded extends Error {
+  constructor() {
+    super('the position searched has passed');
+    this.name = 'Superseded';
+  }
 }
 
 /** What runs it: here (rollout-pool.ts, batch-search.ts), or on another machine (remote.ts). One row per world: ±1 per command, `me`'s result. */

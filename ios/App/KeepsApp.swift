@@ -63,6 +63,10 @@ struct KeepsApp: App {
           Game.Setup(level: BotLevel(rawValue: parts[0]) ?? .easy, marks: parts.count > 1 ? Int(parts[1]) ?? 3 : 3, first: .you),
           autoplay: parts.count > 2 ? Int(parts[2]) ?? 0 : 0)
       }
+      // KEEPS_CONTINUE[=n]: straight into the kept game, if there is one, and your next n moves at random.
+      if let moves = environment["KEEPS_CONTINUE"], game.unfinished != nil { game.resume(autoplay: Int(moves) ?? 0) }
+      // (A traced run is watched from the Mac: the phone stays awake for it.)
+      if environment["KEEPS_TRACE"] != nil { UIApplication.shared.isIdleTimerDisabled = true }
     } catch {
       status = "The core failed: \(error)"
       print("FAILED: \(error)\nDONE")

@@ -325,6 +325,38 @@ describe('the bot in a room', () => {
     expect(human.errors()).toEqual([]);
   });
 
+  it("tells a search when it's no longer wanted: advice once the decision is made, the bot's move once the game moved on", async () => {
+    const asked: BotTurn[] = [];
+    const never = () => new Promise<never>(() => {});
+    const { room, runBot } = botRoom({}, { choose: (turn) => (asked.push(turn), never()), advise: (turn) => (asked.push(turn), never()) });
+    const human = join(room, 'Ana');
+    room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: { player: human.id } } });
+    room.handle(human.id, { t: 'add-bot' });
+    room.handle(human.id, { t: 'start' });
+    room.handle(human.id, { t: 'training', on: true });
+    // Advice for your first decision: wanted until you make it.
+    const advice = asked.at(-1)!;
+    expect(advice.bot.seat).toBe(human.last('game').view.viewer);
+    expect(advice.wanted()).toBe(true);
+    const play = () => {
+      const legal = human.last('game').view.legal.filter((c) => c.type !== 'reveal-duplicity');
+      room.handle(human.id, { t: 'command', command: legal[0]! });
+    };
+    play();
+    expect(advice.wanted()).toBe(false);
+    // The bot's move: wanted while its turn waits for it.
+    for (let step = 0; human.last('game').view.prompts.some((p) => p.mine); step++) {
+      expect(step).toBeLessThan(10);
+      play();
+    }
+    expect(runBot()).toBe(true);
+    const move = asked.at(-1)!;
+    expect(move.bot.seat).not.toBe(human.last('game').view.viewer);
+    expect(move.wanted()).toBe(true);
+    room.close();
+    expect(move.wanted()).toBe(false);
+  });
+
   it('takes a saved game up again where it was: the bot, and training mode at your seat, as if it never stopped', async () => {
     const tick = () => new Promise((r) => setTimeout(r, 0));
     /**

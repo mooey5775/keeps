@@ -116,6 +116,8 @@ export interface BotTurn {
   events: readonly TraceEvent[];
   /** The difficulty the host chose (hard if the server offers no choice). */
   level: BotLevel;
+  /** Whether the move or advice is still wanted (the game hasn't moved on meanwhile): a search may stop once it isn't. */
+  wanted: () => boolean;
 }
 
 export interface BotDeps {
@@ -626,7 +628,8 @@ export class Room {
       if (this.botTimer === cancel) this.botTimer = null;
       return !cancelled && this.game === game && game.state === state;
     };
-    choose({ room: this, bot, state, events: game.events, level: this.settings.botLevel ?? 'hard' }).then(
+    const wanted = () => !cancelled && this.game === game && game.state === state;
+    choose({ room: this, bot, state, events: game.events, level: this.settings.botLevel ?? 'hard', wanted }).then(
       (choice) => {
         if (!settle()) return this.scheduleBot();
         if ('retryAfter' in choice) {
@@ -958,7 +961,7 @@ export class Room {
       const state = game.state;
       let advice: Hint[] | Promise<Hint[]>;
       try {
-        advice = this.advise(advisor.bot, state, game.events);
+        advice = this.advise(advisor.bot, state, game.events, () => this.game === game && game.state === state && advisor.advice?.state === state);
       } catch (error) {
         console.error(`room ${this.code}: training mode could not advise seat ${seat}:`, error);
         return null;
@@ -982,9 +985,9 @@ export class Room {
   }
 
   /** The advice itself: the server's own (deps.bot.advise: a search), or the network's suggestion at once. */
-  private advise(bot: BotPlayer, state: GameState, events: readonly TraceEvent[]): Hint[] | Promise<Hint[]> {
+  private advise(bot: BotPlayer, state: GameState, events: readonly TraceEvent[], wanted: () => boolean): Hint[] | Promise<Hint[]> {
     const advise = this.deps.bot?.advise;
-    return advise ? advise({ room: this, bot, state, events, level: this.settings.botLevel ?? 'hard' }) : bot.suggest(state, events);
+    return advise ? advise({ room: this, bot, state, events, level: this.settings.botLevel ?? 'hard', wanted }) : bot.suggest(state, events);
   }
 }
 

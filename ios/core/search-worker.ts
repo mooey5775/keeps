@@ -12,8 +12,13 @@ export type SearchWorkerReply =
 
 let policy: Policy | null = null;
 
+/** How long the app's network may take to answer one request before the search gives up, saying so. */
+const NETWORK_MS = 30_000;
+
 async function logits(rows: Float32Array[]): Promise<Float32Array> {
-  const response = await fetch('/nn/forward', { method: 'POST', body: encodeRequest(rows) });
+  const response = await fetch('/nn/forward', { method: 'POST', body: encodeRequest(rows), signal: AbortSignal.timeout(NETWORK_MS) }).catch((error: unknown) => {
+    throw new Error(`the network didn't answer ${rows.length} rows in ${NETWORK_MS / 1000} s (${error instanceof Error ? error.message : String(error)})`);
+  });
   if (!response.ok) throw new Error(`the network: HTTP ${response.status} ${await response.text()}`);
   return new Float32Array(await response.arrayBuffer());
 }

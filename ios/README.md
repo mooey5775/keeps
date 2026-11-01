@@ -25,6 +25,10 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
 - `KEEPS_SEED=ui-7` at launch makes every game the same, for the UI tests: the deal, the seating, Midstrike's draws.
   The UI tests use `ui-7` (your first cards played on their own) and `ui-keep-3` (your first card a Keep card).
 - `KEEPS_LAG=2000` holds the game's messages 2 s, as on a slow phone (a move touched twice in that time is made once).
+- `KEEPS_CONTINUE=3` goes straight into the kept game (`Documents/playing.json`) and makes your next 3 moves at random;
+  `KEEPS_TRACE=1` prints every message between the app and the core, timed (and keeps the phone awake). On the phone:
+  `xcrun devicectl device process launch --console --environment-variables '{"KEEPS_CONTINUE":"3","KEEPS_TRACE":"1"}'`.
+  How a game that froze on the phone was looked into: its kept game copied back onto the phone, and played on.
 - `xcrun simctl io booted recordVideo` while a UI test runs, then `ffmpeg` frames tiled into a sheet: how cards flying
   to their places were checked frame by frame (one card, no ghost).
 - `ios/tools/pull-games.sh` fetches the games the app kept: each one's replay log, in `Documents/games`.

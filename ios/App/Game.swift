@@ -111,8 +111,16 @@ final class Game {
     unfinished = core.kept()?.kept
   }
 
+  /// When the core's process last ended (a few, recent): ending again and again, the game isn't taken up by itself.
+  private var ends: [Date] = []
+  /// Ending this many times within `endsWithin` seconds, the core is left be: back to the lobby, the game kept.
+  private static let endsAllowed = 3
+  private static let endsWithin: TimeInterval = 120
+
   /// The core's process ended, taking the room with it: the table waits for the game to be taken up again.
   private func coreEnded() {
+    let now = Date()
+    ends = ends.filter { now.timeIntervalSince($0) < Self.endsWithin } + [now]
     connection = nil
     dragging = nil
     picked = []
@@ -127,7 +135,13 @@ final class Game {
   private func coreRestarted() {
     connection = nil
     guard screen != .lobby else { return unfinished = core.kept()?.kept }
-    if core.kept() != nil {
+    if ends.count >= Self.endsAllowed {
+      // (Something in this game ends it each time: taking it up again would only end it again.)
+      leave(forgetting: false)
+      unfinished = core.kept()?.kept
+      problem = "The game's engine stopped \(ends.count) times in a row, so it wasn't started again. Your game is kept: Continue takes it up."
+      ends = []
+    } else if core.kept() != nil {
       resume()
     } else {
       leave(forgetting: false)
@@ -153,9 +167,10 @@ final class Game {
   }
 
   /// The game kept unfinished, taken up where it was: the table as it was, Midstrike knowing what it knew.
-  func resume() {
+  func resume(autoplay: Int = 0) {
     guard let found = core.kept() else { return unfinished = nil }
     leave(forgetting: false)
+    self.autoplay = autoplay
     let record = found.kept.game
     let you = record.seats.first { $0.bot != true }
     setup = Setup(name: you?.name ?? "Player", level: record.settings.botLevel ?? .hard, marks: Int(record.settings.marksToWin))
@@ -359,8 +374,19 @@ final class Game {
     movesMade += 1
     awaitingMine = true
     core.send(connection, .command(ClientMessageCommand(command: command)))
+    // The core answers a move at once (it's the next position, or why not). No answer means it's stuck: said so, and
+    // the decision may be answered again, rather than every touch on it ignored in silence.
+    let decision = Choosing.decision(command)
+    Task { @MainActor [weak self] in
+      try? await Task.sleep(for: .seconds(Self.answerWithin))
+      guard let self, self.connection == connection, self.answering.remove(decision) != nil else { return }
+      self.problem = "The game hasn't answered your move in \(Int(Self.answerWithin)) seconds."
+    }
     return true
   }
+
+  /// How long the core may take to answer a move (it answers at once; a test may hold its messages two seconds).
+  private static let answerWithin: Double = 10
 
   func setTraining(_ on: Bool) {
     guard let connection else { return }

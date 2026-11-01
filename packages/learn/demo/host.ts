@@ -6,7 +6,10 @@
 import type { GameState, Seat } from '../../engine/src/index.ts';
 import type { BotDeps, BotTurn, Room, RoomHooks, RoomMember, RunningGame } from '../../server/src/room.ts';
 import { Reviewer, type ReviewedGame, type ReviewJobs } from './review.ts';
-import { searchAdvise, searchChoose, type Evaluator, type SearchReport } from './search-bot.ts';
+import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from './search-bot.ts';
+
+/** `pool`, its searches dropped once `wanted` says their position has passed (rather than played out for nothing). */
+const whileWanted = (pool: Evaluator, wanted: () => boolean): Evaluator => ({ evaluate: (job) => pool.evaluate({ ...job, wanted }) });
 
 export interface MidstrikeOptions {
   /** The bot's name, as the table knows it. */
@@ -70,11 +73,12 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
   const search = options.search;
   const bot: MidstrikeHost['bot'] = !search ? {} : {
     levels: true,
-    async choose({ room, bot, state, events, level }: BotTurn) {
+    async choose({ room, bot, state, events, level, wanted }: BotTurn) {
       if (level === 'easy') return { command: bot.choose(state, events) };
       const found = liveSearch(state, bot.seat);
       try {
-        const command = await searchChoose(bot, state, events, level === 'medium' ? search.medium : search.hard, (report) => {
+        // (Dropped, the search fails with Superseded: the room drops a move for a position that's gone anyway.)
+        const command = await searchChoose(bot, state, events, whileWanted(level === 'medium' ? search.medium : search.hard, wanted), (report) => {
           options.onSearch?.(room, report);
           found(report);
         });
@@ -89,10 +93,12 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
     },
     // Training mode's advice comes from the same search, at full strength whatever the difficulty, from the seat's
     // own information; with the search machine away, no hint at all.
-    advise({ room, bot, state, events }: BotTurn) {
+    advise({ room, bot, state, events, wanted }: BotTurn) {
       const found = liveSearch(state, bot.seat);
-      return searchAdvise(bot, state, events, search.hard, found)
+      return searchAdvise(bot, state, events, whileWanted(search.hard, wanted), found)
         .catch((error: unknown) => {
+          // Advice for a decision already made: none.
+          if (error instanceof Superseded) return [];
           if (!isAway(error)) throw error;
           tellAway(room, bot.seat);
           return [];

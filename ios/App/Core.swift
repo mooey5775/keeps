@@ -115,11 +115,21 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     deliver(.config(config))
   }
 
+  /// KEEPS_TRACE: every message to and from the core printed, timed (how a game that stalls is looked into).
+  private let trace = ProcessInfo.processInfo.environment["KEEPS_TRACE"] != nil
+
+  private func traced(_ way: String, _ json: String) {
+    guard trace else { return }
+    print("\(Date().formatted(.iso8601.time(includingFractionalSeconds: true))) \(way) \(json.prefix(240))")
+    fflush(stdout)
+  }
+
   private func deliver(_ message: FromApp) {
     guard let data = try? JSONEncoder().encode(message), let json = String(data: data, encoding: .utf8) else {
       onFailure?("could not encode \(message)")
       return
     }
+    traced("→", json)
     webView.callAsyncJavaScript("keepsCore.receive(json)", arguments: ["json": json], in: nil, in: .page) { result in
       if case .failure(let error) = result { self.onFailure?("keepsCore.receive: \(error)") }
     }
@@ -200,6 +210,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   }
 
   private func received(_ json: String) {
+    traced("←", json)
     let message: ToApp
     do {
       message = try JSONDecoder().decode(ToApp.self, from: Data(json.utf8))
