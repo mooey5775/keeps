@@ -5,7 +5,7 @@
 // it; otherwise greedy, the policy's most likely id.
 import { readFileSync } from 'node:fs';
 import { parentPort, workerData } from 'node:worker_threads';
-import type { Command, GameState, Seat, TraceEvent } from '../../../engine/src/index.ts';
+import type { Command, GameState, Seat, TraceEvent } from '@keeps/engine';
 import { Policy } from '../policy.ts';
 import { greedyPick, playOut, playout, sampledPick } from './playout.ts';
 

@@ -62,9 +62,9 @@ Independent of accounts, and fun right away. Bots also fill seats that are ghost
   entry, engine tests, a check of the bot (belief, world sampler), and both sites deployed. Same change: a
   card taken into a hand from a face-up top (Epiphany, Prayer, Requisition) is logged hidden although
   everyone saw it (`takeIntoHand`; draws of a face-up top are already public).
-- **Disputes filed on Midstrike are not kept.** keeps-midstrike has no `POSTHOG_KEY`, so a dispute there
-  only reaches the server's console log, which Fly keeps for a short time. Fix: give Midstrike the PostHog
-  key (its disputes tagged as Midstrike's), and append every dispute to a file on each site's data volume.
+- **Disputes are kept only in analytics.** Midstrike is part of the website now (one server, with its PostHog
+  key), so disputes against it reach analytics like any other; but a dispute reaches nothing else. Append every
+  dispute to a file on the data volume too.
 
 ## Before going public
 

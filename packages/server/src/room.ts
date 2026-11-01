@@ -60,9 +60,12 @@ export interface RoomDeps {
 
 /**
  * Told what happens in a room, each after the room has done its part (so a hook sees the room as it now is). A
- * server that adds to the game (Midstrike's host: its session notes, its round reviews) does it here.
+ * server that adds to the game (Midstrike's host: its session notes, its round reviews) does it here. A hook that
+ * throws is logged, loudly, and the room goes on: an add-on must not stop the game it's added to.
  */
 export interface RoomHooks {
+  /** A game was dealt, its players seated (the first message of it is yet to be sent). */
+  gameStarted?(room: Room): void;
   /** `player` was sent the game (whether or not they're connected, or a game is running): `reset`, their whole log. */
   sent?(room: Room, player: RoomMember, reset: boolean): void;
   /** A command was applied (rejected ones never get here). */
@@ -319,6 +322,17 @@ export class Room {
     for (const p of this.players) if (!p.bot && (seat === undefined || p.seat === seat)) p.send?.({ t: 'error', message });
   }
 
+  /** Tells the server's hooks (RoomHooks) what happened; one that throws is logged, and the room goes on. */
+  private tell<K extends keyof RoomHooks>(name: K, ...args: Parameters<NonNullable<RoomHooks[K]>>): void {
+    const hook = this.deps.hooks?.[name] as ((...a: typeof args) => void) | undefined;
+    if (!hook) return;
+    try {
+      hook(...args);
+    } catch (error) {
+      console.error(`room ${this.code}: the ${name} hook failed:`, error);
+    }
+  }
+
   private member(p: Player): RoomMember {
     return {
       id: p.id,
@@ -381,7 +395,7 @@ export class Room {
 
   /** Ends the room: tells everyone still connected it's gone. */
   close(): void {
-    this.deps.hooks?.closing?.(this);
+    this.tell('closing', this);
     this.closed = true;
     this.cancelBot();
     for (const p of this.players) {
@@ -397,7 +411,7 @@ export class Room {
     player.send = null;
     this.broadcastRoom();
     if (this.game?.undo) this.settleUndo();
-    this.deps.hooks?.disconnected?.(this, this.member(player));
+    this.tell('disconnected', this, this.member(player));
   }
 
   handle(playerId: string, message: ClientMessage): void {
@@ -446,7 +460,7 @@ export class Room {
         player.training = message.on === true;
         player.send?.({ t: 'room', room: this.summary(player) });
         if (this.game) this.sendGame(player, false);
-        if (player.training !== was) this.deps.hooks?.trainingChanged?.(this, this.member(player));
+        if (player.training !== was) this.tell('trainingChanged', this, this.member(player));
         return null;
       }
       case 'back-to-lobby':
@@ -460,7 +474,7 @@ export class Room {
         return null;
       case 'leave':
         this.leave(player);
-        this.deps.hooks?.left?.(this, this.member(player));
+        this.tell('left', this, this.member(player));
         return null;
       case 'add-bot':
         return this.addBot(player);
@@ -521,6 +535,7 @@ export class Room {
       player_ips: seated.map((p) => p.ip),
       ...this.botProperties(),
     });
+    this.tell('gameStarted', this);
     this.broadcastRoom();
     for (const p of this.players) this.sendGame(p, true);
     this.scheduleBot();
@@ -550,7 +565,7 @@ export class Room {
     this.followHumans();
     for (const p of this.players) this.sendGame(p, false, result.events);
     this.scheduleBot();
-    this.deps.hooks?.commanded?.(this, { seat: player.seat, command, before, after: result.state, newEvents: result.events, events: game.events });
+    this.tell('commanded', this, { seat: player.seat, command, before, after: result.state, newEvents: result.events, events: game.events });
     return null;
   }
 
@@ -918,7 +933,7 @@ export class Room {
   /** Sends `player` their view, plus either the new events or (on reset) the whole log; then the sent hook. */
   private sendGame(player: Player, reset: boolean, newEvents: TraceEvent[] = []): void {
     this.deliverGame(player, reset, newEvents);
-    this.deps.hooks?.sent?.(this, this.member(player), reset);
+    this.tell('sent', this, this.member(player), reset);
   }
 
   private deliverGame(player: Player, reset: boolean, newEvents: TraceEvent[]): void {

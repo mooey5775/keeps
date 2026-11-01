@@ -18,7 +18,10 @@ Then open the page, create a room, and send the link (`/r/ABCD`) to your friends
 | Variable | Default | Meaning |
 |---|---|---|
 | `PORT` | `8787` | HTTP and WebSocket port |
-| `KEEPS_DATA_DIR` | `./data` | Where replay logs are written (`replays/<room>-<time>.jsonl`) |
+| `KEEPS_DATA_DIR` | `./data` | Where replay logs (`replays/<room>-<time>.jsonl`) and the session log are written |
+| `ADMIN_TOKEN` | none (or `data/admin-token`) | The password for the admin pages, `/admin` and `/admin/bot/` |
+
+Midstrike, the bot, is part of the server: create a room "against the bot" to play it, at the level you choose. Locally it searches on this machine's cores; in production its search runs on a remote machine (`REMOTE_TOKEN`). Its settings are listed at the top of `packages/server/src/main.ts`.
 
 For development, `pnpm dev` runs the server and the Vite dev server together. Open the URL Vite prints; it proxies `/ws` to the server.
 

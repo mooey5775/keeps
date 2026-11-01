@@ -2,7 +2,7 @@
 // candidate command played out in each (playout.ts), all the playouts in lockstep: each step, every unfinished
 // playout's next observation goes to the network in one batch. The playouts are split into groups that take
 // turns, so one group's engine work overlaps the other's wait for the network.
-import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Belief, noteObservation } from '../belief.ts';
 import type { Policy } from '../policy.ts';
 import { sampleHistory, worldModel } from '../worlds.ts';

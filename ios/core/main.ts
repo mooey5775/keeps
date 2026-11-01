@@ -1,5 +1,5 @@
 // The app's core, in a hidden web view (WebKit's JIT runs the rules and the search): the game server the app plays
-// on, offline, with Midstrike's host (packages/bot/src/host.ts), its searches in Web Workers and its network in
+// on, offline, with Midstrike's host (packages/server/src/host.ts), its searches in Web Workers and its network in
 // Core ML on the Neural Engine (the app's keeps:// scheme).
 //
 // The app (Swift) talks to it in JSON strings: it calls keepsCore.receive(json) and gets messages back through the
@@ -7,7 +7,7 @@
 // like a browser; each game message comes with what the web client works out for itself: the options (every legal
 // move, with what it involves on the table: packages/table/src/options.ts) and the log's lines (packages/table/src/log.ts).
 import { Policy } from '../../packages/bot/src/policy.ts';
-import { midstrikeHost } from '../../packages/bot/src/host.ts';
+import { midstrikeHost } from '../../packages/server/src/host.ts';
 import { seeded } from '../../packages/bot/src/random.ts';
 import { setSearchMode, setWorlds } from '../../packages/bot/src/search/search.ts';
 import { cardCatalog, coreBridge, savedMessage, type ToApp } from './bridge.ts';

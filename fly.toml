@@ -32,8 +32,17 @@ primary_region = "sjc"
     path = "/health"
     interval = "30s"
     timeout = "5s"
-    grace_period = "10s"
+    # (Loading Midstrike's network takes a few seconds.)
+    grace_period = "15s"
 
+# Saved games and the session log (KEEPS_DATA_DIR) live on a volume, so they survive redeploys and restarts. Create
+# it once: fly volumes create keeps_data --size 1 -r sjc -a keeps-online
+[mounts]
+  source = "keeps_data"
+  destination = "/app/data"
+
+# Midstrike's searching and reviews run on gpu03 (see the Dockerfile): this machine serves the games and holds the
+# network and the reviews' bookkeeping, for which 2 GB is ample.
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = "shared-cpu-2x"
+  memory = "2gb"

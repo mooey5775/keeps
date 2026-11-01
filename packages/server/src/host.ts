@@ -3,10 +3,10 @@
 // it reviewed for the person. It plugs into a room through room.ts's BotDeps (choose, advise) and RoomHooks; the
 // searching and the review's playouts run wherever the server says (its Evaluators, its ReviewJobs), so this file
 // runs in Node or in a browser alike.
-import type { GameState, Seat } from '../../engine/src/index.ts';
-import type { BotDeps, BotTurn, Room, RoomHooks, RoomMember, RunningGame } from '../../server/src/room.ts';
-import { Reviewer, type ReviewedGame, type ReviewJobs } from './review/review.ts';
-import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from './search/search.ts';
+import type { GameState, Seat } from '@keeps/engine';
+import type { BotDeps, BotTurn, Room, RoomHooks, RoomMember, RunningGame } from './room.ts';
+import { Reviewer, type ReviewedGame, type ReviewJobs } from '@keeps/bot/review/review.ts';
+import { searchAdvise, searchChoose, Superseded, type Evaluator, type SearchReport } from '@keeps/bot/search/search.ts';
 
 /** `pool`, its searches dropped once `wanted` says their position has passed (rather than played out for nothing). */
 const whileWanted = (pool: Evaluator, wanted: () => boolean): Evaluator => ({ evaluate: (job) => pool.evaluate({ ...job, wanted }) });
@@ -171,7 +171,9 @@ export function composeHooks(...all: RoomHooks[]): RoomHooks {
     (...args: Parameters<NonNullable<RoomHooks[K]>>) => {
       for (const hooks of all) (hooks[name] as ((...a: typeof args) => void) | undefined)?.(...args);
     };
-  return {
+  // (Every hook, by a record the compiler holds to RoomHooks: a hook added there and missed here won't compile.)
+  const hooks: { [K in keyof Required<RoomHooks>]: RoomHooks[K] } = {
+    gameStarted: each('gameStarted'),
     sent: each('sent'),
     commanded: each('commanded'),
     trainingChanged: each('trainingChanged'),
@@ -179,4 +181,5 @@ export function composeHooks(...all: RoomHooks[]): RoomHooks {
     disconnected: each('disconnected'),
     closing: each('closing'),
   };
+  return hooks;
 }

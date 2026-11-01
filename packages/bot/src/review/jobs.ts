@@ -5,7 +5,7 @@
 //           of it), each played on once, or once per given first move (the same worlds for every move):
 //           `me`'s result per world and move, 1 won, 0 not.
 // Run anywhere: review-worker.ts runs them in Node processes; the app, in Web Workers.
-import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { apply, eventsFor, legalCommands, viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Decision, NUM_ACTIONS } from '../actions.ts';
 import { Belief, noteObservation } from '../belief.ts';
 import { encodeObservation2 } from '../observation2.ts';

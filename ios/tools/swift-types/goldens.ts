@@ -17,14 +17,14 @@ const out = process.argv[2];
 if (!out) throw new Error('usage: goldens.ts <out dir>');
 
 const { Policy } = await import('../../../packages/bot/src/policy.ts');
-const { midstrikeHost } = await import('../../../packages/bot/src/host.ts');
+const { midstrikeHost } = await import('../../../packages/server/src/host.ts');
 const { setSearchLog, setSearchMode, setWorlds } = await import('../../../packages/bot/src/search/search.ts');
 const { RolloutPool } = await import('../../../packages/bot/src/search/rollout-pool.ts');
 const { reviewRunner } = await import('../../../packages/bot/src/review/jobs.ts');
 const { LocalServer } = await import('../../core/local-server.ts');
 const { coreBridge, savedMessage } = await import('../../core/bridge.ts');
 const { capped } = await import('../../core/search-pool.ts');
-const { composeHooks } = await import('../../../packages/bot/src/host.ts');
+const { composeHooks } = await import('../../../packages/server/src/host.ts');
 const { seeded } = await import('../../../packages/bot/src/random.ts');
 // Seeded throughout (deals, the room's choices, Midstrike's at easy, the moves played here), so the coverage games are
 // the same games every run: the check passes or fails the same way until the engine or the bot changes.

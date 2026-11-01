@@ -1,16 +1,15 @@
-// Who played on the demo, and how it went: every game whose replay changed since a time.
-//   node sessions.ts [--since <ISO time or ms>]     (default: the last restart, from data/last-restart)
+// Who played, and how it went: every game whose replay changed since a time.
+//   node packages/server/src/sessions.ts [--since <ISO time or ms>]     (default: every game)
 // One line per game: room, times, players (from data/sessions.jsonl; by seat for games before it
 // existed), rounds, marks, the result (won, or unfinished and where it stood), and who used training
-// mode when. On Fly: fly ssh console -a keeps-midstrike -C "node packages/learn/demo/sessions.ts"
+// mode when. On Fly: fly ssh console -C "node packages/server/src/sessions.ts --since 2026-11-01"
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { apply, newGame, type GameState, type Seat } from '../../engine/src/index.ts';
+import { apply, newGame, type GameState, type Seat } from '@keeps/engine';
 
-const DATA = process.env.KEEPS_DATA_DIR ?? join(import.meta.dirname, 'data');
+const DATA = process.env.KEEPS_DATA_DIR ?? join(import.meta.dirname, '..', '..', '..', 'data');
 const sinceArg = process.argv.indexOf('--since') >= 0 ? process.argv[process.argv.indexOf('--since') + 1]! : null;
-const lastRestart = existsSync(join(DATA, 'last-restart')) ? readFileSync(join(DATA, 'last-restart'), 'utf8').trim() : '0';
-const raw = sinceArg ?? lastRestart;
+const raw = sinceArg ?? '0';
 const since = /^\d+$/.test(raw) ? Number(raw) : Date.parse(raw);
 
 type Session = { replay: string; room: string; startedAt: number; bot: string; level?: string; players: { seat: number; name: string; bot: boolean; training?: boolean }[] };

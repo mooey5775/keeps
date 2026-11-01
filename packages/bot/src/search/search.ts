@@ -12,7 +12,7 @@ import {
   type GameState,
   type Seat,
   type TraceEvent,
-} from '../../../engine/src/index.ts';
+} from '@keeps/engine';
 import { actionName, Decision, NUM_ACTIONS } from '../actions.ts';
 import { Belief, noteObservation } from '../belief.ts';
 import { encodeObservation2 } from '../observation2.ts';

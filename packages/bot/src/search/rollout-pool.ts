@@ -1,7 +1,7 @@
 // The search's playouts in Node worker threads, one playout at a time each (rollout-worker.ts): the Evaluator
 // used where there is no GPU server (batch-search.ts batches them). Node only; search-bot.ts holds the search itself.
 import { Worker } from 'node:worker_threads';
-import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '../../../engine/src/index.ts';
+import { viewFor, type Command, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { Belief, noteObservation } from '../belief.ts';
 import { sampleHistory, worldModel } from '../worlds.ts';
 import { random, type EvaluateJob, type Evaluator } from './search.ts';
