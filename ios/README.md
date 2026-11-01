@@ -28,6 +28,10 @@ APP_ID=${APP_ID:-online.playkeeps.KeepsSpike}   # until the developer account ha
   - the generated types checked against the TypeScript;
   - the golden messages of whole games, recorded on gpu03;
   - the Swift tests on the simulator: the protocol round trips, choosing, and the table's UI tests (touching, holding, carrying).
+- The `KEEPS_*` switches below, and the core's web view open to Safari's Web Inspector, are in our own builds only
+  (`App/Internal.swift`): Debug (the tests') and `sync.sh`'s. `STORE=1 ios/sync.sh` builds as the App Store would
+  have it, without them. A build's number is the commit count (`sync.sh`); its version, `MARKETING_VERSION` in
+  `project.yml`.
 - `KEEPS_SELFTEST=1 ios/sync.sh` plays whole games headless on the phone or simulator.
 - `KEEPS_SEED=ui-7` at launch makes every game the same, for the UI tests: the deal, the seating, Midstrike's draws.
   The UI tests use `ui-7` (your first cards played on their own) and `ui-keep-3` (your first card a Keep card).
@@ -59,8 +63,8 @@ there (`core/remote.ts`) and passes the server's messages through the same bridg
 as a game on the phone; a connection that drops comes back by itself and takes its seat again (`resume`, with the
 seat's token, as a browser's tab does). The app keeps that seat, so after it closes the lobby offers to go back.
 
-- **Which server:** midstrike.playkeeps.online. playkeeps.online runs main, whose protocol is older than the app's: it
-  joins once main has this branch's.
+- **Which server:** playkeeps.online. Its old name for the bot, midstrike.playkeeps.online, is the same server: its
+  pages go to playkeeps.online, its WebSocket (an app built for it, a seat kept there) is still served.
 - **Versions:** the server's welcome carries its `PROTOCOL` (packages/protocol); the core stops at one that speaks
   another and says which side is behind, rather than meet messages the app can't read. Bump it only for a change an
   older app can't read; make new fields optional instead where possible.
@@ -70,8 +74,7 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
 
 ## TODO
 
-- **Next:** playkeeps.online, once main has this branch's protocol (merge and deploy); the online room's polish (who's
-  connected while playing, a spectator's table).
+- **Next:** the online room's polish (who's connected while playing, a spectator's table).
 - **Analytics:** collect game traces (each game's replay log, already kept on the phone and on the website's server),
   opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
   With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's

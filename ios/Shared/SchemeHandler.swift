@@ -3,11 +3,7 @@ import WebKit
 
 /// keeps://app/: the bundled page and its files, and the network:
 ///   POST nn/forward  observations (inference protocol, packages/bot/src/search/inference.ts) → float32 logits
-///   POST nn/echo     the same request answered with zeros, without the network (the bridge's own cost)
 ///   GET  nn/info     the model's metadata (its network's fingerprint and step) and the device's cores
-///   GET  nn/stats    where the requests' time went since the last call (JSON)
-///   GET  nn/bench    Core ML's own speed, by compute units and batch size
-///   GET  nn/units?set=ane|gpu|cpu|all  which compute units the model runs on from now
 final class SchemeHandler: NSObject, WKURLSchemeHandler {
   private let root: URL
   private let inference: Inference
@@ -27,29 +23,15 @@ final class SchemeHandler: NSObject, WKURLSchemeHandler {
     guard let url = request.url else { return finish(task, .failure(KeepsError("no URL"))) }
     let inference = self.inference
     switch url.path {
-    case "/nn/forward", "/nn/echo":
+    case "/nn/forward":
       let body = Self.body(of: request)
-      let echo = url.path == "/nn/echo"
       queue.async {
-        let result = Result { echo ? try inference.echo(body) : try inference.forward(body) }
+        let result = Result { try inference.forward(body) }
         DispatchQueue.main.async { self.finish(task, result, type: "application/octet-stream") }
       }
     case "/nn/info":
       let info = inference.metadata.merging(Cores.current.info) { a, _ in a }
       finish(task, Result { try JSONSerialization.data(withJSONObject: info) }, type: "application/json")
-    case "/nn/stats":
-      finish(task, Result { try inference.takeTimes() }, type: "application/json")
-    case "/nn/bench":
-      queue.async {
-        let result = Result { Data(try inference.bench().utf8) }
-        DispatchQueue.main.async { self.finish(task, result, type: "text/plain") }
-      }
-    case "/nn/units":
-      let name = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first { $0.name == "set" }?.value ?? "ane"
-      queue.async {
-        let result = Result { try inference.setUnits(name); return Data("ok".utf8) }
-        DispatchQueue.main.async { self.finish(task, result, type: "text/plain") }
-      }
     default:
       let file = root.appendingPathComponent(String(url.path.dropFirst()))
       guard file.standardizedFileURL.path.hasPrefix(root.standardizedFileURL.path) else {

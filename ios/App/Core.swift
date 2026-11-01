@@ -42,7 +42,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     super.init()
     // (The controller is shared with the view; a handler holds its target strongly: the core lives as long as the app.)
     config.userContentController.add(self, name: "core")
-    webView.isInspectable = true
+    webView.isInspectable = Internal.on
     webView.navigationDelegate = self
   }
 
@@ -122,7 +122,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   }
 
   /// KEEPS_TRACE: every message to and from the core printed, timed (how a game that stalls is looked into).
-  private let trace = ProcessInfo.processInfo.environment["KEEPS_TRACE"] != nil
+  private let trace = Internal.environment["KEEPS_TRACE"] != nil
 
   private func traced(_ way: String, _ json: String) {
     guard trace else { return }

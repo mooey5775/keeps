@@ -1,11 +1,10 @@
-// The app's own game server: rooms (packages/server/src/room.ts) held here, one connection per client, speaking the
-// same protocol as the website's server (packages/server/src/server.ts handles a WebSocket the same way). Offline
-// games against Midstrike run on it; the app talks to it exactly as a browser talks to the site.
+// The app's own game server: rooms (packages/server/src/room.ts) held here, one connection per client, as the website's
+// server holds them (packages/server/src/connection.ts, the same code). Offline games against Midstrike run on it; the
+// app talks to it exactly as a browser talks to the site. A room no one is connected to is closed: the app takes a game
+// up again from what it kept (restore), never by a seat's token.
 import type { ClientMessage, ServerMessage } from '@keeps/protocol';
+import { connection } from '@keeps/server/connection.ts';
 import { Room, type RoomDeps, type SavedGame } from '@keeps/server/room.ts';
-
-// Unambiguous letters for room codes (no I, O, L), as the website's.
-const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 
 export class LocalServer {
   private readonly rooms = new Map<string, Room>();
@@ -13,6 +12,11 @@ export class LocalServer {
 
   constructor(deps: RoomDeps) {
     this.deps = deps;
+  }
+
+  /** The rooms open now (for tests). */
+  get open(): number {
+    return this.rooms.size;
   }
 
   /** The game running in room `code`, saved to be taken up again (and whether it's over); null if none. */
@@ -32,53 +36,17 @@ export class LocalServer {
 
   /** A connection: messages from its client go to receive(); the server's go to `send`. */
   connect(send: (message: ServerMessage) => void): { receive(message: ClientMessage): void; close(): void } {
-    let room: Room | null = null;
-    let playerId: string | null = null;
-    const fail = (message: string) => send({ t: 'error', message });
+    const client = connection(this.rooms, this.deps, send);
     return {
-      receive: (message) => {
-        if (room && playerId) {
-          room.handle(playerId, message);
-          return;
-        }
-        switch (message.t) {
-          case 'create': {
-            const code = this.newCode();
-            room = new Room(code, this.deps);
-            this.rooms.set(code, room);
-            playerId = room.join(message.name, send).id;
-            if (message.bot === true) room.handle(playerId, { t: 'add-bot' });
-            return;
-          }
-          case 'join': {
-            const found = this.rooms.get(String(message.code ?? '').toUpperCase());
-            if (!found) return fail(`No room called ${message.code}.`);
-            room = found;
-            playerId = found.join(message.name, send).id;
-            return;
-          }
-          case 'resume': {
-            const found = this.rooms.get(String(message.code ?? '').toUpperCase());
-            const player = found?.resume(String(message.token ?? ''), send);
-            if (!found || !player) return send({ t: 'gone' });
-            room = found;
-            playerId = player.id;
-            return;
-          }
-          default:
-            return fail('Join or create a room first.');
-        }
-      },
+      receive: (message) => client.receive(message),
       close: () => {
-        if (room && playerId) room.disconnect(playerId, send);
+        client.close();
+        const room = client.room;
+        if (room && room.connectedCount === 0 && this.rooms.get(room.code) === room) {
+          room.close();
+          this.rooms.delete(room.code);
+        }
       },
     };
-  }
-
-  private newCode(): string {
-    for (;;) {
-      const code = Array.from({ length: 4 }, () => CODE_LETTERS[Math.floor(Math.random() * CODE_LETTERS.length)]).join('');
-      if (!this.rooms.has(code)) return code;
-    }
   }
 }

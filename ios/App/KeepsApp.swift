@@ -37,7 +37,7 @@ struct KeepsApp: App {
       let ready = try await core.start()
       print("Core ready: \(ready.network), \(Int(ready.workers)) search workers")
       fflush(stdout)
-      let environment = ProcessInfo.processInfo.environment
+      let environment = Internal.environment
       if environment["KEEPS_SELFTEST"] != nil {
         UIApplication.shared.isIdleTimerDisabled = true
         let games = (environment["KEEPS_SELFTEST_GAMES"] ?? "hard:1,easy:1").split(separator: ",").map { spec in

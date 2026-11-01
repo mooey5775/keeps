@@ -10,6 +10,9 @@ primary_region = "sjc"
 
 [env]
   PORT = "8080"
+  # The bot's site, midstrike.playkeeps.online, is this one now: its pages are sent here (its WebSocket still served).
+  SITE_URL = "https://playkeeps.online"
+  REDIRECT_HOSTS = "midstrike.playkeeps.online"
 
 [http_service]
   internal_port = 8080

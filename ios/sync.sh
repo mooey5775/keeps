@@ -7,6 +7,7 @@
 #   KEEPS_SELFTEST=1 ios/sync.sh     run the app's self-test (KEEPS_SELFTEST_GAMES='hard:1,easy:1': level:marks, ...)
 #   SIM='iPhone 17' ios/sync.sh      on the Mac's iOS simulator instead of the phone (no signing needed)
 #   KEEPS_PLAY=easy:3 ios/sync.sh    straight into a game against Midstrike at that level, to that many marks
+#   STORE=1 ios/sync.sh --no-run     as the App Store would have it: without the KEEPS_* switches (Internal.swift)
 # The Mac (MAC), the phone (DEVICE) and the bundle id to build as (APP_ID) come from the environment or ios/local.env.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -33,9 +34,13 @@ rsync -a --delete --exclude=__pycache__ training/keeps_bot training/marvel "$MAC
 rsync -a "$WEIGHTS" "$MAC:src/keeps/$WEIGHTS"
 
 SIM=${SIM:-}
-ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$APP_ID" "$(printf %q "$SIM")" <<'EOF'
+# The build's number: the commit count, so each build of a later commit counts higher. Ours have the KEEPS_* switches.
+SETTINGS="CURRENT_PROJECT_VERSION=$(git rev-list --count HEAD)"
+[ -n "${STORE:-}" ] || SETTINGS="$SETTINGS SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL"
+ssh "$MAC" bash -s -- "$DEVICE" "$WEIGHTS" "$APP_ID" "$(printf %q "$SIM")" "$SETTINGS" <<'EOF'
 set -euo pipefail
 DEVICE=$1 WEIGHTS=$2 APP_ID=$3 SIM=$4
+read -r -a SETTINGS <<< "$5"
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps
 if [ ! -d ios/build/KeepsPolicy.mlpackage ] || [ "$WEIGHTS" -nt ios/build/KeepsPolicy.mlpackage ]; then
@@ -55,12 +60,12 @@ fi
 xcodegen generate --quiet
 if [ -n "$SIM" ]; then
   xcodebuild -project Keeps.xcodeproj -scheme Keeps -configuration Release -destination "platform=iOS Simulator,name=$SIM" \
-    -derivedDataPath build/derived-sim -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" build
+    -derivedDataPath build/derived-sim -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" "${SETTINGS[@]}" build
   xcrun simctl boot "$SIM" 2>/dev/null || true
   xcrun simctl install "$SIM" "build/derived-sim/Build/Products/Release-iphonesimulator/Keeps.app"
 else
   xcodebuild -project Keeps.xcodeproj -scheme Keeps -configuration Release -destination "id=$DEVICE" \
-    -derivedDataPath build/derived -allowProvisioningUpdates -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" ${SIGN[@]+"${SIGN[@]}"} build
+    -derivedDataPath build/derived -allowProvisioningUpdates -quiet PRODUCT_BUNDLE_IDENTIFIER="$APP_ID" "${SETTINGS[@]}" ${SIGN[@]+"${SIGN[@]}"} build
   xcrun devicectl device install app --device "$DEVICE" "build/derived/Build/Products/Release-iphoneos/Keeps.app" | tail -2
 fi
 EOF

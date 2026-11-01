@@ -4,6 +4,7 @@
 //   PORT (8787), KEEPS_DATA_DIR (./data: replays, the session log, admin-token);
 //   ADMIN_TOKEN (or data/admin-token): the admin pages, /admin and /admin/bot/; without it, there are none;
 //   POSTHOG_KEY, POSTHOG_HOST: analytics (off without them);
+//   SITE_URL, REDIRECT_HOSTS (names, by commas): pages asked for at those names are sent to the site's address;
 //   Midstrike's (midstrike.ts): BOT_WEIGHTS, BOT_NAME, REMOTE_TOKEN (its search on a remote machine), REMOTE_WORLDS,
 //   MEDIUM_WORLDS, LOCAL_WORLDS, LOCAL_SEARCH=off (nothing searched here), REVIEWS=off.
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
@@ -36,6 +37,8 @@ const server = await createKeepsServer({
   },
   ...(adminToken ? { adminToken } : {}),
   ...(existsSync(webDir) ? { webDir } : {}),
+  ...(process.env.SITE_URL ? { siteUrl: process.env.SITE_URL } : {}),
+  ...(process.env.REDIRECT_HOSTS ? { redirectHosts: process.env.REDIRECT_HOSTS.split(',').map((h) => h.trim()).filter(Boolean) } : {}),
   ...bot,
 });
 rooms = server.rooms;

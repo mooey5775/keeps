@@ -14,16 +14,16 @@ struct OnlineServer: Codable, Equatable, Hashable, Identifiable {
   /// The link that invites someone to room `code`, in a browser.
   func invite(_ code: String) -> URL? { site?.appendingPathComponent("r").appendingPathComponent(code) }
 
-  static let midstrike = OnlineServer(
-    name: "midstrike.playkeeps.online", socket: URL(string: "wss://midstrike.playkeeps.online/ws")!, site: URL(string: "https://midstrike.playkeeps.online")!)
+  static let playkeeps = OnlineServer(
+    name: "playkeeps.online", socket: URL(string: "wss://playkeeps.online/ws")!, site: URL(string: "https://playkeeps.online")!)
 
-  /// The servers the app can play on: Midstrike's site, which speaks the app's protocol (playkeeps.online will, once
-  /// it's updated to this branch's: its rooms don't yet say whether they have the bot). For tests, KEEPS_SERVER (a
-  /// WebSocket address) is the one.
+  /// The servers the app can play on: the website's. (A seat kept on midstrike.playkeeps.online, its old name, still
+  /// comes back there: that name's WebSocket is served by the same server.) For tests, KEEPS_SERVER (a WebSocket
+  /// address) is the one.
   static var known: [OnlineServer] {
-    if let test = ProcessInfo.processInfo.environment["KEEPS_SERVER"], let socket = URL(string: test) {
+    if let test = Internal.environment["KEEPS_SERVER"], let socket = URL(string: test) {
       return [OnlineServer(name: socket.host() ?? test, socket: socket, site: nil)]
     }
-    return [.midstrike]
+    return [.playkeeps]
   }
 }

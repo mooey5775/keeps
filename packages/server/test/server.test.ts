@@ -1,5 +1,6 @@
 import type { ClientMessage, ServerMessage } from '@keeps/protocol';
 import { join } from 'node:path';
+import { request } from 'node:http';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { WebSocket } from 'ws';
 import { createKeepsServer, type KeepsServer } from '../src/server.ts';
@@ -176,5 +177,46 @@ describe('admin page', () => {
     const address = plain.http.address() as { port: number };
     expect((await fetch(`http://localhost:${address.port}/admin`)).status).toBe(404);
     await plain.close();
+  });
+});
+
+describe('a name the site once had', () => {
+  it("sends its pages to the site's address, and still serves its WebSocket", async () => {
+    const old = await createKeepsServer({
+      port: 0,
+      cardsDir: join(import.meta.dirname, '../../../cards'),
+      siteUrl: 'https://playkeeps.online',
+      redirectHosts: ['midstrike.playkeeps.online'],
+    });
+    try {
+      const address = old.http.address();
+      if (!address || typeof address === 'string') throw new Error('no port');
+      const at = (host: string, path: string, method = 'GET') =>
+        new Promise<{ status: number; location: string | undefined }>((resolve, reject) => {
+          const req = request({ host: 'localhost', port: address.port, path, method, headers: { host } }, (res) => {
+            res.resume();
+            resolve({ status: res.statusCode!, location: res.headers.location });
+          });
+          req.on('error', reject);
+          req.end();
+        });
+      expect(await at('midstrike.playkeeps.online', '/r/ABCD?x=1')).toEqual({ status: 301, location: 'https://playkeeps.online/r/ABCD?x=1' });
+      expect(await at('Midstrike.PlayKeeps.online:443', '/')).toEqual({ status: 301, location: 'https://playkeeps.online/' });
+      expect((await at('midstrike.playkeeps.online', '/dispute', 'POST')).status).toBe(308);
+      // The remote worker's routes, and the site's own name: not sent anywhere.
+      expect((await at('midstrike.playkeeps.online', '/remote/poll', 'POST')).status).toBe(404);
+      expect((await at('playkeeps.online', '/config.json')).status).toBe(200);
+      // An app built for the old name still gets its welcome (and the protocol's version) there.
+      const socket = new WebSocket(`ws://localhost:${address.port}/ws`, { headers: { host: 'midstrike.playkeeps.online' } });
+      const welcome = await new Promise<ServerMessage>((resolve, reject) => {
+        socket.on('open', () => socket.send(JSON.stringify({ t: 'create', name: 'Ana' } satisfies ClientMessage)));
+        socket.on('message', (data) => resolve(JSON.parse(String(data)) as ServerMessage));
+        socket.on('error', reject);
+      });
+      socket.close();
+      expect(welcome.t).toBe('welcome');
+    } finally {
+      await old.close();
+    }
   });
 });

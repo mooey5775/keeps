@@ -3,13 +3,14 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { extname, join, normalize, resolve } from 'node:path';
 import { Policy } from '@keeps/bot';
-import { ROOM_CODE, type ClientMessage, type ServerMessage } from '@keeps/protocol';
+import type { ClientMessage, ServerMessage } from '@keeps/protocol';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { serveAdmin, VisitorLog, type AdminSnapshot } from './admin.ts';
 import { noTracker, type Tracker } from './analytics.ts';
 import { buildDispute, RateLimiter } from './dispute.ts';
 import { replayFileName, ReplayStore, type DiskSpace } from './replays.ts';
-import { Room, type BotDeps, type RoomDeps, type RoomHooks, type Send } from './room.ts';
+import { connection } from './connection.ts';
+import type { BotDeps, Room, RoomDeps, RoomHooks, Send } from './room.ts';
 
 export interface ServerOptions {
   port: number;
@@ -45,6 +46,13 @@ export interface ServerOptions {
   roomHooks?: RoomHooks;
   /** Extra pages, tried before the static files: returns true if it served the request. */
   extraRoutes?: (req: IncomingMessage, res: ServerResponse, path: string) => boolean;
+  /**
+   * The site's address (https://playkeeps.online), where pages asked for at one of `redirectHosts` (a name the site
+   * once had: midstrike.playkeeps.online) are sent, path and all. A WebSocket there is still served (an app built for
+   * the old name is told by the protocol's version whether it must update), and so is the remote worker.
+   */
+  siteUrl?: string;
+  redirectHosts?: string[];
 }
 
 export interface KeepsServer {
@@ -54,9 +62,6 @@ export interface KeepsServer {
   sweep(now?: number): void;
   close(): Promise<void>;
 }
-
-// Unambiguous letters for room codes (no I, O, L).
-const CODE_LETTERS = 'ABCDEFGHJKMNPQRSTUVWXYZ';
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -105,13 +110,6 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     ...(replays ? { saveReplay: (code, at, log) => replays.save(code, at, log) } : {}),
   };
 
-  function newCode(): string {
-    for (;;) {
-      const code = Array.from({ length: 4 }, () => CODE_LETTERS[randomInt(0, CODE_LETTERS.length)]).join('');
-      if (!rooms.has(code)) return code;
-    }
-  }
-
   const snapshot = (): AdminSnapshot => ({
     startedAt,
     now: Date.now(),
@@ -131,8 +129,18 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
     }
   });
 
+  const redirectHosts = new Set((options.redirectHosts ?? []).map((h) => h.toLowerCase()));
+  if (redirectHosts.size && !options.siteUrl) throw new Error('redirectHosts needs siteUrl: where to send them');
+
   function route(req: IncomingMessage, res: ServerResponse): void {
     const path = new URL(req.url ?? '/', 'http://localhost').pathname;
+    const host = (req.headers.host ?? '').toLowerCase().replace(/:\d+$/, '');
+    if (redirectHosts.has(host) && !path.startsWith('/remote/')) {
+      // (Permanent; a GET's may be cached and turned into a GET, so anything else keeps its method: 308.)
+      const status = req.method === 'GET' || req.method === 'HEAD' ? 301 : 308;
+      res.writeHead(status, { location: new URL(req.url ?? '/', options.siteUrl).href }).end();
+      return;
+    }
     if (path === '/admin' || path === '/admin.json') return serveAdmin(req, res, path, options.adminToken, snapshot);
     if (path === '/dispute' && req.method === 'POST') {
       void readJson(req, 512 * 1024).then((body) => {
@@ -166,8 +174,6 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
 
   wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
     const ip = clientIp(req);
-    let room: Room | null = null;
-    let playerId: string | null = null;
     let alive = true;
     const send: Send = (message: ServerMessage) => {
       if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
@@ -175,7 +181,11 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       // closed): end it, so it can't hold on to the room. Browsers don't reconnect after these.
       if (message.t === 'replaced' || message.t === 'gone') socket.close();
     };
-    const fail = (message: string) => send({ t: 'error', message });
+    const client = connection(rooms, deps, send, {
+      from: { ip },
+      seated: (player) => visitors.record(ip, player.name, Date.now()),
+      random: () => randomInt(0, 2 ** 32) / 2 ** 32,
+    });
 
     // Without a listener, a socket error (e.g. an oversized message) would crash the server.
     socket.on('error', () => socket.terminate());
@@ -191,57 +201,14 @@ export function createKeepsServer(options: ServerOptions): Promise<KeepsServer> 
       try {
         message = JSON.parse(String(data)) as ClientMessage;
       } catch {
-        return fail('Malformed message.');
+        return send({ t: 'error', message: 'Malformed message.' });
       }
-      if (room && playerId) {
-        try {
-          room.handle(playerId, message);
-        } catch (error) {
-          // An engine bug must not take down every room on the server.
-          console.error(`room ${room.code}: error handling ${JSON.stringify(message).slice(0, 200)}`, error);
-          fail('Something went wrong handling that. Please try again.');
-        }
-        return;
-      }
-      if (!message || typeof message !== 'object') return fail('Malformed message.');
-      switch (message.t) {
-        case 'create': {
-          const code = newCode();
-          room = new Room(code, deps);
-          rooms.set(code, room);
-          const player = room.join(message.name, send, { ip, client: message.client ?? null });
-          visitors.record(ip, player.name, Date.now());
-          playerId = player.id;
-          if (message.bot === true) room.handle(player.id, { t: 'add-bot' });
-          return;
-        }
-        case 'join': {
-          const code = String(message.code ?? '').toUpperCase();
-          const found = ROOM_CODE.test(code) ? rooms.get(code) : undefined;
-          if (!found) return fail(`No room called ${code}.`);
-          room = found;
-          const player = found.join(message.name, send, { ip, client: message.client ?? null });
-          visitors.record(ip, player.name, Date.now());
-          playerId = player.id;
-          return;
-        }
-        case 'resume': {
-          const found = rooms.get(String(message.code ?? '').toUpperCase());
-          const player = found?.resume(String(message.token ?? ''), send, { ip, client: message.client ?? null });
-          if (!found || !player) return send({ t: 'gone' });
-          visitors.record(ip, player.name, Date.now());
-          room = found;
-          playerId = player.id;
-          return;
-        }
-        default:
-          return fail('Join or create a room first.');
-      }
+      client.receive(message);
     });
 
     socket.on('close', () => {
       clearInterval(heartbeat);
-      if (room && playerId) room.disconnect(playerId, send);
+      client.close();
     });
   });
 
