@@ -6,7 +6,9 @@ set -euo pipefail
 OUT=$1
 WAIT=${2:-8}
 shift 2 || shift $#
-MAC=${MAC:-edwardli@100.90.147.75}
+ROOT=$(cd "$(dirname "$0")/../.." && pwd)
+[ -f "$ROOT/ios/local.env" ] && . "$ROOT/ios/local.env"
+MAC=${MAC:?the Mac (user@host): set it in ios/local.env (see ios/README.md)}
 SIM=${SIM:-iPhone 17}
 APP_ID=${APP_ID:-online.playkeeps.Keeps}
 ENV=""

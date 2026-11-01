@@ -60,7 +60,7 @@ taken up the same way.
 
 - **Online,** the app sends an install id (made once, anonymous) as its `client`, as a browser does, so the website's
   server counts its games as it counts a browser's.
-- **On the phone,** games are counted only if the person turns on "Share my games on this phone" in the lobby (off
+- **On the phone,** games are counted only if the person turns on "Share my games on this phone" in Settings (off
   until then). The core sends the app the same events the website's server sends (its local server's tracker), and
   the app passes them to PostHog with the website's public project key (`config.json`): `App/Analytics.swift`.
 - **Shake to report** (or "Report a problem" in the menus): a sheet for what happened, sent to the website's
