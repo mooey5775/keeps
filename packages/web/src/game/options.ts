@@ -287,7 +287,7 @@ export function describeOptions(view: PlayerView, names: Names): Option[] {
         return {
           command,
           refs: [],
-          label: `Pass every pile ${answer.direction}: ${me === null ? names.seat(seat) : 'you'} get${me === null ? 's' : ''} ${names.possessive(from)} pile (${size} card${size === 1 ? '' : 's'}), ${yours} to ${names.seat(to)}`,
+          label: `Pass every pile ${answer.direction} (${answer.direction === 'left' ? 'on, in play order' : 'back'}): ${me === null ? names.seat(seat) : 'you'} get${me === null ? 's' : ''} ${names.possessive(from)} pile (${size} card${size === 1 ? '' : 's'}), ${yours} to ${names.seat(to)}`,
           cards: [],
         };
       }

@@ -23,9 +23,14 @@ struct TableView: View {
         let large = min(74, (geo.size.width - 40) / 5.2)
         let _ = (game.carriedWidth = large)
         ScrollView {
-          VStack(spacing: 8) {
+          VStack(spacing: game.others(view).count > 1 ? 6 : 8) {
             topBar(view)
-            SeatArea(game: game, view: view, table: table, seat: game.seat(at: 2), width: small)
+            // The other players, in the order they play after you; then the middle; then you. (Two or three of them:
+            // smaller, so the table still fits above your hand.)
+            let others = game.others(view)
+            ForEach(others, id: \.self) { seat in
+              SeatArea(game: game, view: view, table: table, seat: seat, width: others.count > 1 ? small * 0.8 : small, compact: others.count > 1)
+            }
             center(view, table, width: small)
             SeatArea(game: game, view: view, table: table, seat: game.me, width: small)
           }
@@ -162,26 +167,31 @@ struct TableView: View {
   private func center(_ view: PlayerView, _ table: TableText, width: CGFloat) -> some View {
     let words = game.dropWords("table")
     let open = words != nil
-    return HStack(alignment: .top) {
-      PileStack(game: game, view: view, seat: game.seat(at: 1), width: width, caption: table.names[game.seat(at: 1)])
-      Spacer()
-      VStack(spacing: 4) {
-        if let top = view.discard.last {
-          CardView(book: game.book, id: top, width: width * 1.1)
-            .opacity(game.travelling.contains(top) ? 0 : 1)
-            .cardPlace(top)
-            .transition(.asymmetric(insertion: .opacity, removal: .identity))
-            .onTapGesture { showDiscard = true }
-            .previewable(top, in: game)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Shows the discard pile")
-        } else {
-          EmptySlot(text: "discard", width: width * 1.1)
-        }
-        Text("Discard · \(view.discard.count)").font(Theme.text(.caption)).foregroundStyle(Theme.muted)
+    // The ghosts' piles either side of the discard (two in a game for two, one for three, none for four). With
+    // several other players to fit above, the discard's caption goes beside it.
+    let ghosts = game.ghosts(view)
+    let crowded = game.others(view).count > 1
+    let pile = discard(view, width: crowded ? width : width * 1.1)
+    return HStack(alignment: crowded ? .center : .top) {
+      if let left = ghosts.first {
+        PileStack(game: game, view: view, seat: left, width: width, caption: table.names[left])
       }
       Spacer()
-      PileStack(game: game, view: view, seat: game.seat(at: 3), width: width, caption: table.names[game.seat(at: 3)])
+      if crowded {
+        HStack(spacing: 8) {
+          pile
+          Text("Discard · \(view.discard.count)").font(Theme.text(.caption)).foregroundStyle(Theme.muted)
+        }
+      } else {
+        VStack(spacing: 4) {
+          pile
+          Text("Discard · \(view.discard.count)").font(Theme.text(.caption)).foregroundStyle(Theme.muted)
+        }
+      }
+      Spacer()
+      if ghosts.count > 1, let right = ghosts.last {
+        PileStack(game: game, view: view, seat: right, width: width, caption: table.names[right])
+      }
     }
     .padding(.horizontal, 8)
     .padding(.vertical, 4)
@@ -195,6 +205,23 @@ struct TableView: View {
     }
     .dropZone("table")
     .accessibilityIdentifier("table")
+  }
+
+  /// The discard's top card (touched, the whole pile in a sheet), or its empty place.
+  @ViewBuilder
+  private func discard(_ view: PlayerView, width: CGFloat) -> some View {
+    if let top = view.discard.last {
+      CardView(book: game.book, id: top, width: width)
+        .opacity(game.travelling.contains(top) ? 0 : 1)
+        .cardPlace(top)
+        .transition(.asymmetric(insertion: .opacity, removal: .identity))
+        .onTapGesture { showDiscard = true }
+        .previewable(top, in: game)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint("Shows the discard pile")
+    } else {
+      EmptySlot(text: "discard", width: width)
+    }
   }
 
   /// Your hand: also where your pile's top is let go, to draw it.
@@ -352,6 +379,8 @@ struct SeatArea: View {
   let table: TableText
   let seat: Int
   let width: CGFloat
+  /// One of several other players: a smaller name, and less room around it.
+  var compact = false
 
   var body: some View {
     let mine = seat == game.me
@@ -361,7 +390,7 @@ struct SeatArea: View {
       HStack(alignment: .firstTextBaseline, spacing: 8) {
         // The name; a gold button when the player is a choice (Pickpocket, Legerdemain): the whole row takes the touch.
         HStack(spacing: 6) {
-          Text(table.names[seat]).font(Theme.heading(22, relativeTo: .title3))
+          Text(table.names[seat]).font(Theme.heading(compact ? 18 : 22, relativeTo: .title3))
             .foregroundStyle(player == .none ? Theme.text : Theme.goldBright)
           if player != .none {
             Image(systemName: "hand.tap.fill").font(.footnote).foregroundStyle(Theme.goldBright)
@@ -394,7 +423,7 @@ struct SeatArea: View {
       }
     }
     .padding(.horizontal, 12)
-    .padding(.vertical, 8)
+    .padding(.vertical, compact ? 5 : 8)
     .background(Theme.raised, in: RoundedRectangle(cornerRadius: 14))
     .overlay(alignment: .top) {
       // Choosing the player: the header row is the button.

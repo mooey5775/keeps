@@ -335,4 +335,40 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(alert.waitForExistence(timeout: 10), "joining a room that isn't there said nothing")
     XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS 'ZZZZ'")).firstMatch.exists)
   }
+
+  /// Seats `players` scripted players in room `code` on the test server (they play any legal move on their turns).
+  private func fill(_ code: String, players: Int) {
+    let url = URL(string: "http://localhost:7777/test/fill?code=\(code)&players=\(players)")!
+    let done = expectation(description: "seated")
+    URLSession.shared.dataTask(with: url) { _, response, _ in
+      XCTAssertEqual((response as? HTTPURLResponse)?.statusCode, 200)
+      done.fulfill()
+    }.resume()
+    wait(for: [done], timeout: 10)
+  }
+
+  /// A room online with `others` scripted players, started: every player's seat on the table, and your turn playable.
+  private func playOnlineWith(others: Int) {
+    launchOnline()
+    app.buttons["Make a room"].tap()
+    let code = app.staticTexts["room's code"]
+    XCTAssertTrue(code.waitForExistence(timeout: 15), "no room")
+    fill(code.label, players: others)
+    XCTAssertTrue(app.staticTexts["Players (\(others + 1) of 4)"].waitForExistence(timeout: 10), "the players didn't join")
+    app.buttons["Start"].tap()
+    XCTAssertTrue(eventually(15) { self.yourPile.exists }, "no table")
+    // Each player at the table, with their keep: not only the one across from you.
+    for i in 1...others {
+      XCTAssertTrue(element("Robot \(i)'s keep").waitForExistence(timeout: 5), "Robot \(i) has no seat at the table")
+    }
+    XCTAssertTrue(element("Your keep").exists)
+    XCTAssertTrue(yourTurn(60), "your turn didn't come")
+    let before = handCards.count
+    yourPile.tap()
+    XCTAssertTrue(eventually(10) { self.handCards.count > before || self.putIntoYourKeep.exists }, "your move wasn't made")
+  }
+
+  func testAGameOfThreeShowsEveryPlayer() throws { playOnlineWith(others: 2) }
+
+  func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }
 }

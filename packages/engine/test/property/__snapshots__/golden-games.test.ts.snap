@@ -21,7 +21,7 @@ exports[`golden games > 2 players 1`] = `
 #18   R1 T2         S2 draws Pandemonium from pile@S2  ← #17  [private: S2]
 #19   R1 T2           S2 plays Pandemonium (HOT!) → discard  ← #18
 #20   R1 T2             waiting on S2: choose-direction  ← #19
-#21   R1 T2               all piles rotate one position to the right  ← #20
+#21   R1 T2               every pile passes right (back, against play order): S0 gets pile@S1, S1 gets pile@S2, S2 gets pile@S3, S3 gets pile@S0  ← #20
 #22   R1 T2     waiting on S2: action  ← #15
 #23   R1 T2       S2 action [turn, 0 left]: draw  ← #22
 #24   R1 T2         S2 draws Count Token from pile@S2  ← #23  [private: S2]
@@ -494,7 +494,7 @@ exports[`golden games > 2 players 1`] = `
 #491  R3 T4         S2 draws Pandemonium from pile@S2  ← #490  [private: S2]
 #492  R3 T4           S2 plays Pandemonium (HOT!) → discard  ← #491
 #493  R3 T4             waiting on S2: choose-direction  ← #492
-#494  R3 T4               all piles rotate one position to the right  ← #493
+#494  R3 T4               every pile passes right (back, against play order): S0 gets pile@S1, S1 gets pile@S2, S2 gets pile@S3, S3 gets pile@S0  ← #493
 #495  R3 T4     waiting on S2: action  ← #488
 #496  R3 T4       S2 action [turn, 0 left]: draw  ← #495
 #497  R3 T4         S2 draws Tithes from pile@S2  ← #496  [private: S2]
@@ -701,7 +701,7 @@ exports[`golden games > 3 players 1`] = `
 #114  R1 T12        S2 draws Pandemonium from pile@S2  ← #113  [private: S2]
 #115  R1 T12          S2 plays Pandemonium (HOT!) → discard  ← #114
 #116  R1 T12            waiting on S2: choose-direction  ← #115
-#117  R1 T12              all piles rotate one position to the right  ← #116
+#117  R1 T12              every pile passes right (back, against play order): S0 gets pile@S1, S1 gets pile@S2, S2 gets pile@S3, S3 gets pile@S0  ← #116
 #118  R1 T12    waiting on S2: action  ← #111
 #119  R1 T12      S2 action [turn, 0 left]: play Medallion → keep(S2)  ← #118
 #120  R1 T12        S2 plays Medallion → keep(S2)  ← #119
@@ -1088,7 +1088,7 @@ exports[`golden games > 4 players 1`] = `
 #68   R1 T8         S0 draws Pandemonium from pile@S0  ← #67  [private: S0]
 #69   R1 T8           S0 plays Pandemonium (HOT!) → discard  ← #68
 #70   R1 T8             waiting on S0: choose-direction  ← #69
-#71   R1 T8               all piles rotate one position to the right  ← #70
+#71   R1 T8               every pile passes right (back, against play order): S0 gets pile@S1, S1 gets pile@S2, S2 gets pile@S3, S3 gets pile@S0  ← #70
 #72   R1 T8     waiting on S0: action  ← #65
 #73   R1 T8       S0 action [turn, 0 left]: draw  ← #72
 #74   R1 T8         S0 draws Fool Token from pile@S0  ← #73  [private: S0]
@@ -1387,7 +1387,7 @@ exports[`golden games > 4 players 1`] = `
 #367  R2 T12              S1 draws Pandemonium from pile@S1  ← #366  [private: S1]
 #368  R2 T12                S1 plays Pandemonium (HOT!) → discard  ← #367
 #369  R2 T12                  waiting on S1: choose-direction  ← #368
-#370  R2 T12                    all piles rotate one position to the left  ← #369
+#370  R2 T12                    every pile passes left (on, in play order): S0 gets pile@S3, S1 gets pile@S0, S2 gets pile@S1, S3 gets pile@S2  ← #369
 #371  R2 T12          waiting on S1: action  ← #362
 #372  R2 T12            S1 action [hocus-pocus, 0 left]: play Hocus Pocus  ← #371
 #373  R2 T12              S1 plays Hocus Pocus → discard  ← #372

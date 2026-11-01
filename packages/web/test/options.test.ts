@@ -151,8 +151,8 @@ describe('Pandemonium directions', () => {
     const labels = optionsOf(viewFor(drawn.state, 0)).map((o) => o.label);
     // Passing left, you receive the pile of the player on your right (Di), and yours goes to Bo.
     expect(labels).toEqual([
-      "Pass every pile left: you get Di's pile (3 cards), yours goes to Bo",
-      "Pass every pile right: you get Bo's pile (2 cards), yours goes to Di",
+      "Pass every pile left (on, in play order): you get Di's pile (3 cards), yours goes to Bo",
+      "Pass every pile right (back): you get Bo's pile (2 cards), yours goes to Di",
     ]);
     // And the label tells the truth: after passing left, your pile is Di's three cards.
     const left = optionsOf(viewFor(drawn.state, 0))[0]!.command;

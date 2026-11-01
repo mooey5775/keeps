@@ -1,5 +1,6 @@
 import { cardName, type CardId } from './cards.ts';
 import type { ActionChoice } from './commands.ts';
+import { rotatedFrom, SEATS } from './state.ts';
 import type {
   ActionFrameOp,
   GameState,
@@ -262,7 +263,8 @@ export function describe(payload: TracePayload): string {
     case 'pile-swap':
       return `piles @${seatLabel(payload.a)} and @${seatLabel(payload.b)} swap places`;
     case 'pile-rotate':
-      return `all piles rotate one position to the ${payload.direction}`;
+      // Who gets whose pile, not only which way: "left" means little where the seats aren't drawn around a table.
+      return `every pile passes ${payload.direction} (${payload.direction === 'left' ? 'on, in play order' : 'back, against play order'}): ${SEATS.map((s) => `${seatLabel(s)} gets pile@${seatLabel(rotatedFrom(s, payload.direction))}`).join(', ')}`;
     case 'pile-flip':
       return `pile@${seatLabel(payload.pile)} is flipped upside down`;
     case 'look':

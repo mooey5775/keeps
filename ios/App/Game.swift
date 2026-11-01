@@ -324,6 +324,13 @@ final class Game {
     return 0
   }
   func seat(at position: Int) -> Int { (me + position) % 4 }
+
+  /// The other players' seats, in the order they play after you (turns pass to the left: the next seat round): the
+  /// table lists them so, down to yours.
+  func others(_ view: PlayerView) -> [Int] { (1...3).map(seat(at:)).filter { view.seats[$0] == .player } }
+
+  /// The ghosts' seats (piles, no player), in the same order.
+  func ghosts(_ view: PlayerView) -> [Int] { (1...3).map(seat(at:)).filter { view.seats[$0] == .ghost } }
   /// Midstrike's seat, if it's playing.
   var botSeat: Int? { room?.players.first(where: { $0.bot == true })?.seat }
   var training: Bool { room?.training ?? false }

@@ -44,7 +44,7 @@ export function promptText(prompt: PromptView, view: PlayerView, names: Names): 
     case 'choose-keep-pair':
       return 'Providence: choose two played Keep cards to swap.';
     case 'choose-direction':
-      return 'Pandemonium: rotate every pile left or right.';
+      return 'Pandemonium: pass every pile left (on, in play order) or right (back).';
     case 'order-pile':
       return 'Tithes: put your pile in any order (top first).';
     case 'choose-player':
