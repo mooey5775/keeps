@@ -1,6 +1,6 @@
 # Keeps for iOS
 
-The game against Midstrike, offline, on the phone.
+Keeps on the phone: games against Midstrike, offline, and online play on the website's server.
 
 - **The UI** is SwiftUI (`App/`).
 - **The core** (`core/`, the workspace package `@keeps/ios-core`, bundled by `sync.sh`) is the website's TypeScript running in a hidden WKWebView: the engine, the game server, Midstrike's host and its search in Web Workers. WebKit's JIT is what makes the search fast enough.
@@ -56,6 +56,17 @@ every move replayed as it was played, so Midstrike and training mode know what t
 When iOS ends the core's process (it may, in the background, to free memory), the core starts again and the game is
 taken up the same way.
 
+## Analytics and reports
+
+- **Online,** the app sends an install id (made once, anonymous) as its `client`, as a browser does, so the website's
+  server counts its games as it counts a browser's.
+- **On the phone,** games are counted only if the person turns on "Share my games on this phone" in the lobby (off
+  until then). The core sends the app the same events the website's server sends (its local server's tracker), and
+  the app passes them to PostHog with the website's public project key (`config.json`): `App/Analytics.swift`.
+- **Shake to report** (or "Report a problem" in the menus): a sheet for what happened, sent to the website's
+  `/dispute` with the app's version and device, a screenshot taken as the report began (the server keeps it, behind
+  the admin password), and the game: the online room's seat, or the phone's game's replay. `App/Report.swift`.
+
 ## Playing online
 
 The lobby's Online side makes a room on the website's server, or joins one by its code. The core opens a WebSocket
@@ -75,10 +86,6 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
 ## TODO
 
 - **Next:** the online room's polish (who's connected while playing, a spectator's table).
-- **Analytics:** collect game traces (each game's replay log, already kept on the phone and on the website's server),
-  opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
-  With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's
-  replay and the app's version (also in the table's menu: a shake can't be found, and UI tests can't shake).
 
 - **Your-turn notifications**, online: a push when it's your move and the app is closed (the server sends it through
   Apple's push service; waits for the developer account).

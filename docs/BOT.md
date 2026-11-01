@@ -1,4 +1,27 @@
-# Keeps bot: MVP plan
+# Keeps bot: Midstrike
+
+## Where it stands (2026-11-01)
+
+**Midstrike** is the bot people play on playkeeps.online and in the iOS app: a network trained by self-play, and a
+search at play time on top of it.
+
+- **The network:** `vrpo1` at 40,000 iterations, trained with VRPO (Ataraxos's learner, `training/keeps_bot/vrpo`):
+  the entity network on observation v2, heads-up, one round an episode. Its weights are
+  `packages/bot/weights/midstrike.bin`.
+- **The search** (`packages/bot/src/search`): at each decision with a real choice, worlds sampled exactly from what the
+  bot knows (`worlds.ts`), every candidate played out to the round's end in each (the network on both sides, sampled
+  rollouts), and the move with the best result played (best-Q; near-ties, within 0.05·√(512/worlds), go to the
+  network's favourite).
+- **Levels:** Easy plays the network's own move; Medium searches 64 worlds; Hard 2,048 on the website (on gpu03: a
+  worker that polls the website for jobs, the network batched on a GPU) and 512 in the app (Web Workers, the network on
+  the Neural Engine). A decision takes about 1.6 s on gpu03.
+- **Around it:** training mode (the search's advice for your own moves, at Hard), and a review of each round of a game
+  against it, move by move (`packages/bot/src/review`).
+
+The rest of this document is the record: the plan it started from (R-NaD, 2026-10-21), its open problems, and what
+building and training it taught.
+
+## The original plan (2026-10-21)
 
 Goal: a **heads-up (2-player) Keeps bot trained with R-NaD** (Regularized Nash Dynamics, OpenSpiel's
 implementation) that clearly beats a random player, is measured honestly, and can be played against in the app.
@@ -232,7 +255,8 @@ Heads-up Keeps is **chess-like in its tactics, card-game-like in its hidden info
 
 ### Next
 
-Implement Ataraxos's learner as an alternative to R-NaD (`--learner mmd`), after reading their Dou Dizhu code, and A/B it against `e1` with the same network and observation. Then the learned belief network, then search at play time.
+Done since: Ataraxos's learner (VRPO; `vrpo1` is Midstrike's network), and search at play time (Midstrike). Open: a
+learned belief network, training on search-improved targets, and the TODO list above.
 
 ### Ideas for future model improvements
 
@@ -240,5 +264,12 @@ Implement Ataraxos's learner as an alternative to R-NaD (`--learner mmd`), after
 
 ## Layout
 
-- `packages/learn/`: action space, observation encoder, belief tracking, round environment, env server (TypeScript).
-- `training/`: Python. The OpenSpiel game wrapper, training and evaluation scripts. Its own virtualenv (`training/.venv`, not committed).
+- `packages/bot/`: the bot at play: the network's forward pass, the action space and observation encoders, belief
+  tracking, the world sampler, the search and its pools (worker threads, the GPU server, the remote worker), and the
+  round reviews.
+- `packages/server/src/host.ts`, `midstrike.ts`: Midstrike on the website (its levels, training mode, reviews, the
+  remote worker's queue, its admin pages).
+- `packages/learn/`: the training environment's bridge for Python, benchmarks, tools (`tools/`: matches, a game in the
+  terminal, the search at one decision, the Providence benchmark) and analyses.
+- `training/`: Python: training (VRPO and R-NaD), evaluation, export, the GPU server and the Core ML export. Its own
+  virtualenvs (not committed).
