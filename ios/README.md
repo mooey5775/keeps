@@ -32,7 +32,9 @@ All of it runs from this machine. The Mac builds over ssh. `MAC=` is its address
 - `xcrun simctl io booted recordVideo` while a UI test runs, then `ffmpeg` frames tiled into a sheet: how cards flying
   to their places were checked frame by frame (one card, no ghost).
 - `ios/tools/pull-games.sh` fetches the games the app kept: each one's replay log, in `Documents/games`.
-- `python3 ios/tools/make-icon.py` draws the icon.
+- The icon is an Icon Composer document, `App/AppIcon.icon` (Liquid Glass: the system draws its light, dark, tinted and
+  clear looks from its layers). Open it in Icon Composer (in Xcode) to change it; `ictool AppIcon.icon --export-image`
+  (in Icon Composer's Executables) renders a look without opening it.
 
 ## A game kept through the app closing
 

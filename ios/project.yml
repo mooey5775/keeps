@@ -34,7 +34,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: online.playkeeps.Keeps
         GENERATE_INFOPLIST_FILE: YES
-        # App/Assets.xcassets (ios/tools/make-icon.py draws it).
+        # App/AppIcon.icon: an Icon Composer document (Liquid Glass: the system draws its light, dark, tinted and clear looks).
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_CFBundleDisplayName: Keeps
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
