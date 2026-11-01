@@ -10,9 +10,11 @@ import { logLines, type LogLine } from '../../packages/web/src/game/log.ts';
 import { describeOptions, makeNames, shownCards, type Names, type Option, type ShownCard } from '../../packages/web/src/game/options.ts';
 import { capital, headline, promptText } from '../../packages/web/src/game/status.ts';
 import type { LocalServer } from './local-server.ts';
+import { remoteConnection, type LinkState } from './remote.ts';
 
 export type FromApp =
-  | { t: 'connect'; id: number }
+  /** A new client: of the core's own server, or (`server`: its WebSocket address) of a game server elsewhere. */
+  | { t: 'connect'; id: number; server?: string }
   | { t: 'client'; id: number; message: ClientMessage }
   | { t: 'close'; id: number }
   /**
@@ -72,6 +74,8 @@ export type ToApp =
    * it as `file`; and with it, what taking the game up again takes (`restore`).
    */
   | { t: 'saved'; file: string; text: string; game: GameRecord }
+  /** A connection to a server elsewhere: connecting, open, dropped and coming back, or closed for good. */
+  | { t: 'link'; id: number; state: LinkState }
   /** Each of Midstrike's searches, as it finishes. */
   | { t: 'search'; room: string; seat: number; turn: number; worlds: number; moves: number; ms: number }
   | { t: 'failed'; message: string };
@@ -108,7 +112,13 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
     try {
       const m = JSON.parse(json) as FromApp;
       if (m.t === 'config') configure(m.botDelayMs, m.seed);
-      else if (m.t === 'connect') connections.set(m.id, { ...server.connect((message) => deliver(m.id, message)), events: [] });
+      else if (m.t === 'connect') {
+        const receive = (message: ServerMessage) => deliver(m.id, message);
+        const connection = m.server
+          ? remoteConnection({ url: m.server, receive, state: (state) => post({ t: 'link', id: m.id, state }) })
+          : server.connect(receive);
+        connections.set(m.id, { ...connection, events: [] });
+      }
       else if (m.t === 'client') connections.get(m.id)?.receive(m.message);
       else if (m.t === 'close') {
         connections.get(m.id)?.close();

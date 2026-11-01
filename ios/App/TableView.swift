@@ -36,6 +36,17 @@ struct TableView: View {
         // Only when the table doesn't fit.
         .scrollBounceBehavior(.basedOnSize)
         .background(Theme.background.ignoresSafeArea())
+        // Online, a dropped connection coming back.
+        .safeAreaInset(edge: .top, spacing: 0) {
+          if game.online?.link == .reconnecting {
+            Label("Reconnecting…", systemImage: "wifi.exclamationmark")
+              .font(Theme.text(.footnote))
+              .foregroundStyle(Theme.goldBright)
+              .padding(.vertical, 6)
+              .frame(maxWidth: .infinity)
+              .background(Theme.panel)
+          }
+        }
         // Your hand and your choices stay in view, whatever the table above them needs.
         .safeAreaInset(edge: .bottom, spacing: 0) {
           VStack(spacing: 0) {
@@ -120,8 +131,15 @@ struct TableView: View {
       }
       .accessibilityLabel("Game log")
       Menu {
-        Toggle(isOn: Binding(get: { game.training }, set: { game.setTraining($0) })) {
-          Label("Training mode", systemImage: "graduationcap")
+        // (Training mode is Midstrike's advice: in a game against it.)
+        if game.botSeat != nil {
+          Toggle(isOn: Binding(get: { game.training }, set: { game.setTraining($0) })) {
+            Label("Training mode", systemImage: "graduationcap")
+          }
+        }
+        // (Undo, in a game between people: everyone else agrees to it.)
+        if game.game?.undo.available == true {
+          Button { game.proposeUndo() } label: { Label("Ask to undo the last move", systemImage: "arrow.uturn.backward") }
         }
         Divider()
         Button(role: .destructive) { confirmLeave = true } label: { Label("Leave game", systemImage: "xmark.circle") }

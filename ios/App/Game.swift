@@ -2,9 +2,10 @@ import Foundation
 import Observation
 import SwiftUI
 
-/// A game against Midstrike, as the app holds it: one connection to the core's server (the website's protocol), the
-/// room it made, and the game's latest message with what the core worked out for it (the options, the log's lines,
-/// the table's words). The views read it and call it; it never decides a rule.
+/// A game, as the app holds it: one connection, to the core's own server (a game against Midstrike on the phone) or to
+/// the website's (online: a room others join by its code), both speaking the website's protocol; the room, and the
+/// game's latest message with what the core worked out for it (the options, the log's lines, the table's words). The
+/// views read it and call it; it never decides a rule.
 @MainActor
 @Observable
 final class Game {
@@ -28,7 +29,29 @@ final class Game {
   private(set) var screen: Screen = .lobby
   /// What's said while starting: a game being dealt, or taken up again.
   private(set) var starting = "Dealing…"
-  enum Screen { case lobby, starting, table }
+  enum Screen { case lobby, starting, room, table }
+
+  /// Playing online: on which server, and how the connection is doing (nil: on the phone).
+  private(set) var online: Online?
+
+  struct Online: Equatable {
+    let server: OnlineServer
+    let name: String
+    var link: LinkState = .connecting
+  }
+
+  /// A seat online, kept (UserDefaults) so a game there is taken up again after the app closes, as a browser's tab
+  /// keeps its token: the server, the room, the seat's token.
+  struct OnlineSeat: Codable, Equatable {
+    let server: OnlineServer
+    let code: String
+    let token: String
+    let name: String
+  }
+
+  /// The seat online the app last had, to take up again (the lobby offers it).
+  private(set) var onlineSeat: OnlineSeat? = Game.loadSeat()
+  private static let seatKey = "onlineSeat"
 
   private(set) var room: RoomSummary?
   private(set) var game: ServerMessageGame?
@@ -124,8 +147,8 @@ final class Game {
     connection = nil
     dragging = nil
     picked = []
-    if screen == .table {
-      starting = "Taking up your game…"
+    if screen == .table || screen == .room {
+      starting = online == nil ? "Taking up your game…" : "Reconnecting…"
       screen = .starting
     }
   }
@@ -141,7 +164,9 @@ final class Game {
       unfinished = core.kept()?.kept
       problem = "The game's engine stopped \(ends.count) times in a row, so it wasn't started again. Your game is kept: Continue takes it up."
       ends = []
-    } else if core.kept() != nil {
+    } else if online != nil, onlineSeat != nil {
+      rejoin()
+    } else if online == nil, core.kept() != nil {
       resume()
     } else {
       leave(forgetting: false)
@@ -180,8 +205,80 @@ final class Game {
     connection = core.restore(found.kept, replay: found.replay) { [weak self] server in self?.received(server) }
   }
 
-  /// The same game again, in the same room.
+  // MARK: Online
+
+  /// A new room on `server`, yours to set up and start (others join it by its code).
+  func host(on server: OnlineServer, name: String) {
+    goOnline(server, name: name, .create(ClientMessageCreate(name: name)), saying: "Making a room…")
+  }
+
+  /// The room `code` on `server`, joined.
+  func join(on server: OnlineServer, code: String, name: String) {
+    let code = code.trimmingCharacters(in: .whitespaces).uppercased()
+    goOnline(server, name: name, .join(ClientMessageJoin(code: code, name: name)), saying: "Joining \(code)…")
+  }
+
+  /// The seat online kept from before, taken again.
+  func rejoin() {
+    guard let seat = onlineSeat else { return }
+    goOnline(seat.server, name: seat.name, .resume(ClientMessageResume(code: seat.code, token: seat.token)), saying: "Back to \(seat.code)…")
+  }
+
+  private func goOnline(_ server: OnlineServer, name: String, _ hello: ClientMessage, saying: String) {
+    leave(forgetting: false)
+    feed = []
+    online = Online(server: server, name: name)
+    starting = saying
+    screen = .starting
+    var id = 0
+    id = core.connect(server: server.socket, { [weak self] message in self?.received(message) }, link: { [weak self] state in self?.linked(state, on: id) })
+    connection = id
+    core.send(id, hello)
+  }
+
+  /// How the connection online is doing: dropped and coming back (the table says so), or closed for good.
+  private func linked(_ state: LinkState, on id: Int) {
+    guard connection == id else { return }
+    online?.link = state
+    if state == .closed, screen != .lobby { leave(forgetting: false) }
+  }
+
+  /// Your player id in the room, and whether you're its host.
+  var you: String? { room?.you }
+  var hosting: Bool { room?.players.first { $0.id == room?.you }?.host == true }
+
+  /// The host's settings for the room's next game.
+  func change(_ settings: Settings) {
+    guard let connection else { return }
+    core.send(connection, .settings(ClientMessageSettings(settings: settings)))
+  }
+
+  func addBot() { if let connection { core.send(connection, .addBot) } }
+  func removeBot() { if let connection { core.send(connection, .removeBot) } }
+  func start() { if let connection { core.send(connection, .start) } }
+  /// Asks the other players to take back the last move (a game between people).
+  func proposeUndo() { if let connection { core.send(connection, .proposeUndo) } }
+  func voteUndo(_ accept: Bool) { if let connection { core.send(connection, .voteUndo(ClientMessageVoteUndo(accept: accept))) } }
+
+  private static func loadSeat() -> OnlineSeat? {
+    UserDefaults.standard.data(forKey: seatKey).flatMap { try? JSONDecoder().decode(OnlineSeat.self, from: $0) }
+  }
+
+  private func keepSeat(_ seat: OnlineSeat?) {
+    onlineSeat = seat
+    if let seat, let data = try? JSONEncoder().encode(seat) {
+      UserDefaults.standard.set(data, forKey: Self.seatKey)
+    } else {
+      UserDefaults.standard.removeObject(forKey: Self.seatKey)
+    }
+  }
+
+  /// The same game again, in the same room (online: the host takes the room back to its lobby, for the next game).
   func playAgain() {
+    if online != nil {
+      if let connection, hosting { core.send(connection, .backToLobby) }
+      return
+    }
     guard let connection else { return play(setup) }
     game = nil
     lines = []
@@ -194,12 +291,15 @@ final class Game {
 
   /// Back to the lobby; the room goes (and, `forgetting`, the game kept to take up again: it was left).
   func leave(forgetting: Bool = true) {
-    if forgetting, game != nil {
+    if forgetting, online != nil {
+      keepSeat(nil)
+    } else if forgetting, game != nil {
       core.forgetKept()
       unfinished = nil
     }
     if let connection { core.close(connection) }
     connection = nil
+    online = nil
     room = nil
     game = nil
     options = []
@@ -399,6 +499,17 @@ final class Game {
     switch server.message {
     case .room(let message):
       room = message.room
+      if online != nil {
+        // Online, the room's lobby is a screen of its own (whoever's in, the host's settings), between games too.
+        if message.room.phase == .lobby, screen != .room {
+          game = nil
+          lines = []
+          table = nil
+          feed = []
+          screen = .room
+        }
+        return
+      }
       guard message.room.phase == .lobby, screen == .starting, !started, let connection else { return }
       let wanted = settings(for: message.room)
       if message.room.settings != wanted {
@@ -457,9 +568,18 @@ final class Game {
       // A move refused: its decision may be answered again.
       answering = []
       problem = error.message
-    case .gone, .replaced:
+      // Online, before a room was ours (no such room, the server unreachable): back to the lobby, as the website does.
+      if online != nil, room == nil { leave(forgetting: false) }
+    case .welcome(let welcome):
+      // Online: the seat kept, to come back to.
+      if let online { keepSeat(OnlineSeat(server: online.server, code: welcome.code, token: welcome.token, name: online.name)) }
+    case .gone:
+      if online != nil { problem = "That room is gone." }
       leave()
-    case .welcome, .review:
+    case .replaced:
+      if online != nil { problem = "Your seat was taken on another device." }
+      leave()
+    case .review:
       break
     }
   }

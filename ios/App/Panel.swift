@@ -21,9 +21,16 @@ struct DecisionPanel: View {
       if let shown = table.shown { ShownCards(game: game, shown: shown) }
       if let hints = table.hints, game.training { Hints(hints: hints) }
       options
+      if let undo = game.game?.undo, undo.proposedBy != nil { UndoVote(game: game, undo: undo) }
       if view.phase == .gameOver {
         HStack {
-          Button("Play again") { game.playAgain() }.buttonStyle(.borderedProminent).tint(Theme.gold).foregroundStyle(Theme.background)
+          // Online, the host takes the room back to its lobby for the next game; the others wait for them.
+          if game.online == nil || game.hosting {
+            Button(game.online == nil ? "Play again" : "Back to the room") { game.playAgain() }
+              .buttonStyle(.borderedProminent).tint(Theme.gold).foregroundStyle(Theme.background)
+          } else {
+            Text("The host starts the next game.").font(Theme.text(.footnote)).italic().foregroundStyle(Theme.muted)
+          }
           Button("Leave", action: leave).buttonStyle(.bordered).tint(Theme.muted)
         }
         .font(Theme.text(.body))
@@ -81,6 +88,29 @@ struct DecisionPanel: View {
         .accessibilityLabel("All moves")
       }
       .sheet(isPresented: $allMoves) { AllMovesSheet(game: game) }
+    }
+  }
+}
+
+/// Someone asked to take back the last move (a game between people): yours to agree to, or waited on.
+struct UndoVote: View {
+  let game: Game
+  let undo: UndoState
+
+  var body: some View {
+    let names = game.room?.players ?? []
+    let asker = names.first { $0.id == undo.proposedBy }?.name ?? "Someone"
+    HStack(spacing: 10) {
+      if let you = game.you, undo.waitingOn.contains(you) {
+        Text("\(asker) asks to undo the last move.").font(Theme.text(.callout)).foregroundStyle(Theme.goldBright)
+        Spacer(minLength: 0)
+        Button("Agree") { game.voteUndo(true) }.buttonStyle(.borderedProminent).tint(Theme.gold).foregroundStyle(Theme.background)
+        Button("No") { game.voteUndo(false) }.buttonStyle(.bordered).tint(Theme.muted)
+      } else {
+        let waiting = undo.waitingOn.compactMap { id in names.first { $0.id == id }?.name }
+        Text("Undo asked: waiting for \(waiting.isEmpty ? "the others" : waiting.joined(separator: ", ")).")
+          .font(Theme.text(.callout)).italic().foregroundStyle(Theme.muted)
+      }
     }
   }
 }

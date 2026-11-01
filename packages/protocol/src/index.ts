@@ -132,7 +132,8 @@ export type ClientMessage =
 export type ServerMessage =
   /** You are in a room; keep the token to resume after a disconnect. */
   /** `build`: the site build the server serves; a page from another build reloads. */
-  | { t: 'welcome'; code: string; token: string; playerId: string; build?: string }
+  /** `protocol`: the server's PROTOCOL (absent: from before it had one). */
+  | { t: 'welcome'; code: string; token: string; playerId: string; build?: string; protocol?: number }
   | { t: 'room'; room: RoomSummary }
   | {
       t: 'game';
@@ -158,6 +159,14 @@ export type ServerMessage =
   | { t: 'replaced' };
 
 export const NAME_MAX = 20;
+
+/**
+ * The protocol's version, sent in each welcome: a client that speaks another stops there and says which side is out of
+ * date (the app, installed and not updated for months, plays on the website's server). Bump it when a message changes
+ * in a way a client built before can't read: a field removed, renamed or retyped, or a new one it must have. Rather
+ * than bump it, make a new field optional, and new message kinds ones an older client can pass over.
+ */
+export const PROTOCOL = 1;
 export const ROOM_CODE = /^[A-Z]{4}$/;
 
 /** A game's replay file (engine/src/replay.ts's format), by its room and when it started: "ABCD-2026-10-30T22-41-36-000Z.jsonl". The server and the app keep games so. */

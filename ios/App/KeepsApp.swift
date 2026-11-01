@@ -84,6 +84,7 @@ struct RootView: View {
       switch game.screen {
       case .lobby: LobbyView(game: game)
       case .starting: Splash(status: game.starting)
+      case .room: RoomView(game: game)
       case .table: TableView(game: game)
       }
     }

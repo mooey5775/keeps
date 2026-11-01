@@ -222,6 +222,10 @@ final class TableUITests: XCTestCase {
     app.terminate()
     app.launchEnvironment["KEEPS_PLAY"] = nil
     app.launch()
+    // (The lobby remembers where you last played: here, on this phone.)
+    let here = app.buttons["On this phone"]
+    XCTAssertTrue(here.waitForExistence(timeout: 30))
+    here.tap()
     let resume = app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Continue'")).firstMatch
     XCTAssertTrue(resume.waitForExistence(timeout: 30), "the lobby doesn't offer the game")
     resume.tap()
@@ -257,5 +261,78 @@ final class TableUITests: XCTestCase {
     let before = handCards.count
     yourPile.press(forDuration: 0.12, thenDragTo: element("Your hand"))
     XCTAssertTrue(eventually(5) { handCards.count > before }, "carrying your pile to your hand drew no card")
+  }
+
+  // MARK: Online (ios/tools/test-server.ts, which ios/test.sh runs and forwards to the Mac)
+
+  private static let testServer = "ws://localhost:7777/ws"
+
+  /// The app with the test server as its online server, at the lobby (not straight into a game).
+  private func launchOnline() {
+    app = XCUIApplication()
+    app.launchEnvironment["KEEPS_SERVER"] = Self.testServer
+    app.launch()
+    let online = app.buttons["Online"]
+    XCTAssertTrue(online.waitForExistence(timeout: 30), "no lobby")
+    online.tap()
+  }
+
+  /// A room made online with Midstrike in it, and the game started: its code.
+  private func startOnlineGameAgainstMidstrike() -> String {
+    app.buttons["Make a room"].tap()
+    let code = app.staticTexts["room's code"]
+    XCTAssertTrue(code.waitForExistence(timeout: 15), "no room")
+    let name = code.label
+    XCTAssertEqual(name.count, 4)
+    app.buttons["Add Midstrike"].tap()
+    XCTAssertTrue(app.buttons["Remove Midstrike"].waitForExistence(timeout: 5), "Midstrike didn't join")
+    app.buttons["Start"].tap()
+    XCTAssertTrue(eventually(15) { self.yourPile.exists }, "no table")
+    return name
+  }
+
+  func testAnOnlineRoomIsMadeAndPlayedAgainstMidstrike() throws {
+    launchOnline()
+    _ = startOnlineGameAgainstMidstrike()
+    // Your turn comes (Midstrike's first, if it starts), and your move is made there.
+    XCTAssertTrue(yourTurn(40))
+    let before = handCards.count
+    yourPile.tap()
+    XCTAssertTrue(eventually(10) { self.handCards.count > before || self.putIntoYourKeep.exists }, "the move online wasn't made")
+    XCTAssertFalse(app.alerts["Something went wrong"].exists)
+  }
+
+  func testAnOnlineSeatIsTakenBackAfterTheAppCloses() throws {
+    launchOnline()
+    let code = startOnlineGameAgainstMidstrike()
+    // Drawing until a card stays in your hand (a HOT one goes into your keep; the deal online is the server's).
+    for _ in 0..<6 where handCards.isEmpty {
+      XCTAssertTrue(yourTurn(40))
+      yourPile.tap()
+      placeHot()
+      _ = eventually(3) { !self.handCards.isEmpty }
+    }
+    XCTAssertFalse(handCards.isEmpty, "no card stayed in your hand")
+    let hand = handCards.map(\.identifier).sorted()
+    app.terminate()
+    app.launch()
+    let online = app.buttons["Online"]
+    XCTAssertTrue(online.waitForExistence(timeout: 30))
+    online.tap()
+    let back = app.buttons.matching(NSPredicate(format: "label BEGINSWITH %@", "Back to \(code)")).firstMatch
+    XCTAssertTrue(back.waitForExistence(timeout: 5), "the lobby doesn't offer the room")
+    back.tap()
+    XCTAssertTrue(eventually(15) { self.handCards.map(\.identifier).sorted() == hand }, "the seat wasn't taken back as it was")
+  }
+
+  func testJoiningARoomThatIsntThereSaysSo() throws {
+    launchOnline()
+    let field = app.textFields["room code"]
+    field.tap()
+    field.typeText("zzzz")
+    app.buttons["Join"].tap()
+    let alert = app.alerts["Something went wrong"]
+    XCTAssertTrue(alert.waitForExistence(timeout: 10), "joining a room that isn't there said nothing")
+    XCTAssertTrue(alert.staticTexts.matching(NSPredicate(format: "label CONTAINS 'ZZZZ'")).firstMatch.exists)
   }
 }

@@ -1,5 +1,5 @@
 import type { ActionChoice, Command, ReplayLog, Seat } from '@keeps/engine';
-import type { ClientMessage, ServerMessage, Settings } from '@keeps/protocol';
+import { PROTOCOL, type ClientMessage, type ServerMessage, type Settings } from '@keeps/protocol';
 import { describe, expect, it } from 'vitest';
 import { Room, type RoomDeps, type Send } from '../src/room.ts';
 
@@ -92,7 +92,7 @@ describe('joining', () => {
     const { room } = makeRoom();
     const a = join(room, 'Ada');
     const b = join(room, 'Bo');
-    expect(a.last('welcome')).toEqual({ t: 'welcome', code: 'ABCD', token: a.token, playerId: a.id });
+    expect(a.last('welcome')).toEqual({ t: 'welcome', code: 'ABCD', token: a.token, playerId: a.id, protocol: PROTOCOL });
     const players = b.last('room').room.players;
     expect(players.map((p) => [p.name, p.host, p.connected])).toEqual([
       ['Ada', true, true],

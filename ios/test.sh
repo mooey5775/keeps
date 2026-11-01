@@ -29,10 +29,16 @@ else
 fi
 
 ios/tools/build-core.sh > /dev/null
+# The website's server for the online UI tests, here, its port forwarded to the Mac's (where the simulator finds it).
+node ios/tools/test-server.ts 7777 > ios/build/test-server.log 2>&1 &
+TEST_SERVER=$!
+trap 'kill $TEST_SERVER 2>/dev/null' EXIT
+for _ in $(seq 50); do grep -q ready ios/build/test-server.log && break; sleep 0.2; done
+grep -q ready ios/build/test-server.log || { cat ios/build/test-server.log; exit 1; }
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build'
 rsync -a --delete ios/App ios/Shared ios/Spike ios/Tests ios/UITests ios/project.yml "$MAC:src/keeps/ios/"
 rsync -a --delete ios/build/goldens ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
-ssh "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" <<'REMOTE'
+command ssh -o ControlPath=none -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" <<'REMOTE'
 set -euo pipefail
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps/ios

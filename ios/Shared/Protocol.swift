@@ -126,14 +126,14 @@ public struct ActionChoiceAbilityAcquisition: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    discard = try container.decode(CardId.self, forKey: .discard)
-    first = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .first)
+    self.discard = try container.decode(CardId.self, forKey: .discard)
+    self.first = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .first)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(discard, forKey: .discard)
-    try container.encode(first, forKey: .first)
+    try container.encode(self.discard, forKey: .discard)
+    try container.encode(self.first, forKey: .first)
   }
 }
 
@@ -155,12 +155,12 @@ public struct ActionChoiceAbilityBlunder: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -177,12 +177,12 @@ public struct ActionChoiceAbilityJuggling: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    piles = try container.decode([Int].self, forKey: .piles)
+    self.piles = try container.decode([Int].self, forKey: .piles)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(piles, forKey: .piles)
+    try container.encode(self.piles, forKey: .piles)
   }
 }
 
@@ -199,12 +199,12 @@ public struct ActionChoiceAbilitySanction: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    from = try container.decode(Int.self, forKey: .from)
+    self.from = try container.decode(Int.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(from, forKey: .from)
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -227,16 +227,16 @@ public struct ActionChoicePlay: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
-    target = try container.decodeIfPresent(Int.self, forKey: .target)
-    copy = try container.decodeIfPresent(CardId.self, forKey: .copy)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.target = try container.decodeIfPresent(Int.self, forKey: .target)
+    self.copy = try container.decodeIfPresent(CardId.self, forKey: .copy)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
-    try container.encodeIfPresent(target, forKey: .target)
-    try container.encodeIfPresent(copy, forKey: .copy)
+    try container.encode(self.card, forKey: .card)
+    try container.encodeIfPresent(self.target, forKey: .target)
+    try container.encodeIfPresent(self.copy, forKey: .copy)
   }
 }
 
@@ -379,12 +379,12 @@ public struct AnswerAction: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    choice = try container.decode(ActionChoice.self, forKey: .choice)
+    self.choice = try container.decode(ActionChoice.self, forKey: .choice)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(choice, forKey: .choice)
+    try container.encode(self.choice, forKey: .choice)
   }
 }
 
@@ -401,12 +401,12 @@ public struct AnswerChooseDirection: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    direction = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .direction)
+    self.direction = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .direction)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(direction, forKey: .direction)
+    try container.encode(self.direction, forKey: .direction)
   }
 }
 
@@ -423,12 +423,12 @@ public struct AnswerChooseDiscardCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -448,14 +448,14 @@ public struct AnswerChooseHandCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -475,14 +475,14 @@ public struct AnswerChooseKeepPair: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    a = try container.decode(KeepRef.self, forKey: .a)
-    b = try container.decode(KeepRef.self, forKey: .b)
+    self.a = try container.decode(KeepRef.self, forKey: .a)
+    self.b = try container.decode(KeepRef.self, forKey: .b)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(a, forKey: .a)
-    try container.encode(b, forKey: .b)
+    try container.encode(self.a, forKey: .a)
+    try container.encode(self.b, forKey: .b)
   }
 }
 
@@ -499,12 +499,12 @@ public struct AnswerChoosePile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -521,12 +521,12 @@ public struct AnswerChoosePileCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    index = try container.decode(Double.self, forKey: .index)
+    self.index = try container.decode(Double.self, forKey: .index)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(index, forKey: .index)
+    try container.encode(self.index, forKey: .index)
   }
 }
 
@@ -543,12 +543,12 @@ public struct AnswerChoosePlayer: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -565,12 +565,12 @@ public struct AnswerChooseTopCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -587,12 +587,12 @@ public struct AnswerClaimPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    from = try container.decode(Int.self, forKey: .from)
+    self.from = try container.decode(Int.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(from, forKey: .from)
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -612,14 +612,14 @@ public struct AnswerDuplicityHide: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
-    target = try container.decode(Int.self, forKey: .target)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.target = try container.decode(Int.self, forKey: .target)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
-    try container.encode(target, forKey: .target)
+    try container.encode(self.card, forKey: .card)
+    try container.encode(self.target, forKey: .target)
   }
 }
 
@@ -636,12 +636,12 @@ public struct AnswerGiveCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -658,12 +658,12 @@ public struct AnswerHotTarget: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    target = try container.decode(Int.self, forKey: .target)
+    self.target = try container.decode(Int.self, forKey: .target)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(target, forKey: .target)
+    try container.encode(self.target, forKey: .target)
   }
 }
 
@@ -680,12 +680,12 @@ public struct AnswerJokerCopy: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -702,12 +702,12 @@ public struct AnswerOrderPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    order = try container.decode([CardId].self, forKey: .order)
+    self.order = try container.decode([CardId].self, forKey: .order)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(order, forKey: .order)
+    try container.encode(self.order, forKey: .order)
   }
 }
 
@@ -724,12 +724,12 @@ public struct AnswerRevealWindow: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    reveal = try container.decode(Bool.self, forKey: .reveal)
+    self.reveal = try container.decode(Bool.self, forKey: .reveal)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(reveal, forKey: .reveal)
+    try container.encode(self.reveal, forKey: .reveal)
   }
 }
 
@@ -746,12 +746,12 @@ public struct AnswerTakeOrDiscard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    take = try container.decode(Bool.self, forKey: .take)
+    self.take = try container.decode(Bool.self, forKey: .take)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(take, forKey: .take)
+    try container.encode(self.take, forKey: .take)
   }
 }
 
@@ -822,18 +822,18 @@ public struct CardInfo: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(CardId.self, forKey: .id)
-    name = try container.decode(String.self, forKey: .name)
-    text = try container.decode(String.self, forKey: .text)
-    image = try container.decode(String.self, forKey: .image)
+    self.id = try container.decode(CardId.self, forKey: .id)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.text = try container.decode(String.self, forKey: .text)
+    self.image = try container.decode(String.self, forKey: .image)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(name, forKey: .name)
-    try container.encode(text, forKey: .text)
-    try container.encode(image, forKey: .image)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.name, forKey: .name)
+    try container.encode(self.text, forKey: .text)
+    try container.encode(self.image, forKey: .image)
   }
 }
 
@@ -946,12 +946,12 @@ public struct ClientMessageCommand: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    command = try container.decode(Command.self, forKey: .command)
+    self.command = try container.decode(Command.self, forKey: .command)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(command, forKey: .command)
+    try container.encode(self.command, forKey: .command)
   }
 }
 
@@ -974,16 +974,16 @@ public struct ClientMessageCreate: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    name = try container.decode(String.self, forKey: .name)
-    client = try container.decodeIfPresent(String.self, forKey: .client)
-    bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.client = try container.decodeIfPresent(String.self, forKey: .client)
+    self.bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(name, forKey: .name)
-    try container.encodeIfPresent(client, forKey: .client)
-    try container.encodeIfPresent(bot, forKey: .bot)
+    try container.encode(self.name, forKey: .name)
+    try container.encodeIfPresent(self.client, forKey: .client)
+    try container.encodeIfPresent(self.bot, forKey: .bot)
   }
 }
 
@@ -1006,16 +1006,16 @@ public struct ClientMessageJoin: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    code = try container.decode(String.self, forKey: .code)
-    name = try container.decode(String.self, forKey: .name)
-    client = try container.decodeIfPresent(String.self, forKey: .client)
+    self.code = try container.decode(String.self, forKey: .code)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.client = try container.decodeIfPresent(String.self, forKey: .client)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(code, forKey: .code)
-    try container.encode(name, forKey: .name)
-    try container.encodeIfPresent(client, forKey: .client)
+    try container.encode(self.code, forKey: .code)
+    try container.encode(self.name, forKey: .name)
+    try container.encodeIfPresent(self.client, forKey: .client)
   }
 }
 
@@ -1038,16 +1038,16 @@ public struct ClientMessageResume: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    code = try container.decode(String.self, forKey: .code)
-    token = try container.decode(String.self, forKey: .token)
-    client = try container.decodeIfPresent(String.self, forKey: .client)
+    self.code = try container.decode(String.self, forKey: .code)
+    self.token = try container.decode(String.self, forKey: .token)
+    self.client = try container.decodeIfPresent(String.self, forKey: .client)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(code, forKey: .code)
-    try container.encode(token, forKey: .token)
-    try container.encodeIfPresent(client, forKey: .client)
+    try container.encode(self.code, forKey: .code)
+    try container.encode(self.token, forKey: .token)
+    try container.encodeIfPresent(self.client, forKey: .client)
   }
 }
 
@@ -1064,12 +1064,12 @@ public struct ClientMessageSettings: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    settings = try container.decode(Settings.self, forKey: .settings)
+    self.settings = try container.decode(Settings.self, forKey: .settings)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(settings, forKey: .settings)
+    try container.encode(self.settings, forKey: .settings)
   }
 }
 
@@ -1086,12 +1086,12 @@ public struct ClientMessageTraining: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    on = try container.decode(Bool.self, forKey: .on)
+    self.on = try container.decode(Bool.self, forKey: .on)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(on, forKey: .on)
+    try container.encode(self.on, forKey: .on)
   }
 }
 
@@ -1108,12 +1108,12 @@ public struct ClientMessageVoteUndo: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    accept = try container.decode(Bool.self, forKey: .accept)
+    self.accept = try container.decode(Bool.self, forKey: .accept)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(accept, forKey: .accept)
+    try container.encode(self.accept, forKey: .accept)
   }
 }
 
@@ -1173,14 +1173,14 @@ public struct CommandAnswer: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    promptId = try container.decode(String.self, forKey: .promptId)
-    answer = try container.decode(Answer.self, forKey: .answer)
+    self.promptId = try container.decode(String.self, forKey: .promptId)
+    self.answer = try container.decode(Answer.self, forKey: .answer)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(promptId, forKey: .promptId)
-    try container.encode(answer, forKey: .answer)
+    try container.encode(self.promptId, forKey: .promptId)
+    try container.encode(self.answer, forKey: .answer)
   }
 }
 
@@ -1200,14 +1200,14 @@ public struct Drag: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    from = try container.decode(String.self, forKey: .from)
-    to = try container.decode(String.self, forKey: .to)
+    self.from = try container.decode(String.self, forKey: .from)
+    self.to = try container.decode(String.self, forKey: .to)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(from, forKey: .from)
-    try container.encode(to, forKey: .to)
+    try container.encode(self.from, forKey: .from)
+    try container.encode(self.to, forKey: .to)
   }
 }
 
@@ -1281,14 +1281,14 @@ public struct FromAppClient: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(Double.self, forKey: .id)
-    message = try container.decode(ClientMessage.self, forKey: .message)
+    self.id = try container.decode(Double.self, forKey: .id)
+    self.message = try container.decode(ClientMessage.self, forKey: .message)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(message, forKey: .message)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.message, forKey: .message)
   }
 }
 
@@ -1305,12 +1305,12 @@ public struct FromAppClose: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(Double.self, forKey: .id)
+    self.id = try container.decode(Double.self, forKey: .id)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
+    try container.encode(self.id, forKey: .id)
   }
 }
 
@@ -1330,36 +1330,41 @@ public struct FromAppConfig: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    botDelayMs = try container.decode(Double.self, forKey: .botDelayMs)
-    seed = try container.decodeIfPresent(String.self, forKey: .seed)
+    self.botDelayMs = try container.decode(Double.self, forKey: .botDelayMs)
+    self.seed = try container.decodeIfPresent(String.self, forKey: .seed)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(botDelayMs, forKey: .botDelayMs)
-    try container.encodeIfPresent(seed, forKey: .seed)
+    try container.encode(self.botDelayMs, forKey: .botDelayMs)
+    try container.encodeIfPresent(self.seed, forKey: .seed)
   }
 }
 
 public struct FromAppConnect: Codable, Equatable, Sendable {
   public var id: Double
+  public var server: String?
 
-  public init(id: Double) {
+  public init(id: Double, server: String? = nil) {
     self.id = id
+    self.server = server
   }
 
   private enum CodingKeys: String, CodingKey {
     case id
+    case server
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(Double.self, forKey: .id)
+    self.id = try container.decode(Double.self, forKey: .id)
+    self.server = try container.decodeIfPresent(String.self, forKey: .server)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
+    try container.encode(self.id, forKey: .id)
+    try container.encodeIfPresent(self.server, forKey: .server)
   }
 }
 
@@ -1382,16 +1387,16 @@ public struct FromAppRestore: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(Double.self, forKey: .id)
-    game = try container.decode(GameRecord.self, forKey: .game)
-    replay = try container.decode(String.self, forKey: .replay)
+    self.id = try container.decode(Double.self, forKey: .id)
+    self.game = try container.decode(GameRecord.self, forKey: .game)
+    self.replay = try container.decode(String.self, forKey: .replay)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(game, forKey: .game)
-    try container.encode(replay, forKey: .replay)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.game, forKey: .game)
+    try container.encode(self.replay, forKey: .replay)
   }
 }
 
@@ -1420,20 +1425,20 @@ public struct GameRecord: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    code = try container.decode(String.self, forKey: .code)
-    startedAt = try container.decode(Double.self, forKey: .startedAt)
-    settings = try container.decode(GameRecordSettings.self, forKey: .settings)
-    seats = try container.decode([GameRecordSeatsElement].self, forKey: .seats)
-    over = try container.decode(Bool.self, forKey: .over)
+    self.code = try container.decode(String.self, forKey: .code)
+    self.startedAt = try container.decode(Double.self, forKey: .startedAt)
+    self.settings = try container.decode(GameRecordSettings.self, forKey: .settings)
+    self.seats = try container.decode([GameRecordSeatsElement].self, forKey: .seats)
+    self.over = try container.decode(Bool.self, forKey: .over)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(code, forKey: .code)
-    try container.encode(startedAt, forKey: .startedAt)
-    try container.encode(settings, forKey: .settings)
-    try container.encode(seats, forKey: .seats)
-    try container.encode(over, forKey: .over)
+    try container.encode(self.code, forKey: .code)
+    try container.encode(self.startedAt, forKey: .startedAt)
+    try container.encode(self.settings, forKey: .settings)
+    try container.encode(self.seats, forKey: .seats)
+    try container.encode(self.over, forKey: .over)
   }
 }
 
@@ -1459,18 +1464,18 @@ public struct GameRecordSeatsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    name = try container.decode(String.self, forKey: .name)
-    bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
-    training = try container.decodeIfPresent(Bool.self, forKey: .training)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
+    self.training = try container.decodeIfPresent(Bool.self, forKey: .training)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(name, forKey: .name)
-    try container.encodeIfPresent(bot, forKey: .bot)
-    try container.encodeIfPresent(training, forKey: .training)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.name, forKey: .name)
+    try container.encodeIfPresent(self.bot, forKey: .bot)
+    try container.encodeIfPresent(self.training, forKey: .training)
   }
 }
 
@@ -1490,14 +1495,14 @@ public struct GameRecordSettings: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    marksToWin = try container.decode(Double.self, forKey: .marksToWin)
-    botLevel = try container.decodeIfPresent(BotLevel.self, forKey: .botLevel)
+    self.marksToWin = try container.decode(Double.self, forKey: .marksToWin)
+    self.botLevel = try container.decodeIfPresent(BotLevel.self, forKey: .botLevel)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(marksToWin, forKey: .marksToWin)
-    try container.encodeIfPresent(botLevel, forKey: .botLevel)
+    try container.encode(self.marksToWin, forKey: .marksToWin)
+    try container.encodeIfPresent(self.botLevel, forKey: .botLevel)
   }
 }
 
@@ -1520,16 +1525,16 @@ public struct Hint: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    command = try container.decode(Command.self, forKey: .command)
-    probability = try container.decode(Double.self, forKey: .probability)
-    win = try container.decodeIfPresent(Double.self, forKey: .win)
+    self.command = try container.decode(Command.self, forKey: .command)
+    self.probability = try container.decode(Double.self, forKey: .probability)
+    self.win = try container.decodeIfPresent(Double.self, forKey: .win)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(command, forKey: .command)
-    try container.encode(probability, forKey: .probability)
-    try container.encodeIfPresent(win, forKey: .win)
+    try container.encode(self.command, forKey: .command)
+    try container.encode(self.probability, forKey: .probability)
+    try container.encodeIfPresent(self.win, forKey: .win)
   }
 }
 
@@ -1582,12 +1587,12 @@ public struct KeepCardViewFaceDown: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decodeIfPresent(CardId.self, forKey: .id)
+    self.id = try container.decodeIfPresent(CardId.self, forKey: .id)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encodeIfPresent(id, forKey: .id)
+    try container.encodeIfPresent(self.id, forKey: .id)
   }
 }
 
@@ -1604,12 +1609,12 @@ public struct KeepCardViewNotFaceDown: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(CardId.self, forKey: .id)
+    self.id = try container.decode(CardId.self, forKey: .id)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
+    try container.encode(self.id, forKey: .id)
   }
 }
 
@@ -1629,15 +1634,22 @@ public struct KeepRef: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    index = try container.decode(Double.self, forKey: .index)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.index = try container.decode(Double.self, forKey: .index)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(index, forKey: .index)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.index, forKey: .index)
   }
+}
+
+public enum LinkState: String, Codable, Equatable, Sendable, CaseIterable {
+  case closed = "closed"
+  case connecting = "connecting"
+  case `open` = "open"
+  case reconnecting = "reconnecting"
 }
 
 public struct LogLine: Codable, Equatable, Sendable {
@@ -1662,18 +1674,18 @@ public struct LogLine: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seq = try container.decode(Double.self, forKey: .seq)
-    depth = try container.decode(Double.self, forKey: .depth)
-    text = try container.decode(String.self, forKey: .text)
-    heading = try container.decode(Bool.self, forKey: .heading)
+    self.seq = try container.decode(Double.self, forKey: .seq)
+    self.depth = try container.decode(Double.self, forKey: .depth)
+    self.text = try container.decode(String.self, forKey: .text)
+    self.heading = try container.decode(Bool.self, forKey: .heading)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seq, forKey: .seq)
-    try container.encode(depth, forKey: .depth)
-    try container.encode(text, forKey: .text)
-    try container.encode(heading, forKey: .heading)
+    try container.encode(self.seq, forKey: .seq)
+    try container.encode(self.depth, forKey: .depth)
+    try container.encode(self.text, forKey: .text)
+    try container.encode(self.heading, forKey: .heading)
   }
 }
 
@@ -1708,24 +1720,24 @@ public struct Option: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    command = try container.decode(Command.self, forKey: .command)
-    refs = try container.decode([String].self, forKey: .refs)
-    label = try container.decode(String.self, forKey: .label)
-    drags = try container.decodeIfPresent([Drag].self, forKey: .drags)
-    cards = try container.decode([CardId].self, forKey: .cards)
-    starts = try container.decodeIfPresent([String].self, forKey: .starts)
-    groups = try container.decodeIfPresent([String].self, forKey: .groups)
+    self.command = try container.decode(Command.self, forKey: .command)
+    self.refs = try container.decode([String].self, forKey: .refs)
+    self.label = try container.decode(String.self, forKey: .label)
+    self.drags = try container.decodeIfPresent([Drag].self, forKey: .drags)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
+    self.starts = try container.decodeIfPresent([String].self, forKey: .starts)
+    self.groups = try container.decodeIfPresent([String].self, forKey: .groups)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(command, forKey: .command)
-    try container.encode(refs, forKey: .refs)
-    try container.encode(label, forKey: .label)
-    try container.encodeIfPresent(drags, forKey: .drags)
-    try container.encode(cards, forKey: .cards)
-    try container.encodeIfPresent(starts, forKey: .starts)
-    try container.encodeIfPresent(groups, forKey: .groups)
+    try container.encode(self.command, forKey: .command)
+    try container.encode(self.refs, forKey: .refs)
+    try container.encode(self.label, forKey: .label)
+    try container.encodeIfPresent(self.drags, forKey: .drags)
+    try container.encode(self.cards, forKey: .cards)
+    try container.encodeIfPresent(self.starts, forKey: .starts)
+    try container.encodeIfPresent(self.groups, forKey: .groups)
   }
 }
 
@@ -1752,14 +1764,14 @@ public struct PileClaim: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    decider = try container.decode(Int.self, forKey: .decider)
-    claimant = try container.decode(Int.self, forKey: .claimant)
+    self.decider = try container.decode(Int.self, forKey: .decider)
+    self.claimant = try container.decode(Int.self, forKey: .claimant)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(decider, forKey: .decider)
-    try container.encode(claimant, forKey: .claimant)
+    try container.encode(self.decider, forKey: .decider)
+    try container.encode(self.claimant, forKey: .claimant)
   }
 }
 
@@ -1796,16 +1808,16 @@ public struct PileView: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    position = try container.decode(Int.self, forKey: .position)
-    size = try container.decode(Double.self, forKey: .size)
-    top = try container.decode(CardId?.self, forKey: .top)
+    self.position = try container.decode(Int.self, forKey: .position)
+    self.size = try container.decode(Double.self, forKey: .size)
+    self.top = try container.decode(CardId?.self, forKey: .top)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(position, forKey: .position)
-    try container.encode(size, forKey: .size)
-    if let value = top { try container.encode(value, forKey: .top) } else { try container.encodeNil(forKey: .top) }
+    try container.encode(self.position, forKey: .position)
+    try container.encode(self.size, forKey: .size)
+    if let value = self.top { try container.encode(value, forKey: .top) } else { try container.encodeNil(forKey: .top) }
   }
 }
 
@@ -1879,50 +1891,50 @@ public struct PlayerView: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    viewer = try container.decode(Viewer.self, forKey: .viewer)
-    seats = try container.decode([SeatKind].self, forKey: .seats)
-    marksToWin = try container.decode(Double.self, forKey: .marksToWin)
-    marks = try container.decode([Double].self, forKey: .marks)
-    round = try container.decode(Double.self, forKey: .round)
-    turnNumber = try container.decode(Double.self, forKey: .turnNumber)
-    phase = try container.decode(Phase.self, forKey: .phase)
-    turn = try container.decode(PlayerViewTurn?.self, forKey: .turn)
-    frame = try container.decode(PlayerViewFrame?.self, forKey: .frame)
-    startingSeat = try container.decode(Int?.self, forKey: .startingSeat)
-    lastRoundWinner = try container.decode(Int?.self, forKey: .lastRoundWinner)
-    roundEnd = try container.decode(RoundEnd?.self, forKey: .roundEnd)
-    piles = try container.decode([PileView].self, forKey: .piles)
-    hands = try container.decode([PlayerViewHandsElement].self, forKey: .hands)
-    keeps = try container.decode([PlayerViewKeepsElement].self, forKey: .keeps)
-    discard = try container.decode([CardId].self, forKey: .discard)
-    scores = try container.decode([Double?].self, forKey: .scores)
-    prompts = try container.decode([PromptView].self, forKey: .prompts)
-    duplicityHolder = try container.decode(Int?.self, forKey: .duplicityHolder)
-    legal = try container.decode([Command].self, forKey: .legal)
+    self.viewer = try container.decode(Viewer.self, forKey: .viewer)
+    self.seats = try container.decode([SeatKind].self, forKey: .seats)
+    self.marksToWin = try container.decode(Double.self, forKey: .marksToWin)
+    self.marks = try container.decode([Double].self, forKey: .marks)
+    self.round = try container.decode(Double.self, forKey: .round)
+    self.turnNumber = try container.decode(Double.self, forKey: .turnNumber)
+    self.phase = try container.decode(Phase.self, forKey: .phase)
+    self.turn = try container.decode(PlayerViewTurn?.self, forKey: .turn)
+    self.frame = try container.decode(PlayerViewFrame?.self, forKey: .frame)
+    self.startingSeat = try container.decode(Int?.self, forKey: .startingSeat)
+    self.lastRoundWinner = try container.decode(Int?.self, forKey: .lastRoundWinner)
+    self.roundEnd = try container.decode(RoundEnd?.self, forKey: .roundEnd)
+    self.piles = try container.decode([PileView].self, forKey: .piles)
+    self.hands = try container.decode([PlayerViewHandsElement].self, forKey: .hands)
+    self.keeps = try container.decode([PlayerViewKeepsElement].self, forKey: .keeps)
+    self.discard = try container.decode([CardId].self, forKey: .discard)
+    self.scores = try container.decode([Double?].self, forKey: .scores)
+    self.prompts = try container.decode([PromptView].self, forKey: .prompts)
+    self.duplicityHolder = try container.decode(Int?.self, forKey: .duplicityHolder)
+    self.legal = try container.decode([Command].self, forKey: .legal)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(viewer, forKey: .viewer)
-    try container.encode(seats, forKey: .seats)
-    try container.encode(marksToWin, forKey: .marksToWin)
-    try container.encode(marks, forKey: .marks)
-    try container.encode(round, forKey: .round)
-    try container.encode(turnNumber, forKey: .turnNumber)
-    try container.encode(phase, forKey: .phase)
-    if let value = turn { try container.encode(value, forKey: .turn) } else { try container.encodeNil(forKey: .turn) }
-    if let value = frame { try container.encode(value, forKey: .frame) } else { try container.encodeNil(forKey: .frame) }
-    if let value = startingSeat { try container.encode(value, forKey: .startingSeat) } else { try container.encodeNil(forKey: .startingSeat) }
-    if let value = lastRoundWinner { try container.encode(value, forKey: .lastRoundWinner) } else { try container.encodeNil(forKey: .lastRoundWinner) }
-    if let value = roundEnd { try container.encode(value, forKey: .roundEnd) } else { try container.encodeNil(forKey: .roundEnd) }
-    try container.encode(piles, forKey: .piles)
-    try container.encode(hands, forKey: .hands)
-    try container.encode(keeps, forKey: .keeps)
-    try container.encode(discard, forKey: .discard)
-    try container.encode(scores, forKey: .scores)
-    try container.encode(prompts, forKey: .prompts)
-    if let value = duplicityHolder { try container.encode(value, forKey: .duplicityHolder) } else { try container.encodeNil(forKey: .duplicityHolder) }
-    try container.encode(legal, forKey: .legal)
+    try container.encode(self.viewer, forKey: .viewer)
+    try container.encode(self.seats, forKey: .seats)
+    try container.encode(self.marksToWin, forKey: .marksToWin)
+    try container.encode(self.marks, forKey: .marks)
+    try container.encode(self.round, forKey: .round)
+    try container.encode(self.turnNumber, forKey: .turnNumber)
+    try container.encode(self.phase, forKey: .phase)
+    if let value = self.turn { try container.encode(value, forKey: .turn) } else { try container.encodeNil(forKey: .turn) }
+    if let value = self.frame { try container.encode(value, forKey: .frame) } else { try container.encodeNil(forKey: .frame) }
+    if let value = self.startingSeat { try container.encode(value, forKey: .startingSeat) } else { try container.encodeNil(forKey: .startingSeat) }
+    if let value = self.lastRoundWinner { try container.encode(value, forKey: .lastRoundWinner) } else { try container.encodeNil(forKey: .lastRoundWinner) }
+    if let value = self.roundEnd { try container.encode(value, forKey: .roundEnd) } else { try container.encodeNil(forKey: .roundEnd) }
+    try container.encode(self.piles, forKey: .piles)
+    try container.encode(self.hands, forKey: .hands)
+    try container.encode(self.keeps, forKey: .keeps)
+    try container.encode(self.discard, forKey: .discard)
+    try container.encode(self.scores, forKey: .scores)
+    try container.encode(self.prompts, forKey: .prompts)
+    if let value = self.duplicityHolder { try container.encode(value, forKey: .duplicityHolder) } else { try container.encodeNil(forKey: .duplicityHolder) }
+    try container.encode(self.legal, forKey: .legal)
   }
 }
 
@@ -1945,16 +1957,16 @@ public struct PlayerViewFrame: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    kind = try container.decode(PlayerViewFrameKind.self, forKey: .kind)
-    remaining = try container.decode(Double.self, forKey: .remaining)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.kind = try container.decode(PlayerViewFrameKind.self, forKey: .kind)
+    self.remaining = try container.decode(Double.self, forKey: .remaining)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(kind, forKey: .kind)
-    try container.encode(remaining, forKey: .remaining)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.kind, forKey: .kind)
+    try container.encode(self.remaining, forKey: .remaining)
   }
 }
 
@@ -1984,16 +1996,16 @@ public struct PlayerViewHandsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    count = try container.decode(Double.self, forKey: .count)
-    cards = try container.decodeIfPresent([CardId].self, forKey: .cards)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.count = try container.decode(Double.self, forKey: .count)
+    self.cards = try container.decodeIfPresent([CardId].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(count, forKey: .count)
-    try container.encodeIfPresent(cards, forKey: .cards)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.count, forKey: .count)
+    try container.encodeIfPresent(self.cards, forKey: .cards)
   }
 }
 
@@ -2013,14 +2025,14 @@ public struct PlayerViewKeepsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    cards = try container.decode([KeepCardView].self, forKey: .cards)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.cards = try container.decode([KeepCardView].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -2040,14 +2052,14 @@ public struct PlayerViewTurn: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    actionsTaken = try container.decode(Double.self, forKey: .actionsTaken)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.actionsTaken = try container.decode(Double.self, forKey: .actionsTaken)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(actionsTaken, forKey: .actionsTaken)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.actionsTaken, forKey: .actionsTaken)
   }
 }
 
@@ -2287,14 +2299,14 @@ public struct PromptViewMineAction: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -2314,14 +2326,14 @@ public struct PromptViewMineChooseDirection: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -2341,14 +2353,14 @@ public struct PromptViewMineChooseDiscardCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -2371,16 +2383,16 @@ public struct PromptViewMineChooseHandCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([PromptViewMineChooseHandCardOptionsElement].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([PromptViewMineChooseHandCardOptionsElement].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2400,14 +2412,14 @@ public struct PromptViewMineChooseHandCardOptionsElement: Codable, Equatable, Se
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -2427,14 +2439,14 @@ public struct PromptViewMineChooseKeepPair: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -2460,18 +2472,18 @@ public struct PromptViewMineChoosePile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    purpose = try container.decode(PilePurpose.self, forKey: .purpose)
-    options = try container.decode([Int].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.purpose = try container.decode(PilePurpose.self, forKey: .purpose)
+    self.options = try container.decode([Int].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(purpose, forKey: .purpose)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.purpose, forKey: .purpose)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2497,18 +2509,18 @@ public struct PromptViewMineChoosePileCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    pile = try container.decode(Int.self, forKey: .pile)
-    cards = try container.decode([CardId].self, forKey: .cards)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.pile = try container.decode(Int.self, forKey: .pile)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(pile, forKey: .pile)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.pile, forKey: .pile)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -2534,18 +2546,18 @@ public struct PromptViewMineChoosePlayer: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    purpose = try container.decode(PromptViewMineChoosePlayerPurpose.self, forKey: .purpose)
-    options = try container.decode([Int].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.purpose = try container.decode(PromptViewMineChoosePlayerPurpose.self, forKey: .purpose)
+    self.options = try container.decode([Int].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(purpose, forKey: .purpose)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.purpose, forKey: .purpose)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2573,16 +2585,16 @@ public struct PromptViewMineChooseTopCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([PromptViewMineChooseTopCardOptionsElement].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([PromptViewMineChooseTopCardOptionsElement].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2602,14 +2614,14 @@ public struct PromptViewMineChooseTopCardOptionsElement: Codable, Equatable, Sen
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    pile = try container.decode(Int.self, forKey: .pile)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.pile = try container.decode(Int.self, forKey: .pile)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(pile, forKey: .pile)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.pile, forKey: .pile)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -2641,22 +2653,22 @@ public struct PromptViewMineClaimPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([Int].self, forKey: .options)
-    claimant = try container.decode(Int.self, forKey: .claimant)
-    claims = try container.decode([PromptViewMineClaimPileClaimsElement].self, forKey: .claims)
-    queue = try container.decode([PileClaim].self, forKey: .queue)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([Int].self, forKey: .options)
+    self.claimant = try container.decode(Int.self, forKey: .claimant)
+    self.claims = try container.decode([PromptViewMineClaimPileClaimsElement].self, forKey: .claims)
+    self.queue = try container.decode([PileClaim].self, forKey: .queue)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
-    try container.encode(claimant, forKey: .claimant)
-    try container.encode(claims, forKey: .claims)
-    try container.encode(queue, forKey: .queue)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
+    try container.encode(self.claimant, forKey: .claimant)
+    try container.encode(self.claims, forKey: .claims)
+    try container.encode(self.queue, forKey: .queue)
   }
 }
 
@@ -2676,14 +2688,14 @@ public struct PromptViewMineClaimPileClaimsElement: Codable, Equatable, Sendable
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    claimant = try container.decode(Int.self, forKey: .claimant)
-    from = try container.decode(Int.self, forKey: .from)
+    self.claimant = try container.decode(Int.self, forKey: .claimant)
+    self.from = try container.decode(Int.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(claimant, forKey: .claimant)
-    try container.encode(from, forKey: .from)
+    try container.encode(self.claimant, forKey: .claimant)
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -2706,16 +2718,16 @@ public struct PromptViewMineDuplicityHide: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([CardId].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([CardId].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2738,16 +2750,16 @@ public struct PromptViewMineGiveCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    to = try container.decode(Int.self, forKey: .to)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.to = try container.decode(Int.self, forKey: .to)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(to, forKey: .to)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.to, forKey: .to)
   }
 }
 
@@ -2770,16 +2782,16 @@ public struct PromptViewMineHotTarget: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -2802,16 +2814,16 @@ public struct PromptViewMineJokerCopy: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([CardId].self, forKey: .options)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([CardId].self, forKey: .options)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
   }
 }
 
@@ -2837,18 +2849,18 @@ public struct PromptViewMineOrderPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    pile = try container.decode(Int.self, forKey: .pile)
-    cards = try container.decode([CardId].self, forKey: .cards)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.pile = try container.decode(Int.self, forKey: .pile)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(pile, forKey: .pile)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.pile, forKey: .pile)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -2874,18 +2886,18 @@ public struct PromptViewMineRevealWindow: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    reason = try container.decode(WindowReason.self, forKey: .reason)
-    playId = try container.decode(Double?.self, forKey: .playId)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.reason = try container.decode(WindowReason.self, forKey: .reason)
+    self.playId = try container.decode(Double?.self, forKey: .playId)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(reason, forKey: .reason)
-    if let value = playId { try container.encode(value, forKey: .playId) } else { try container.encodeNil(forKey: .playId) }
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.reason, forKey: .reason)
+    if let value = self.playId { try container.encode(value, forKey: .playId) } else { try container.encodeNil(forKey: .playId) }
   }
 }
 
@@ -2911,18 +2923,18 @@ public struct PromptViewMineTakeOrDiscard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -2945,16 +2957,16 @@ public struct PromptViewNotMine: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    seat = try container.decode(Int.self, forKey: .seat)
-    kind = try container.decode(PromptViewNotMineKind.self, forKey: .kind)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.kind = try container.decode(PromptViewNotMineKind.self, forKey: .kind)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(kind, forKey: .kind)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.kind, forKey: .kind)
   }
 }
 
@@ -3006,22 +3018,22 @@ public struct RoomPlayer: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(String.self, forKey: .id)
-    name = try container.decode(String.self, forKey: .name)
-    connected = try container.decode(Bool.self, forKey: .connected)
-    host = try container.decode(Bool.self, forKey: .host)
-    seat = try container.decode(Int?.self, forKey: .seat)
-    bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
+    self.id = try container.decode(String.self, forKey: .id)
+    self.name = try container.decode(String.self, forKey: .name)
+    self.connected = try container.decode(Bool.self, forKey: .connected)
+    self.host = try container.decode(Bool.self, forKey: .host)
+    self.seat = try container.decode(Int?.self, forKey: .seat)
+    self.bot = try container.decodeIfPresent(Bool.self, forKey: .bot)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(name, forKey: .name)
-    try container.encode(connected, forKey: .connected)
-    try container.encode(host, forKey: .host)
-    if let value = seat { try container.encode(value, forKey: .seat) } else { try container.encodeNil(forKey: .seat) }
-    try container.encodeIfPresent(bot, forKey: .bot)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.name, forKey: .name)
+    try container.encode(self.connected, forKey: .connected)
+    try container.encode(self.host, forKey: .host)
+    if let value = self.seat { try container.encode(value, forKey: .seat) } else { try container.encodeNil(forKey: .seat) }
+    try container.encodeIfPresent(self.bot, forKey: .bot)
   }
 }
 
@@ -3059,26 +3071,26 @@ public struct RoomSummary: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    code = try container.decode(String.self, forKey: .code)
-    phase = try container.decode(RoomSummaryPhase.self, forKey: .phase)
-    players = try container.decode([RoomPlayer].self, forKey: .players)
-    settings = try container.decode(Settings.self, forKey: .settings)
-    you = try container.decode(String.self, forKey: .you)
-    botAvailable = try container.decode(Bool.self, forKey: .botAvailable)
-    botLevels = try container.decodeIfPresent(Bool.self, forKey: .botLevels)
-    training = try container.decodeIfPresent(Bool.self, forKey: .training)
+    self.code = try container.decode(String.self, forKey: .code)
+    self.phase = try container.decode(RoomSummaryPhase.self, forKey: .phase)
+    self.players = try container.decode([RoomPlayer].self, forKey: .players)
+    self.settings = try container.decode(Settings.self, forKey: .settings)
+    self.you = try container.decode(String.self, forKey: .you)
+    self.botAvailable = try container.decode(Bool.self, forKey: .botAvailable)
+    self.botLevels = try container.decodeIfPresent(Bool.self, forKey: .botLevels)
+    self.training = try container.decodeIfPresent(Bool.self, forKey: .training)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(code, forKey: .code)
-    try container.encode(phase, forKey: .phase)
-    try container.encode(players, forKey: .players)
-    try container.encode(settings, forKey: .settings)
-    try container.encode(you, forKey: .you)
-    try container.encode(botAvailable, forKey: .botAvailable)
-    try container.encodeIfPresent(botLevels, forKey: .botLevels)
-    try container.encodeIfPresent(training, forKey: .training)
+    try container.encode(self.code, forKey: .code)
+    try container.encode(self.phase, forKey: .phase)
+    try container.encode(self.players, forKey: .players)
+    try container.encode(self.settings, forKey: .settings)
+    try container.encode(self.you, forKey: .you)
+    try container.encode(self.botAvailable, forKey: .botAvailable)
+    try container.encodeIfPresent(self.botLevels, forKey: .botLevels)
+    try container.encodeIfPresent(self.training, forKey: .training)
   }
 }
 
@@ -3136,12 +3148,12 @@ public struct RoundEndEmptyPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    enderSeat = try container.decode(Int.self, forKey: .enderSeat)
+    self.enderSeat = try container.decode(Int.self, forKey: .enderSeat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(enderSeat, forKey: .enderSeat)
+    try container.encode(self.enderSeat, forKey: .enderSeat)
   }
 }
 
@@ -3158,12 +3170,12 @@ public struct RoundEndTokens: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    winner = try container.decode(Int.self, forKey: .winner)
+    self.winner = try container.decode(Int.self, forKey: .winner)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(winner, forKey: .winner)
+    try container.encode(self.winner, forKey: .winner)
   }
 }
 
@@ -3201,26 +3213,26 @@ public struct RoundReview: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    game = try container.decode(String.self, forKey: .game)
-    round = try container.decode(Double.self, forKey: .round)
-    seat = try container.decode(Int.self, forKey: .seat)
-    pending = try container.decode(Double.self, forKey: .pending)
-    winner = try container.decode(Int?.self, forKey: .winner)
-    scores = try container.decode([Double?].self, forKey: .scores)
-    moves = try container.decode([RoundReviewMovesElement].self, forKey: .moves)
-    decisions = try container.decode([RoundReviewDecisionsElement].self, forKey: .decisions)
+    self.game = try container.decode(String.self, forKey: .game)
+    self.round = try container.decode(Double.self, forKey: .round)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.pending = try container.decode(Double.self, forKey: .pending)
+    self.winner = try container.decode(Int?.self, forKey: .winner)
+    self.scores = try container.decode([Double?].self, forKey: .scores)
+    self.moves = try container.decode([RoundReviewMovesElement].self, forKey: .moves)
+    self.decisions = try container.decode([RoundReviewDecisionsElement].self, forKey: .decisions)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(game, forKey: .game)
-    try container.encode(round, forKey: .round)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(pending, forKey: .pending)
-    if let value = winner { try container.encode(value, forKey: .winner) } else { try container.encodeNil(forKey: .winner) }
-    try container.encode(scores, forKey: .scores)
-    try container.encode(moves, forKey: .moves)
-    try container.encode(decisions, forKey: .decisions)
+    try container.encode(self.game, forKey: .game)
+    try container.encode(self.round, forKey: .round)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.pending, forKey: .pending)
+    if let value = self.winner { try container.encode(value, forKey: .winner) } else { try container.encodeNil(forKey: .winner) }
+    try container.encode(self.scores, forKey: .scores)
+    try container.encode(self.moves, forKey: .moves)
+    try container.encode(self.decisions, forKey: .decisions)
   }
 }
 
@@ -3246,18 +3258,18 @@ public struct RoundReviewDecisionsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    move = try container.decode(Double.self, forKey: .move)
-    seat = try container.decode(Int.self, forKey: .seat)
-    options = try container.decode([RoundReviewDecisionsElementOptionsElement].self, forKey: .options)
-    verdict = try container.decode(RoundReviewDecisionsElementVerdict?.self, forKey: .verdict)
+    self.move = try container.decode(Double.self, forKey: .move)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.options = try container.decode([RoundReviewDecisionsElementOptionsElement].self, forKey: .options)
+    self.verdict = try container.decode(RoundReviewDecisionsElementVerdict?.self, forKey: .verdict)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(move, forKey: .move)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(options, forKey: .options)
-    if let value = verdict { try container.encode(value, forKey: .verdict) } else { try container.encodeNil(forKey: .verdict) }
+    try container.encode(self.move, forKey: .move)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.options, forKey: .options)
+    if let value = self.verdict { try container.encode(value, forKey: .verdict) } else { try container.encodeNil(forKey: .verdict) }
   }
 }
 
@@ -3283,18 +3295,18 @@ public struct RoundReviewDecisionsElementOptionsElement: Codable, Equatable, Sen
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    label = try container.decode(String.self, forKey: .label)
-    known = try container.decode(Double?.self, forKey: .known)
-    truth = try container.decode(Double?.self, forKey: .truth)
-    played = try container.decode(Bool.self, forKey: .played)
+    self.label = try container.decode(String.self, forKey: .label)
+    self.known = try container.decode(Double?.self, forKey: .known)
+    self.truth = try container.decode(Double?.self, forKey: .truth)
+    self.played = try container.decode(Bool.self, forKey: .played)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(label, forKey: .label)
-    if let value = known { try container.encode(value, forKey: .known) } else { try container.encodeNil(forKey: .known) }
-    if let value = truth { try container.encode(value, forKey: .truth) } else { try container.encodeNil(forKey: .truth) }
-    try container.encode(played, forKey: .played)
+    try container.encode(self.label, forKey: .label)
+    if let value = self.known { try container.encode(value, forKey: .known) } else { try container.encodeNil(forKey: .known) }
+    if let value = self.truth { try container.encode(value, forKey: .truth) } else { try container.encodeNil(forKey: .truth) }
+    try container.encode(self.played, forKey: .played)
   }
 }
 
@@ -3334,22 +3346,22 @@ public struct RoundReviewMovesElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    turn = try container.decode(Double.self, forKey: .turn)
-    seat = try container.decode(Int.self, forKey: .seat)
-    events = try container.decode([TraceEvent].self, forKey: .events)
-    truth = try container.decode(Double?.self, forKey: .truth)
-    mine = try container.decode(Double?.self, forKey: .mine)
-    theirs = try container.decode(Double?.self, forKey: .theirs)
+    self.turn = try container.decode(Double.self, forKey: .turn)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.events = try container.decode([TraceEvent].self, forKey: .events)
+    self.truth = try container.decode(Double?.self, forKey: .truth)
+    self.mine = try container.decode(Double?.self, forKey: .mine)
+    self.theirs = try container.decode(Double?.self, forKey: .theirs)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(turn, forKey: .turn)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(events, forKey: .events)
-    if let value = truth { try container.encode(value, forKey: .truth) } else { try container.encodeNil(forKey: .truth) }
-    if let value = mine { try container.encode(value, forKey: .mine) } else { try container.encodeNil(forKey: .mine) }
-    if let value = theirs { try container.encode(value, forKey: .theirs) } else { try container.encodeNil(forKey: .theirs) }
+    try container.encode(self.turn, forKey: .turn)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.events, forKey: .events)
+    if let value = self.truth { try container.encode(value, forKey: .truth) } else { try container.encodeNil(forKey: .truth) }
+    if let value = self.mine { try container.encode(value, forKey: .mine) } else { try container.encodeNil(forKey: .mine) }
+    if let value = self.theirs { try container.encode(value, forKey: .theirs) } else { try container.encodeNil(forKey: .theirs) }
   }
 }
 
@@ -3435,12 +3447,12 @@ public struct ServerMessageError: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    message = try container.decode(String.self, forKey: .message)
+    self.message = try container.decode(String.self, forKey: .message)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(message, forKey: .message)
+    try container.encode(self.message, forKey: .message)
   }
 }
 
@@ -3472,22 +3484,22 @@ public struct ServerMessageGame: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    view = try container.decode(PlayerView.self, forKey: .view)
-    log = try container.decode([TraceEvent].self, forKey: .log)
-    reset = try container.decode(Bool.self, forKey: .reset)
-    names = try container.decode([String?].self, forKey: .names)
-    undo = try container.decode(UndoState.self, forKey: .undo)
-    hints = container.contains(.hints) ? try container.decode(Nullable<[Hint]>.self, forKey: .hints) : nil
+    self.view = try container.decode(PlayerView.self, forKey: .view)
+    self.log = try container.decode([TraceEvent].self, forKey: .log)
+    self.reset = try container.decode(Bool.self, forKey: .reset)
+    self.names = try container.decode([String?].self, forKey: .names)
+    self.undo = try container.decode(UndoState.self, forKey: .undo)
+    self.hints = container.contains(.hints) ? try container.decode(Nullable<[Hint]>.self, forKey: .hints) : nil
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(view, forKey: .view)
-    try container.encode(log, forKey: .log)
-    try container.encode(reset, forKey: .reset)
-    try container.encode(names, forKey: .names)
-    try container.encode(undo, forKey: .undo)
-    try container.encodeIfPresent(hints, forKey: .hints)
+    try container.encode(self.view, forKey: .view)
+    try container.encode(self.log, forKey: .log)
+    try container.encode(self.reset, forKey: .reset)
+    try container.encode(self.names, forKey: .names)
+    try container.encode(self.undo, forKey: .undo)
+    try container.encodeIfPresent(self.hints, forKey: .hints)
   }
 }
 
@@ -3504,12 +3516,12 @@ public struct ServerMessageReview: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    review = try container.decode(RoundReview.self, forKey: .review)
+    self.review = try container.decode(RoundReview.self, forKey: .review)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(review, forKey: .review)
+    try container.encode(self.review, forKey: .review)
   }
 }
 
@@ -3526,12 +3538,12 @@ public struct ServerMessageRoom: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    room = try container.decode(RoomSummary.self, forKey: .room)
+    self.room = try container.decode(RoomSummary.self, forKey: .room)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(room, forKey: .room)
+    try container.encode(self.room, forKey: .room)
   }
 }
 
@@ -3540,12 +3552,14 @@ public struct ServerMessageWelcome: Codable, Equatable, Sendable {
   public var token: String
   public var playerId: String
   public var build: String?
+  public var `protocol`: Double?
 
-  public init(code: String, token: String, playerId: String, build: String? = nil) {
+  public init(code: String, token: String, playerId: String, build: String? = nil, protocol: Double? = nil) {
     self.code = code
     self.token = token
     self.playerId = playerId
     self.build = build
+    self.protocol = `protocol`
   }
 
   private enum CodingKeys: String, CodingKey {
@@ -3553,22 +3567,25 @@ public struct ServerMessageWelcome: Codable, Equatable, Sendable {
     case token
     case playerId
     case build
+    case `protocol`
   }
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    code = try container.decode(String.self, forKey: .code)
-    token = try container.decode(String.self, forKey: .token)
-    playerId = try container.decode(String.self, forKey: .playerId)
-    build = try container.decodeIfPresent(String.self, forKey: .build)
+    self.code = try container.decode(String.self, forKey: .code)
+    self.token = try container.decode(String.self, forKey: .token)
+    self.playerId = try container.decode(String.self, forKey: .playerId)
+    self.build = try container.decodeIfPresent(String.self, forKey: .build)
+    self.protocol = try container.decodeIfPresent(Double.self, forKey: .protocol)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(code, forKey: .code)
-    try container.encode(token, forKey: .token)
-    try container.encode(playerId, forKey: .playerId)
-    try container.encodeIfPresent(build, forKey: .build)
+    try container.encode(self.code, forKey: .code)
+    try container.encode(self.token, forKey: .token)
+    try container.encode(self.playerId, forKey: .playerId)
+    try container.encodeIfPresent(self.build, forKey: .build)
+    try container.encodeIfPresent(self.protocol, forKey: .protocol)
   }
 }
 
@@ -3591,16 +3608,16 @@ public struct Settings: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    marksToWin = try container.decode(Double.self, forKey: .marksToWin)
-    firstPlayer = try container.decode(SettingsFirstPlayer.self, forKey: .firstPlayer)
-    botLevel = try container.decodeIfPresent(BotLevel.self, forKey: .botLevel)
+    self.marksToWin = try container.decode(Double.self, forKey: .marksToWin)
+    self.firstPlayer = try container.decode(SettingsFirstPlayer.self, forKey: .firstPlayer)
+    self.botLevel = try container.decodeIfPresent(BotLevel.self, forKey: .botLevel)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(marksToWin, forKey: .marksToWin)
-    try container.encode(firstPlayer, forKey: .firstPlayer)
-    try container.encodeIfPresent(botLevel, forKey: .botLevel)
+    try container.encode(self.marksToWin, forKey: .marksToWin)
+    try container.encode(self.firstPlayer, forKey: .firstPlayer)
+    try container.encodeIfPresent(self.botLevel, forKey: .botLevel)
   }
 }
 
@@ -3637,12 +3654,12 @@ public struct SettingsFirstPlayerObject: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    player = try container.decode(String.self, forKey: .player)
+    self.player = try container.decode(String.self, forKey: .player)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(player, forKey: .player)
+    try container.encode(self.player, forKey: .player)
   }
 }
 
@@ -3665,16 +3682,16 @@ public struct ShownCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
-    ref = try container.decode(String?.self, forKey: .ref)
-    caption = try container.decodeIfPresent(String.self, forKey: .caption)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.ref = try container.decode(String?.self, forKey: .ref)
+    self.caption = try container.decodeIfPresent(String.self, forKey: .caption)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
-    if let value = ref { try container.encode(value, forKey: .ref) } else { try container.encodeNil(forKey: .ref) }
-    try container.encodeIfPresent(caption, forKey: .caption)
+    try container.encode(self.card, forKey: .card)
+    if let value = self.ref { try container.encode(value, forKey: .ref) } else { try container.encodeNil(forKey: .ref) }
+    try container.encodeIfPresent(self.caption, forKey: .caption)
   }
 }
 
@@ -3709,24 +3726,24 @@ public struct TableText: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    names = try container.decode([String].self, forKey: .names)
-    possessive = try container.decode([String].self, forKey: .possessive)
-    coins = try container.decode([String].self, forKey: .coins)
-    headline = try container.decode(String?.self, forKey: .headline)
-    prompts = try container.decode([TableTextPromptsElement].self, forKey: .prompts)
-    shown = try container.decode(TableTextShown?.self, forKey: .shown)
-    hints = try container.decode([TableTextHintsElement]?.self, forKey: .hints)
+    self.names = try container.decode([String].self, forKey: .names)
+    self.possessive = try container.decode([String].self, forKey: .possessive)
+    self.coins = try container.decode([String].self, forKey: .coins)
+    self.headline = try container.decode(String?.self, forKey: .headline)
+    self.prompts = try container.decode([TableTextPromptsElement].self, forKey: .prompts)
+    self.shown = try container.decode(TableTextShown?.self, forKey: .shown)
+    self.hints = try container.decode([TableTextHintsElement]?.self, forKey: .hints)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(names, forKey: .names)
-    try container.encode(possessive, forKey: .possessive)
-    try container.encode(coins, forKey: .coins)
-    if let value = headline { try container.encode(value, forKey: .headline) } else { try container.encodeNil(forKey: .headline) }
-    try container.encode(prompts, forKey: .prompts)
-    if let value = shown { try container.encode(value, forKey: .shown) } else { try container.encodeNil(forKey: .shown) }
-    if let value = hints { try container.encode(value, forKey: .hints) } else { try container.encodeNil(forKey: .hints) }
+    try container.encode(self.names, forKey: .names)
+    try container.encode(self.possessive, forKey: .possessive)
+    try container.encode(self.coins, forKey: .coins)
+    if let value = self.headline { try container.encode(value, forKey: .headline) } else { try container.encodeNil(forKey: .headline) }
+    try container.encode(self.prompts, forKey: .prompts)
+    if let value = self.shown { try container.encode(value, forKey: .shown) } else { try container.encodeNil(forKey: .shown) }
+    if let value = self.hints { try container.encode(value, forKey: .hints) } else { try container.encodeNil(forKey: .hints) }
   }
 }
 
@@ -3746,14 +3763,14 @@ public struct TableTextHintsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    label = try container.decode(String.self, forKey: .label)
-    chance = try container.decode(String.self, forKey: .chance)
+    self.label = try container.decode(String.self, forKey: .label)
+    self.chance = try container.decode(String.self, forKey: .chance)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(label, forKey: .label)
-    try container.encode(chance, forKey: .chance)
+    try container.encode(self.label, forKey: .label)
+    try container.encode(self.chance, forKey: .chance)
   }
 }
 
@@ -3776,16 +3793,16 @@ public struct TableTextPromptsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    mine = try container.decode(Bool.self, forKey: .mine)
-    text = try container.decode(String.self, forKey: .text)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.mine = try container.decode(Bool.self, forKey: .mine)
+    self.text = try container.decode(String.self, forKey: .text)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(mine, forKey: .mine)
-    try container.encode(text, forKey: .text)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.mine, forKey: .mine)
+    try container.encode(self.text, forKey: .text)
   }
 }
 
@@ -3805,19 +3822,20 @@ public struct TableTextShown: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    title = try container.decode(String.self, forKey: .title)
-    cards = try container.decode([ShownCard].self, forKey: .cards)
+    self.title = try container.decode(String.self, forKey: .title)
+    self.cards = try container.decode([ShownCard].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(title, forKey: .title)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.title, forKey: .title)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
 public enum ToApp: Codable, Equatable, Sendable {
   case failed(ToAppFailed)
+  case link(ToAppLink)
   case ready(ToAppReady)
   case saved(ToAppSaved)
   case search(ToAppSearch)
@@ -3829,6 +3847,7 @@ public enum ToApp: Codable, Equatable, Sendable {
     let container = try decoder.container(keyedBy: Tag.self)
     switch try container.decode(String.self, forKey: .tag) {
     case "failed": self = .failed(try ToAppFailed(from: decoder))
+    case "link": self = .link(try ToAppLink(from: decoder))
     case "ready": self = .ready(try ToAppReady(from: decoder))
     case "saved": self = .saved(try ToAppSaved(from: decoder))
     case "search": self = .search(try ToAppSearch(from: decoder))
@@ -3842,6 +3861,9 @@ public enum ToApp: Codable, Equatable, Sendable {
     switch self {
     case .failed(let value):
       try container.encode("failed", forKey: .tag)
+      try value.encode(to: encoder)
+    case .link(let value):
+      try container.encode("link", forKey: .tag)
       try value.encode(to: encoder)
     case .ready(let value):
       try container.encode("ready", forKey: .tag)
@@ -3862,6 +3884,7 @@ public enum ToApp: Codable, Equatable, Sendable {
   public var caseTag: String {
     switch self {
     case .failed: return "failed"
+    case .link: return "link"
     case .ready: return "ready"
     case .saved: return "saved"
     case .search: return "search"
@@ -3883,12 +3906,39 @@ public struct ToAppFailed: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    message = try container.decode(String.self, forKey: .message)
+    self.message = try container.decode(String.self, forKey: .message)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(message, forKey: .message)
+    try container.encode(self.message, forKey: .message)
+  }
+}
+
+public struct ToAppLink: Codable, Equatable, Sendable {
+  public var id: Double
+  public var state: LinkState
+
+  public init(id: Double, state: LinkState) {
+    self.id = id
+    self.state = state
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id
+    case state
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.id = try container.decode(Double.self, forKey: .id)
+    self.state = try container.decode(LinkState.self, forKey: .state)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.state, forKey: .state)
   }
 }
 
@@ -3911,16 +3961,16 @@ public struct ToAppReady: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    workers = try container.decode(Double.self, forKey: .workers)
-    network = try container.decode(String.self, forKey: .network)
-    cards = try container.decode([CardInfo].self, forKey: .cards)
+    self.workers = try container.decode(Double.self, forKey: .workers)
+    self.network = try container.decode(String.self, forKey: .network)
+    self.cards = try container.decode([CardInfo].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(workers, forKey: .workers)
-    try container.encode(network, forKey: .network)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.workers, forKey: .workers)
+    try container.encode(self.network, forKey: .network)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -3943,16 +3993,16 @@ public struct ToAppSaved: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    file = try container.decode(String.self, forKey: .file)
-    text = try container.decode(String.self, forKey: .text)
-    game = try container.decode(GameRecord.self, forKey: .game)
+    self.file = try container.decode(String.self, forKey: .file)
+    self.text = try container.decode(String.self, forKey: .text)
+    self.game = try container.decode(GameRecord.self, forKey: .game)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(file, forKey: .file)
-    try container.encode(text, forKey: .text)
-    try container.encode(game, forKey: .game)
+    try container.encode(self.file, forKey: .file)
+    try container.encode(self.text, forKey: .text)
+    try container.encode(self.game, forKey: .game)
   }
 }
 
@@ -3984,22 +4034,22 @@ public struct ToAppSearch: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    room = try container.decode(String.self, forKey: .room)
-    seat = try container.decode(Double.self, forKey: .seat)
-    turn = try container.decode(Double.self, forKey: .turn)
-    worlds = try container.decode(Double.self, forKey: .worlds)
-    moves = try container.decode(Double.self, forKey: .moves)
-    ms = try container.decode(Double.self, forKey: .ms)
+    self.room = try container.decode(String.self, forKey: .room)
+    self.seat = try container.decode(Double.self, forKey: .seat)
+    self.turn = try container.decode(Double.self, forKey: .turn)
+    self.worlds = try container.decode(Double.self, forKey: .worlds)
+    self.moves = try container.decode(Double.self, forKey: .moves)
+    self.ms = try container.decode(Double.self, forKey: .ms)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(room, forKey: .room)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(turn, forKey: .turn)
-    try container.encode(worlds, forKey: .worlds)
-    try container.encode(moves, forKey: .moves)
-    try container.encode(ms, forKey: .ms)
+    try container.encode(self.room, forKey: .room)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.turn, forKey: .turn)
+    try container.encode(self.worlds, forKey: .worlds)
+    try container.encode(self.moves, forKey: .moves)
+    try container.encode(self.ms, forKey: .ms)
   }
 }
 
@@ -4028,20 +4078,20 @@ public struct ToAppServer: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    id = try container.decode(Double.self, forKey: .id)
-    message = try container.decode(ServerMessage.self, forKey: .message)
-    options = try container.decodeIfPresent([Option].self, forKey: .options)
-    lines = try container.decodeIfPresent([LogLine].self, forKey: .lines)
-    table = try container.decodeIfPresent(TableText.self, forKey: .table)
+    self.id = try container.decode(Double.self, forKey: .id)
+    self.message = try container.decode(ServerMessage.self, forKey: .message)
+    self.options = try container.decodeIfPresent([Option].self, forKey: .options)
+    self.lines = try container.decodeIfPresent([LogLine].self, forKey: .lines)
+    self.table = try container.decodeIfPresent(TableText.self, forKey: .table)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(id, forKey: .id)
-    try container.encode(message, forKey: .message)
-    try container.encodeIfPresent(options, forKey: .options)
-    try container.encodeIfPresent(lines, forKey: .lines)
-    try container.encodeIfPresent(table, forKey: .table)
+    try container.encode(self.id, forKey: .id)
+    try container.encode(self.message, forKey: .message)
+    try container.encodeIfPresent(self.options, forKey: .options)
+    try container.encodeIfPresent(self.lines, forKey: .lines)
+    try container.encodeIfPresent(self.table, forKey: .table)
   }
 }
 
@@ -4082,28 +4132,28 @@ public struct TraceEvent: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seq = try container.decode(Double.self, forKey: .seq)
-    round = try container.decode(Double.self, forKey: .round)
-    turn = try container.decode(Double.self, forKey: .turn)
-    depth = try container.decode(Double.self, forKey: .depth)
-    cause = try container.decode(Double?.self, forKey: .cause)
-    visibility = try container.decode(Visibility.self, forKey: .visibility)
-    payload = try container.decode(TracePayload.self, forKey: .payload)
-    redacted = try container.decodeIfPresent(TracePayload.self, forKey: .redacted)
-    wasRedacted = try container.decodeIfPresent(Bool.self, forKey: .wasRedacted)
+    self.seq = try container.decode(Double.self, forKey: .seq)
+    self.round = try container.decode(Double.self, forKey: .round)
+    self.turn = try container.decode(Double.self, forKey: .turn)
+    self.depth = try container.decode(Double.self, forKey: .depth)
+    self.cause = try container.decode(Double?.self, forKey: .cause)
+    self.visibility = try container.decode(Visibility.self, forKey: .visibility)
+    self.payload = try container.decode(TracePayload.self, forKey: .payload)
+    self.redacted = try container.decodeIfPresent(TracePayload.self, forKey: .redacted)
+    self.wasRedacted = try container.decodeIfPresent(Bool.self, forKey: .wasRedacted)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seq, forKey: .seq)
-    try container.encode(round, forKey: .round)
-    try container.encode(turn, forKey: .turn)
-    try container.encode(depth, forKey: .depth)
-    if let value = cause { try container.encode(value, forKey: .cause) } else { try container.encodeNil(forKey: .cause) }
-    try container.encode(visibility, forKey: .visibility)
-    try container.encode(payload, forKey: .payload)
-    try container.encodeIfPresent(redacted, forKey: .redacted)
-    try container.encodeIfPresent(wasRedacted, forKey: .wasRedacted)
+    try container.encode(self.seq, forKey: .seq)
+    try container.encode(self.round, forKey: .round)
+    try container.encode(self.turn, forKey: .turn)
+    try container.encode(self.depth, forKey: .depth)
+    if let value = self.cause { try container.encode(value, forKey: .cause) } else { try container.encodeNil(forKey: .cause) }
+    try container.encode(self.visibility, forKey: .visibility)
+    try container.encode(self.payload, forKey: .payload)
+    try container.encodeIfPresent(self.redacted, forKey: .redacted)
+    try container.encodeIfPresent(self.wasRedacted, forKey: .wasRedacted)
   }
 }
 
@@ -4387,18 +4437,18 @@ public struct TracePayloadAction: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    frame = try container.decode(PlayerViewFrameKind.self, forKey: .frame)
-    remaining = try container.decode(Double.self, forKey: .remaining)
-    choice = try container.decode(ActionChoice.self, forKey: .choice)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.frame = try container.decode(PlayerViewFrameKind.self, forKey: .frame)
+    self.remaining = try container.decode(Double.self, forKey: .remaining)
+    self.choice = try container.decode(ActionChoice.self, forKey: .choice)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(frame, forKey: .frame)
-    try container.encode(remaining, forKey: .remaining)
-    try container.encode(choice, forKey: .choice)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.frame, forKey: .frame)
+    try container.encode(self.remaining, forKey: .remaining)
+    try container.encode(self.choice, forKey: .choice)
   }
 }
 
@@ -4421,16 +4471,16 @@ public struct TracePayloadDiscard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    cards = try container.decode([CardId].self, forKey: .cards)
-    from = try container.decode(TracePayloadDiscardFrom.self, forKey: .from)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
+    self.from = try container.decode(TracePayloadDiscardFrom.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(cards, forKey: .cards)
-    try container.encode(from, forKey: .from)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.cards, forKey: .cards)
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -4459,16 +4509,16 @@ public struct TracePayloadDraw: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    from = try container.decode(Int.self, forKey: .from)
-    card = try container.decode(CardId?.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.from = try container.decode(Int.self, forKey: .from)
+    self.card = try container.decode(CardId?.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(from, forKey: .from)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.from, forKey: .from)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
   }
 }
 
@@ -4491,16 +4541,16 @@ public struct TracePayloadEmptyDraw: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    from = try container.decode(Int.self, forKey: .from)
-    afterRoundEnd = try container.decode(Bool.self, forKey: .afterRoundEnd)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.from = try container.decode(Int.self, forKey: .from)
+    self.afterRoundEnd = try container.decode(Bool.self, forKey: .afterRoundEnd)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(from, forKey: .from)
-    try container.encode(afterRoundEnd, forKey: .afterRoundEnd)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.from, forKey: .from)
+    try container.encode(self.afterRoundEnd, forKey: .afterRoundEnd)
   }
 }
 
@@ -4523,16 +4573,16 @@ public struct TracePayloadExtraActions: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    count = try container.decode(Double.self, forKey: .count)
-    source = try container.decode(CardId.self, forKey: .source)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.count = try container.decode(Double.self, forKey: .count)
+    self.source = try container.decode(CardId.self, forKey: .source)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(count, forKey: .count)
-    try container.encode(source, forKey: .source)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.count, forKey: .count)
+    try container.encode(self.source, forKey: .source)
   }
 }
 
@@ -4549,12 +4599,12 @@ public struct TracePayloadGameOver: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    winner = try container.decode(Int.self, forKey: .winner)
+    self.winner = try container.decode(Int.self, forKey: .winner)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(winner, forKey: .winner)
+    try container.encode(self.winner, forKey: .winner)
   }
 }
 
@@ -4574,14 +4624,14 @@ public struct TracePayloadGameStart: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seats = try container.decode([SeatKind].self, forKey: .seats)
-    marksToWin = try container.decode(Double.self, forKey: .marksToWin)
+    self.seats = try container.decode([SeatKind].self, forKey: .seats)
+    self.marksToWin = try container.decode(Double.self, forKey: .marksToWin)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seats, forKey: .seats)
-    try container.encode(marksToWin, forKey: .marksToWin)
+    try container.encode(self.seats, forKey: .seats)
+    try container.encode(self.marksToWin, forKey: .marksToWin)
   }
 }
 
@@ -4604,16 +4654,16 @@ public struct TracePayloadGive: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    to = try container.decode(Int.self, forKey: .to)
-    card = try container.decode(CardId?.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.to = try container.decode(Int.self, forKey: .to)
+    self.card = try container.decode(CardId?.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(to, forKey: .to)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.to, forKey: .to)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
   }
 }
 
@@ -4636,16 +4686,16 @@ public struct TracePayloadKeepSwap: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    a = try container.decode(TracePayloadKeepSwapA.self, forKey: .a)
-    b = try container.decode(TracePayloadKeepSwapB.self, forKey: .b)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.a = try container.decode(TracePayloadKeepSwapA.self, forKey: .a)
+    self.b = try container.decode(TracePayloadKeepSwapB.self, forKey: .b)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(a, forKey: .a)
-    try container.encode(b, forKey: .b)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.a, forKey: .a)
+    try container.encode(self.b, forKey: .b)
   }
 }
 
@@ -4668,16 +4718,16 @@ public struct TracePayloadKeepSwapA: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    index = try container.decode(Double.self, forKey: .index)
-    card = try container.decode(CardId?.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.index = try container.decode(Double.self, forKey: .index)
+    self.card = try container.decode(CardId?.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(index, forKey: .index)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.index, forKey: .index)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
   }
 }
 
@@ -4700,16 +4750,16 @@ public struct TracePayloadKeepSwapB: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    index = try container.decode(Double.self, forKey: .index)
-    card = try container.decode(CardId?.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.index = try container.decode(Double.self, forKey: .index)
+    self.card = try container.decode(CardId?.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(index, forKey: .index)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.index, forKey: .index)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
   }
 }
 
@@ -4726,12 +4776,12 @@ public struct TracePayloadLastLaugh: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -4754,16 +4804,16 @@ public struct TracePayloadLook: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    piles = try container.decode([Int].self, forKey: .piles)
-    cards = try container.decode([CardId]?.self, forKey: .cards)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.piles = try container.decode([Int].self, forKey: .piles)
+    self.cards = try container.decode([CardId]?.self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(piles, forKey: .piles)
-    if let value = cards { try container.encode(value, forKey: .cards) } else { try container.encodeNil(forKey: .cards) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.piles, forKey: .piles)
+    if let value = self.cards { try container.encode(value, forKey: .cards) } else { try container.encodeNil(forKey: .cards) }
   }
 }
 
@@ -4783,14 +4833,14 @@ public struct TracePayloadLookHands: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    hands = try container.decode([TracePayloadLookHandsHandsElement]?.self, forKey: .hands)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.hands = try container.decode([TracePayloadLookHandsHandsElement]?.self, forKey: .hands)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    if let value = hands { try container.encode(value, forKey: .hands) } else { try container.encodeNil(forKey: .hands) }
+    try container.encode(self.seat, forKey: .seat)
+    if let value = self.hands { try container.encode(value, forKey: .hands) } else { try container.encodeNil(forKey: .hands) }
   }
 }
 
@@ -4810,14 +4860,14 @@ public struct TracePayloadLookHandsHandsElement: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    cards = try container.decode([CardId].self, forKey: .cards)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -4837,14 +4887,14 @@ public struct TracePayloadMark: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    marks = try container.decode(Double.self, forKey: .marks)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.marks = try container.decode(Double.self, forKey: .marks)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(marks, forKey: .marks)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.marks, forKey: .marks)
   }
 }
 
@@ -4867,16 +4917,16 @@ public struct TracePayloadNoEffect: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
-    reason = try container.decode(String.self, forKey: .reason)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.reason = try container.decode(String.self, forKey: .reason)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
-    try container.encode(reason, forKey: .reason)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
+    try container.encode(self.reason, forKey: .reason)
   }
 }
 
@@ -4893,12 +4943,12 @@ public struct TracePayloadNote: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    text = try container.decode(String.self, forKey: .text)
+    self.text = try container.decode(String.self, forKey: .text)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(text, forKey: .text)
+    try container.encode(self.text, forKey: .text)
   }
 }
 
@@ -4921,16 +4971,16 @@ public struct TracePayloadPileClaim: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    claimant = try container.decode(Int.self, forKey: .claimant)
-    from = try container.decode(Int.self, forKey: .from)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.claimant = try container.decode(Int.self, forKey: .claimant)
+    self.from = try container.decode(Int.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(claimant, forKey: .claimant)
-    try container.encode(from, forKey: .from)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.claimant, forKey: .claimant)
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -4953,16 +5003,16 @@ public struct TracePayloadPileDealt: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    position = try container.decode(Int.self, forKey: .position)
-    pile = try container.decode(PileId.self, forKey: .pile)
-    cards = try container.decode([CardId].self, forKey: .cards)
+    self.position = try container.decode(Int.self, forKey: .position)
+    self.pile = try container.decode(PileId.self, forKey: .pile)
+    self.cards = try container.decode([CardId].self, forKey: .cards)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(position, forKey: .position)
-    try container.encode(pile, forKey: .pile)
-    try container.encode(cards, forKey: .cards)
+    try container.encode(self.position, forKey: .position)
+    try container.encode(self.pile, forKey: .pile)
+    try container.encode(self.cards, forKey: .cards)
   }
 }
 
@@ -4982,14 +5032,14 @@ public struct TracePayloadPileFlip: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -5009,14 +5059,14 @@ public struct TracePayloadPilePlaced: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    position = try container.decode(Int.self, forKey: .position)
-    size = try container.decode(Double.self, forKey: .size)
+    self.position = try container.decode(Int.self, forKey: .position)
+    self.size = try container.decode(Double.self, forKey: .size)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(position, forKey: .position)
-    try container.encode(size, forKey: .size)
+    try container.encode(self.position, forKey: .position)
+    try container.encode(self.size, forKey: .size)
   }
 }
 
@@ -5039,16 +5089,16 @@ public struct TracePayloadPileReorder: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    pile = try container.decode(Int.self, forKey: .pile)
-    order = try container.decode([CardId]?.self, forKey: .order)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.pile = try container.decode(Int.self, forKey: .pile)
+    self.order = try container.decode([CardId]?.self, forKey: .order)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(pile, forKey: .pile)
-    if let value = order { try container.encode(value, forKey: .order) } else { try container.encodeNil(forKey: .order) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.pile, forKey: .pile)
+    if let value = self.order { try container.encode(value, forKey: .order) } else { try container.encodeNil(forKey: .order) }
   }
 }
 
@@ -5068,14 +5118,14 @@ public struct TracePayloadPileRotate: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    direction = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .direction)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.direction = try container.decode(ActionChoiceAbilityAcquisitionFirst.self, forKey: .direction)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(direction, forKey: .direction)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.direction, forKey: .direction)
   }
 }
 
@@ -5092,12 +5142,12 @@ public struct TracePayloadPilesToCenter: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -5120,16 +5170,16 @@ public struct TracePayloadPileSwap: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    a = try container.decode(Int.self, forKey: .a)
-    b = try container.decode(Int.self, forKey: .b)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.a = try container.decode(Int.self, forKey: .a)
+    self.b = try container.decode(Int.self, forKey: .b)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(a, forKey: .a)
-    try container.encode(b, forKey: .b)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.a, forKey: .a)
+    try container.encode(self.b, forKey: .b)
   }
 }
 
@@ -5152,16 +5202,16 @@ public struct TracePayloadPlaceFaceDown: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    target = try container.decode(Int.self, forKey: .target)
-    card = try container.decode(CardId?.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.target = try container.decode(Int.self, forKey: .target)
+    self.card = try container.decode(CardId?.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(target, forKey: .target)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.target, forKey: .target)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
   }
 }
 
@@ -5184,16 +5234,16 @@ public struct TracePayloadPlaceOnPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -5222,20 +5272,20 @@ public struct TracePayloadPlay: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
-    target = try container.decode(Int?.self, forKey: .target)
-    hot = try container.decode(Bool.self, forKey: .hot)
-    copy = try container.decodeIfPresent(CardId.self, forKey: .copy)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.target = try container.decode(Int?.self, forKey: .target)
+    self.hot = try container.decode(Bool.self, forKey: .hot)
+    self.copy = try container.decodeIfPresent(CardId.self, forKey: .copy)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
-    if let value = target { try container.encode(value, forKey: .target) } else { try container.encodeNil(forKey: .target) }
-    try container.encode(hot, forKey: .hot)
-    try container.encodeIfPresent(copy, forKey: .copy)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
+    if let value = self.target { try container.encode(value, forKey: .target) } else { try container.encodeNil(forKey: .target) }
+    try container.encode(self.hot, forKey: .hot)
+    try container.encodeIfPresent(self.copy, forKey: .copy)
   }
 }
 
@@ -5258,16 +5308,16 @@ public struct TracePayloadPrompt: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    kind = try container.decode(PromptViewNotMineKind.self, forKey: .kind)
-    card = try container.decodeIfPresent(CardId.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.kind = try container.decode(PromptViewNotMineKind.self, forKey: .kind)
+    self.card = try container.decodeIfPresent(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(kind, forKey: .kind)
-    try container.encodeIfPresent(card, forKey: .card)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.kind, forKey: .kind)
+    try container.encodeIfPresent(self.card, forKey: .card)
   }
 }
 
@@ -5290,16 +5340,16 @@ public struct TracePayloadReveal: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    keep = try container.decode(Int.self, forKey: .keep)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.keep = try container.decode(Int.self, forKey: .keep)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(keep, forKey: .keep)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.keep, forKey: .keep)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -5319,14 +5369,14 @@ public struct TracePayloadRevealCard: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId.self, forKey: .card)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId.self, forKey: .card)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(card, forKey: .card)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.card, forKey: .card)
   }
 }
 
@@ -5379,12 +5429,12 @@ public struct TracePayloadRoundEndEmptyPile: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    ender = try container.decode(Int.self, forKey: .ender)
+    self.ender = try container.decode(Int.self, forKey: .ender)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(ender, forKey: .ender)
+    try container.encode(self.ender, forKey: .ender)
   }
 }
 
@@ -5401,12 +5451,12 @@ public struct TracePayloadRoundEndTokens: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    winner = try container.decode(Int.self, forKey: .winner)
+    self.winner = try container.decode(Int.self, forKey: .winner)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(winner, forKey: .winner)
+    try container.encode(self.winner, forKey: .winner)
   }
 }
 
@@ -5426,14 +5476,14 @@ public struct TracePayloadRoundStart: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    round = try container.decode(Double.self, forKey: .round)
-    startingSeat = try container.decode(Int.self, forKey: .startingSeat)
+    self.round = try container.decode(Double.self, forKey: .round)
+    self.startingSeat = try container.decode(Int.self, forKey: .startingSeat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(round, forKey: .round)
-    try container.encode(startingSeat, forKey: .startingSeat)
+    try container.encode(self.round, forKey: .round)
+    try container.encode(self.startingSeat, forKey: .startingSeat)
   }
 }
 
@@ -5456,16 +5506,16 @@ public struct TracePayloadScore: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    scores = try container.decode([Double?].self, forKey: .scores)
-    winner = try container.decode(Int.self, forKey: .winner)
-    tiedWith = try container.decode([Int].self, forKey: .tiedWith)
+    self.scores = try container.decode([Double?].self, forKey: .scores)
+    self.winner = try container.decode(Int.self, forKey: .winner)
+    self.tiedWith = try container.decode([Int].self, forKey: .tiedWith)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(scores, forKey: .scores)
-    try container.encode(winner, forKey: .winner)
-    try container.encode(tiedWith, forKey: .tiedWith)
+    try container.encode(self.scores, forKey: .scores)
+    try container.encode(self.winner, forKey: .winner)
+    try container.encode(self.tiedWith, forKey: .tiedWith)
   }
 }
 
@@ -5485,14 +5535,14 @@ public struct TracePayloadShackled: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    remaining = try container.decode(Double.self, forKey: .remaining)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.remaining = try container.decode(Double.self, forKey: .remaining)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(remaining, forKey: .remaining)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.remaining, forKey: .remaining)
   }
 }
 
@@ -5518,18 +5568,18 @@ public struct TracePayloadSteal: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    from = try container.decode(Int.self, forKey: .from)
-    cards = try container.decode([CardId]?.self, forKey: .cards)
-    count = try container.decode(Double.self, forKey: .count)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.from = try container.decode(Int.self, forKey: .from)
+    self.cards = try container.decode([CardId]?.self, forKey: .cards)
+    self.count = try container.decode(Double.self, forKey: .count)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(from, forKey: .from)
-    if let value = cards { try container.encode(value, forKey: .cards) } else { try container.encodeNil(forKey: .cards) }
-    try container.encode(count, forKey: .count)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.from, forKey: .from)
+    if let value = self.cards { try container.encode(value, forKey: .cards) } else { try container.encodeNil(forKey: .cards) }
+    try container.encode(self.count, forKey: .count)
   }
 }
 
@@ -5552,16 +5602,16 @@ public struct TracePayloadTake: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    card = try container.decode(CardId?.self, forKey: .card)
-    from = try container.decode(TracePayloadTakeFrom.self, forKey: .from)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.card = try container.decode(CardId?.self, forKey: .card)
+    self.from = try container.decode(TracePayloadTakeFrom.self, forKey: .from)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    if let value = card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
-    try container.encode(from, forKey: .from)
+    try container.encode(self.seat, forKey: .seat)
+    if let value = self.card { try container.encode(value, forKey: .card) } else { try container.encodeNil(forKey: .card) }
+    try container.encode(self.from, forKey: .from)
   }
 }
 
@@ -5598,12 +5648,12 @@ public struct TracePayloadTakeFromObject: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    pile = try container.decode(Int.self, forKey: .pile)
+    self.pile = try container.decode(Int.self, forKey: .pile)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(pile, forKey: .pile)
+    try container.encode(self.pile, forKey: .pile)
   }
 }
 
@@ -5626,16 +5676,16 @@ public struct TracePayloadTrigger: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    kind = try container.decode(TriggerKind.self, forKey: .kind)
-    seat = try container.decode(Int.self, forKey: .seat)
-    source = try container.decode(CardId.self, forKey: .source)
+    self.kind = try container.decode(TriggerKind.self, forKey: .kind)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.source = try container.decode(CardId.self, forKey: .source)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(kind, forKey: .kind)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(source, forKey: .source)
+    try container.encode(self.kind, forKey: .kind)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.source, forKey: .source)
   }
 }
 
@@ -5655,14 +5705,14 @@ public struct TracePayloadTriggers: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    card = try container.decode(CardId.self, forKey: .card)
-    triggers = try container.decode([TracePayloadTriggersTriggersElement].self, forKey: .triggers)
+    self.card = try container.decode(CardId.self, forKey: .card)
+    self.triggers = try container.decode([TracePayloadTriggersTriggersElement].self, forKey: .triggers)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(card, forKey: .card)
-    try container.encode(triggers, forKey: .triggers)
+    try container.encode(self.card, forKey: .card)
+    try container.encode(self.triggers, forKey: .triggers)
   }
 }
 
@@ -5682,14 +5732,14 @@ public struct TracePayloadTriggersTriggersElement: Codable, Equatable, Sendable 
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    kind = try container.decode(TriggerKind.self, forKey: .kind)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.kind = try container.decode(TriggerKind.self, forKey: .kind)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(kind, forKey: .kind)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.kind, forKey: .kind)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -5706,12 +5756,12 @@ public struct TracePayloadTurnEnd: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
+    self.seat = try container.decode(Int.self, forKey: .seat)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
+    try container.encode(self.seat, forKey: .seat)
   }
 }
 
@@ -5731,14 +5781,14 @@ public struct TracePayloadTurnStart: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    seat = try container.decode(Int.self, forKey: .seat)
-    actions = try container.decode(Double.self, forKey: .actions)
+    self.seat = try container.decode(Int.self, forKey: .seat)
+    self.actions = try container.decode(Double.self, forKey: .actions)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(seat, forKey: .seat)
-    try container.encode(actions, forKey: .actions)
+    try container.encode(self.seat, forKey: .seat)
+    try container.encode(self.actions, forKey: .actions)
   }
 }
 
@@ -5770,18 +5820,18 @@ public struct UndoState: Codable, Equatable, Sendable {
 
   public init(from decoder: Decoder) throws {
     let container = try decoder.container(keyedBy: CodingKeys.self)
-    available = try container.decode(Bool.self, forKey: .available)
-    proposedBy = try container.decode(String?.self, forKey: .proposedBy)
-    accepted = try container.decode([String].self, forKey: .accepted)
-    waitingOn = try container.decode([String].self, forKey: .waitingOn)
+    self.available = try container.decode(Bool.self, forKey: .available)
+    self.proposedBy = try container.decode(String?.self, forKey: .proposedBy)
+    self.accepted = try container.decode([String].self, forKey: .accepted)
+    self.waitingOn = try container.decode([String].self, forKey: .waitingOn)
   }
 
   public func encode(to encoder: Encoder) throws {
     var container = encoder.container(keyedBy: CodingKeys.self)
-    try container.encode(available, forKey: .available)
-    if let value = proposedBy { try container.encode(value, forKey: .proposedBy) } else { try container.encodeNil(forKey: .proposedBy) }
-    try container.encode(accepted, forKey: .accepted)
-    try container.encode(waitingOn, forKey: .waitingOn)
+    try container.encode(self.available, forKey: .available)
+    if let value = self.proposedBy { try container.encode(value, forKey: .proposedBy) } else { try container.encodeNil(forKey: .proposedBy) }
+    try container.encode(self.accepted, forKey: .accepted)
+    try container.encode(self.waitingOn, forKey: .waitingOn)
   }
 }
 

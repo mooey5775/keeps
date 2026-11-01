@@ -360,21 +360,22 @@ function struct(t: ts.Type, hint: string, exclude: readonly string[], preferred:
   const field = (f: (typeof fields)[number]) => `  public var ${f.swiftName}: ${fieldType(f)}${f.isOptional || f.nullable ? '?' : ''}`;
   fieldsOf.set(name, new Map(fields.map((f) => [f.swiftName, `${fieldType(f)}${f.isOptional || f.nullable ? '?' : ''}`])));
   const keys = fields.length ? ['  private enum CodingKeys: String, CodingKey {', ...fields.map((f) => `    case ${f.swiftName}${f.plain === f.json ? '' : ` = ${JSON.stringify(f.json)}`}`), '  }'] : [];
+  // (A field named for a Swift keyword, `protocol`, is escaped wherever it stands on its own; after a dot it needn't be.)
   const decode = fields.map((f) =>
     f.isOptional && f.nullable
-      ? `    ${f.plain} = container.contains(.${f.plain}) ? try container.decode(Nullable<${f.type}>.self, forKey: .${f.plain}) : nil`
+      ? `    self.${f.plain} = container.contains(.${f.plain}) ? try container.decode(Nullable<${f.type}>.self, forKey: .${f.plain}) : nil`
       : f.isOptional
-      ? `    ${f.plain} = try container.decodeIfPresent(${f.type}.self, forKey: .${f.plain})`
+      ? `    self.${f.plain} = try container.decodeIfPresent(${f.type}.self, forKey: .${f.plain})`
       : f.nullable
-        ? `    ${f.plain} = try container.decode(${f.type}?.self, forKey: .${f.plain})`
-        : `    ${f.plain} = try container.decode(${f.type}.self, forKey: .${f.plain})`,
+        ? `    self.${f.plain} = try container.decode(${f.type}?.self, forKey: .${f.plain})`
+        : `    self.${f.plain} = try container.decode(${f.type}.self, forKey: .${f.plain})`,
   );
   const encode = fields.map((f) =>
     f.isOptional
-      ? `    try container.encodeIfPresent(${f.plain}, forKey: .${f.plain})`
+      ? `    try container.encodeIfPresent(self.${f.plain}, forKey: .${f.plain})`
       : f.nullable
-        ? `    if let value = ${f.plain} { try container.encode(value, forKey: .${f.plain}) } else { try container.encodeNil(forKey: .${f.plain}) }`
-        : `    try container.encode(${f.plain}, forKey: .${f.plain})`,
+        ? `    if let value = self.${f.plain} { try container.encode(value, forKey: .${f.plain}) } else { try container.encodeNil(forKey: .${f.plain}) }`
+        : `    try container.encode(self.${f.plain}, forKey: .${f.plain})`,
   );
   declarations.push(
     [
@@ -382,7 +383,7 @@ function struct(t: ts.Type, hint: string, exclude: readonly string[], preferred:
       ...fields.map(field),
       '',
       `  public init(${fields.map((f) => `${f.plain}: ${fieldType(f)}${f.isOptional || f.nullable ? '? = nil' : ''}`).join(', ')}) {`,
-      ...fields.map((f) => `    self.${f.plain} = ${f.plain}`),
+      ...fields.map((f) => `    self.${f.plain} = ${f.swiftName}`),
       '  }',
       ...(fields.length
         ? [

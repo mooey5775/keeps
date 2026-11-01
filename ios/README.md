@@ -43,10 +43,26 @@ every move replayed as it was played, so Midstrike and training mode know what t
 When iOS ends the core's process (it may, in the background, to free memory), the core starts again and the game is
 taken up the same way.
 
+## Playing online
+
+The lobby's Online side makes a room on the website's server, or joins one by its code. The core opens a WebSocket
+there (`core/remote.ts`) and passes the server's messages through the same bridge, with the same options and words
+as a game on the phone; a connection that drops comes back by itself and takes its seat again (`resume`, with the
+seat's token, as a browser's tab does). The app keeps that seat, so after it closes the lobby offers to go back.
+
+- **Which server:** midstrike.playkeeps.online. playkeeps.online runs main, whose protocol is older than the app's: it
+  joins once main has this branch's.
+- **Versions:** the server's welcome carries its `PROTOCOL` (packages/protocol); the core stops at one that speaks
+  another and says which side is behind, rather than meet messages the app can't read. Bump it only for a change an
+  older app can't read; make new fields optional instead where possible.
+- **Tests:** `ios/core/test/remote.test.ts` plays through the bridge on the website's server, run in Node
+  (`pnpm -C packages/server exec vitest run --dir ../../ios/core/test`); the UI tests play on `ios/tools/test-server.ts`,
+  which `test.sh` runs here and forwards to the Mac (`KEEPS_SERVER=ws://localhost:7777/ws`).
+
 ## TODO
 
-- **Next:** joining games on playkeeps.online (the core opening a WebSocket to the website's server, its messages through
-  the same bridge).
+- **Next:** playkeeps.online, once main has this branch's protocol (merge and deploy); the online room's polish (who's
+  connected while playing, a spectator's table).
 - **Analytics:** collect game traces (each game's replay log, already kept on the phone and on the website's server),
   opt-in on the app, sent to a server of ours or PostHog (the website already uses it).
   With it, **shake to report a bug**: a sheet for what happened, sent with a screenshot taken at the shake, the game's

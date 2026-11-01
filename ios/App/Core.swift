@@ -13,6 +13,8 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   let webView: WKWebView
   private var started: CheckedContinuation<ToAppReady, Error>?
   private var connections: [Int: (ToAppServer) -> Void] = [:]
+  /// Each connection to a server elsewhere: told how the connection itself is doing.
+  private var links: [Int: (LinkState) -> Void] = [:]
   private var nextConnection = 1
   /// Each of Midstrike's searches, as it finishes.
   var onSearch: ((ToAppSearch) -> Void)?
@@ -48,6 +50,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
   func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
     print("The core's process ended: starting it again")
     connections = [:]
+    links = [:]
     restarting = true
     onEnded?()
     webView.load(URLRequest(url: URL(string: "keeps://app/index.html")!))
@@ -74,13 +77,15 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     }
   }
 
-  /// A new client of the core's server; its messages (each with the options and log lines) arrive at `receive`.
-  /// Returns the connection's id.
-  func connect(_ receive: @escaping (ToAppServer) -> Void) -> Int {
+  /// A new client of the core's server, or (`server`: its WebSocket address) of a game server elsewhere, the website's;
+  /// its messages (each with the options and log lines) arrive at `receive`, and how a connection elsewhere is doing at
+  /// `link`. Returns the connection's id.
+  func connect(server: URL? = nil, _ receive: @escaping (ToAppServer) -> Void, link: ((LinkState) -> Void)? = nil) -> Int {
     let id = nextConnection
     nextConnection += 1
     connections[id] = receive
-    deliver(.connect(FromAppConnect(id: Double(id))))
+    links[id] = link
+    deliver(.connect(FromAppConnect(id: Double(id), server: server?.absoluteString)))
     return id
   }
 
@@ -105,6 +110,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     guard connections[id] != nil else { return }
     deliver(.close(FromAppClose(id: Double(id))))
     connections[id] = nil
+    links[id] = nil
   }
 
   /// How long Midstrike waits before each move, so a person can follow it; and, for tests, a seed that makes every
@@ -240,6 +246,8 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
       } else {
         connections[Int(server.id)]?(server)
       }
+    case .link(let link):
+      links[Int(link.id)]?(link.state)
     case .search(let search):
       onSearch?(search)
     case .saved(let saved):

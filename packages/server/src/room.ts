@@ -16,6 +16,7 @@ import {
 import {
   BOT_LEVELS,
   DEFAULT_SETTINGS,
+  PROTOCOL,
   NAME_MAX,
   type BotLevel,
   type ClientMessage,
@@ -375,7 +376,7 @@ export class Room {
   }
 
   private welcome(player: Player): ServerMessage {
-    return { t: 'welcome', code: this.code, token: player.token, playerId: player.id, ...(this.deps.build ? { build: this.deps.build } : {}) };
+    return { t: 'welcome', code: this.code, token: player.token, playerId: player.id, protocol: PROTOCOL, ...(this.deps.build ? { build: this.deps.build } : {}) };
   }
 
   /** Ends the room: tells everyone still connected it's gone. */
