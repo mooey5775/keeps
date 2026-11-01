@@ -559,12 +559,14 @@ export class Room {
     return { state, events, log: { options, commands: [] }, startedAt, history: [], undo: null, roundStartedAt: startedAt, bots, advisors };
   }
 
-  private command(player: Player, command: Command): string | null {
+  private command(player: Player, sent: Command): string | null {
     const game = this.game;
     if (!game) return 'The game has not started.';
     if (player.seat === null) return 'Spectators cannot play.';
-    const result = apply(game.state, player.seat, command);
+    const result = apply(game.state, player.seat, sent);
     if (!result.ok) return result.error.message;
+    // (As the engine writes it: the log and the hooks the same whoever sent it, and however.)
+    const command = result.command;
 
     const before = game.state;
     this.record(game, player.seat, command, result.state, result.events);

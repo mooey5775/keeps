@@ -309,6 +309,42 @@ describe('serialization', () => {
     expect(apply(start, 0, swapped).ok).toBe(false);
   });
 
+  it('writes every command it takes as the engine would, whoever sent it and however: its log and events the same', () => {
+    const ok = (result: ReturnType<typeof apply>) => {
+      if (!result.ok) throw new Error(result.error.message);
+      return result;
+    };
+    // A listed command, keys reversed: the listed one.
+    const start = buildPosition({ keeps: { 0: ['juggling'] }, hands: { 0: ['chalice'] }, piles: { 1: ['dagger'] }, turn: 0 });
+    const promptId = promptFor(start, 0, 'action').id;
+    const reordered = JSON.parse(`{"answer":{"choice":{"target":2,"card":"chalice","action":"play"},"kind":"action"},"promptId":"${promptId}","type":"answer"}`) as Command;
+    const listed = legalCommands(start, 0).find((c) => JSON.stringify(c) === JSON.stringify({ type: 'answer', promptId, answer: { kind: 'action', choice: { action: 'play', card: 'chalice', target: 2 } } }))!;
+    expect(JSON.stringify(ok(apply(start, 0, reordered)).command)).toBe(JSON.stringify(listed));
+
+    // Resigning, with a field it doesn't have: as written, without it.
+    expect(JSON.stringify(ok(apply(start, 1, { type: 'resign', why: 'tired' } as unknown as Command)).command)).toBe('{"type":"resign"}');
+
+    // Tithes' order (too many to list), keys reversed and a field more.
+    const tithes = act(buildPosition({ keeps: { 0: ['tithes'] }, piles: { 0: ['chalice', 'blunder', 'dagger'] }, turn: 0 }), 0, { action: 'ability', card: 'tithes' }).state;
+    const order = promptFor(tithes, 0, 'order-pile').id;
+    const sent = JSON.parse(`{"answer":{"order":["dagger","chalice","blunder"],"kind":"order-pile","extra":1},"promptId":"${order}","type":"answer"}`) as Command;
+    const clean: Command = { type: 'answer', promptId: order, answer: { kind: 'order-pile', order: ['dagger', 'chalice', 'blunder'] } };
+    const a = ok(apply(tithes, 0, sent));
+    const b = ok(apply(tithes, 0, clean));
+    expect(JSON.stringify(a.command)).toBe(JSON.stringify(clean));
+    expect(JSON.stringify(a.events)).toBe(JSON.stringify(b.events));
+
+    // Providence's pair (either order is legal: the one sent kept), references with their keys reversed and more.
+    const providence = act(buildPosition({ hands: { 0: ['providence'] }, keeps: { 1: ['chalice'], 2: ['dagger'] }, turn: 0 }), 0, { action: 'play', card: 'providence' }).state;
+    const pair = promptFor(providence, 0, 'choose-keep-pair').id;
+    const messy = JSON.parse(`{"type":"answer","promptId":"${pair}","answer":{"b":{"index":0,"seat":1,"card":"chalice"},"kind":"choose-keep-pair","a":{"index":0,"seat":2}}}`) as Command;
+    const tidy: Command = { type: 'answer', promptId: pair, answer: { kind: 'choose-keep-pair', a: { seat: 2, index: 0 }, b: { seat: 1, index: 0 } } };
+    const c = ok(apply(providence, 0, messy));
+    const d = ok(apply(providence, 0, tidy));
+    expect(JSON.stringify(c.command)).toBe(JSON.stringify(tidy));
+    expect(JSON.stringify(c.events)).toBe(JSON.stringify(d.events));
+  });
+
   it('refuses to hand back a broken state: apply checks every invariant after a command', () => {
     const start = buildPosition({ piles: { 0: ['chalice', 'dagger'] }, turn: 0 });
     // Corrupt the input: a card in two places at once.

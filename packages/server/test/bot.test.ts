@@ -359,12 +359,14 @@ describe('the bot in a room', () => {
   });
 
   it('lets a person resign against the bot, who wins the game: nothing more is scheduled', () => {
-    const { room, runBot, waiting } = botRoom();
+    const { room, runBot, waiting, saved } = botRoom();
     const human = join(room, 'Ana');
     room.handle(human.id, { t: 'add-bot' });
     room.handle(human.id, { t: 'start' });
-    room.handle(human.id, { t: 'command', command: { type: 'resign' } });
+    // (With a field resigning hasn't: the replay has it as the engine writes it.)
+    room.handle(human.id, { t: 'command', command: { type: 'resign', because: 'bored' } as Command });
     expect(human.errors()).toEqual([]);
+    expect(JSON.stringify(saved.at(-1)!.commands.at(-1)!.command)).toBe('{"type":"resign"}');
     const view = human.last('game').view;
     expect(view.phase).toBe('game-over');
     expect(view.roundEnd).toEqual({ kind: 'resign', seat: view.viewer });

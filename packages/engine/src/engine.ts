@@ -33,6 +33,7 @@ import {
   pileAtSeat,
   SEATS,
   type GameState,
+  type KeepRef,
   type Op,
   type Prompt,
   type Seat,
@@ -41,7 +42,8 @@ import {
 import { assertNever, Tracer, type TraceEvent } from './trace.ts';
 
 export type ApplyResult =
-  | { ok: true; state: GameState; events: TraceEvent[] }
+  /** `command`: the command as the engine writes it (asWritten), for a log the same whoever sent it. */
+  | { ok: true; state: GameState; events: TraceEvent[]; command: Command }
   | { ok: false; error: EngineError };
 
 /** Deals a new game and runs it to the first decision (the first player's action). */
@@ -66,10 +68,7 @@ export function apply(state: GameState, seat: Seat, command: Command, { trusted 
   if (!trusted) {
     const rejection = validate(state, seat, command);
     if (rejection) return { ok: false, error: rejection };
-    // The command as the engine writes it, if it lists it: a client may order its keys otherwise (the app's Swift
-    // does), and events copy parts of it (an action's choice), so the log would depend on who sent the move.
-    const wanted = canonical(command);
-    command = legalCommands(state, seat).find((c) => canonical(c) === wanted) ?? command;
+    command = asWritten(state, seat, command);
   }
 
   const draft = clone(state);
@@ -85,7 +84,27 @@ export function apply(state: GameState, seat: Seat, command: Command, { trusted 
     assertInvariants(draft);
     assertRestInvariants(draft);
   }
-  return { ok: true, state: draft, events: ctx.tracer.events };
+  return { ok: true, state: draft, events: ctx.tracer.events, command };
+}
+
+/**
+ * A legal command as the engine writes it: a client may order its keys otherwise (the app's Swift does) or add others
+ * (validate checks what it reads, not what else is there), and events copy parts of it (an action's choice, a keep
+ * pair's references), so the log would depend on who sent the move. The engine's own when it lists it; the answers too
+ * many to list (validate checked them field by field) and resigning, rebuilt from the fields they have.
+ */
+function asWritten(state: GameState, seat: Seat, command: Command): Command {
+  if (command.type === 'resign') return { type: 'resign' };
+  const wanted = canonical(command);
+  const listed = legalCommands(state, seat).find((c) => canonical(c) === wanted);
+  if (listed) return listed;
+  if (command.type === 'answer') {
+    const { promptId, answer } = command;
+    const ref = (r: KeepRef): KeepRef => ({ seat: r.seat, index: r.index });
+    if (answer.kind === 'order-pile') return { type: 'answer', promptId, answer: { kind: 'order-pile', order: [...answer.order] } };
+    if (answer.kind === 'choose-keep-pair') return { type: 'answer', promptId, answer: { kind: 'choose-keep-pair', a: ref(answer.a), b: ref(answer.b) } };
+  }
+  throw new Error(`no written form for a command validate allowed: ${wanted}`);
 }
 
 /** Every command `seat` may send right now. */
