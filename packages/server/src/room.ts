@@ -961,7 +961,8 @@ export class Room {
       const state = game.state;
       let advice: Hint[] | Promise<Hint[]>;
       try {
-        advice = this.advise(advisor.bot, state, game.events, () => this.game === game && game.state === state && advisor.advice?.state === state);
+        // (Wanted while the game stays at this position: asked at once too, before the advice is recorded below.)
+        advice = this.advise(advisor.bot, state, game.events, () => this.game === game && game.state === state);
       } catch (error) {
         console.error(`room ${this.code}: training mode could not advise seat ${seat}:`, error);
         return null;

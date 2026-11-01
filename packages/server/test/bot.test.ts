@@ -327,8 +327,11 @@ describe('the bot in a room', () => {
 
   it("tells a search when it's no longer wanted: advice once the decision is made, the bot's move once the game moved on", async () => {
     const asked: BotTurn[] = [];
+    // Asked at once, too: a pool asks before its first chunk, while the room is still starting the search.
+    const wantedAtOnce: boolean[] = [];
     const never = () => new Promise<never>(() => {});
-    const { room, runBot } = botRoom({}, { choose: (turn) => (asked.push(turn), never()), advise: (turn) => (asked.push(turn), never()) });
+    const ask = (turn: BotTurn) => (asked.push(turn), wantedAtOnce.push(turn.wanted()), never());
+    const { room, runBot } = botRoom({}, { choose: ask, advise: ask });
     const human = join(room, 'Ana');
     room.handle(human.id, { t: 'settings', settings: { marksToWin: 1, firstPlayer: { player: human.id } } });
     room.handle(human.id, { t: 'add-bot' });
@@ -355,6 +358,7 @@ describe('the bot in a room', () => {
     expect(move.wanted()).toBe(true);
     room.close();
     expect(move.wanted()).toBe(false);
+    expect(wantedAtOnce.every((w) => w)).toBe(true);
   });
 
   it('takes a saved game up again where it was: the bot, and training mode at your seat, as if it never stopped', async () => {
