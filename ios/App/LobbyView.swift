@@ -128,7 +128,7 @@ struct LobbyView: View {
       .tint(Theme.muted)
     }
     .padding(.bottom, 8)
-    .sheet(isPresented: $settings) { SettingsView() }
+    .sheet(isPresented: $settings) { SettingsView(core: game.core) }
   }
 
   // MARK: On this phone

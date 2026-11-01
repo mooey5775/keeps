@@ -1183,6 +1183,7 @@ public enum FromApp: Codable, Equatable, Sendable {
   case config(FromAppConfig)
   case connect(FromAppConnect)
   case restore(FromAppRestore)
+  case reviews(FromAppReviews)
 
   private enum Tag: String, CodingKey { case tag = "t" }
 
@@ -1194,6 +1195,7 @@ public enum FromApp: Codable, Equatable, Sendable {
     case "config": self = .config(try FromAppConfig(from: decoder))
     case "connect": self = .connect(try FromAppConnect(from: decoder))
     case "restore": self = .restore(try FromAppRestore(from: decoder))
+    case "reviews": self = .reviews(try FromAppReviews(from: decoder))
     case let other: throw DecodingError.dataCorruptedError(forKey: .tag, in: container, debugDescription: "FromApp: no case \(other)")
     }
   }
@@ -1216,6 +1218,9 @@ public enum FromApp: Codable, Equatable, Sendable {
     case .restore(let value):
       try container.encode("restore", forKey: .tag)
       try value.encode(to: encoder)
+    case .reviews(let value):
+      try container.encode("reviews", forKey: .tag)
+      try value.encode(to: encoder)
     }
   }
 
@@ -1227,6 +1232,7 @@ public enum FromApp: Codable, Equatable, Sendable {
     case .config: return "config"
     case .connect: return "connect"
     case .restore: return "restore"
+    case .reviews: return "reviews"
     }
   }
 }
@@ -1363,6 +1369,28 @@ public struct FromAppRestore: Codable, Equatable, Sendable {
     try container.encode(self.id, forKey: .id)
     try container.encode(self.game, forKey: .game)
     try container.encode(self.replay, forKey: .replay)
+  }
+}
+
+public struct FromAppReviews: Codable, Equatable, Sendable {
+  public var on: Bool
+
+  public init(on: Bool) {
+    self.on = on
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case on
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    self.on = try container.decode(Bool.self, forKey: .on)
+  }
+
+  public func encode(to encoder: Encoder) throws {
+    var container = encoder.container(keyedBy: CodingKeys.self)
+    try container.encode(self.on, forKey: .on)
   }
 }
 

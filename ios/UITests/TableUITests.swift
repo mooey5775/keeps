@@ -484,7 +484,7 @@ final class TableUITests: XCTestCase {
     XCTAssertFalse(app.alerts["Something went wrong"].exists)
   }
 
-  func testSettingsCreditTheGameAndOfferToBuyIt() throws {
+  func testSettingsCreditTheGameOfferToBuyItAndSwitchReviews() throws {
     app = XCUIApplication()
     app.launch()
     let settings = app.buttons["Settings"]
@@ -495,6 +495,8 @@ final class TableUITests: XCTestCase {
     XCTAssertTrue(app.switches["Share statistics about my games on this phone"].exists, "no sharing setting")
     // Off until turned on.
     XCTAssertEqual(app.switches["Share statistics about my games on this phone"].value as? String, "0")
+    // Round reviews: on until turned off.
+    XCTAssertEqual(app.switches["Round reviews"].value as? String, "1")
     app.buttons["Done"].tap()
   }
 

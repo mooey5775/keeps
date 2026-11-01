@@ -123,6 +123,13 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
     deliver(.config(config))
   }
 
+  /// Round reviews of the phone's games on or off (the person's setting: they cost battery). Kept, for a core that starts again.
+  func setReviews(_ on: Bool) {
+    reviews = on
+    deliver(.reviews(FromAppReviews(on: on)))
+  }
+  private var reviews: Bool?
+
   /// KEEPS_TRACE: every message to and from the core printed, timed (how a game that stalls is looked into).
   private let trace = Internal.environment["KEEPS_TRACE"] != nil
 
@@ -233,6 +240,7 @@ final class Core: NSObject, WKScriptMessageHandler, WKNavigationDelegate {
       if restarting {
         restarting = false
         if let config { deliver(.config(config)) }
+        if let reviews { deliver(.reviews(FromAppReviews(on: reviews))) }
         onRestarted?()
       }
     case .failed(let failed):

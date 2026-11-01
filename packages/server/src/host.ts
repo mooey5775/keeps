@@ -35,6 +35,11 @@ export interface MidstrikeHost {
   bot: Pick<BotDeps, 'choose' | 'advise' | 'levels'>;
   hooks: RoomHooks;
   reviewer: Reviewer | null;
+  /**
+   * Round reviews on or off (on to begin with; the app's setting, to save the phone's battery). Off, the games under
+   * review stop at once; on again, the next game is reviewed (not one already under way: its review would start mid-round).
+   */
+  setReviewing(on: boolean): void;
 }
 
 /** How long the bot waits before trying a search again while its machine is away. */
@@ -125,15 +130,27 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
   const roomOfGame = new WeakMap<ReviewedGame, Room>();
   const reviewedGameOf = new WeakMap<Room, ReviewedGame>();
   /** Keeps the reviewer on the room's current game: stops the old one, starts a new game against the bot. */
+  let reviewing = true;
+  /** The games under review now; and those not to be (they started, or ran, while reviews were off). */
+  const underReview = new Set<ReviewedGame>();
+  const unreviewed = new WeakSet<ReviewedGame>();
+  function stopReviewing(game: ReviewedGame): void {
+    reviewer?.stop(game);
+    underReview.delete(game);
+  }
   function followGame(room: Room): void {
     if (!reviewer) return;
     const old = reviewedGameOf.get(room);
     const game = room.runningGame as (RunningGame & ReviewedGame) | null;
     if (old && old !== game) {
-      reviewer.stop(old);
+      stopReviewing(old);
       reviewedGameOf.delete(room);
     }
-    if (!game || reviewedGameOf.get(room) === game) return;
+    if (!game || reviewedGameOf.get(room) === game || unreviewed.has(game)) return;
+    if (!reviewing) {
+      unreviewed.add(game);
+      return;
+    }
     const seated = room.members.filter((p) => p.seat !== null);
     const bots = seated.filter((p) => p.bot);
     const people = seated.filter((p) => !p.bot);
@@ -142,6 +159,7 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
     for (const p of seated) names[p.seat!] = p.name;
     roomOfGame.set(game, room);
     reviewedGameOf.set(room, game);
+    underReview.add(game);
     reviewer.start(room.code, game, people[0]!.seat!, bots[0]!.seat!, names);
   }
   // The person going away sets the round in play aside; coming back (the game sent afresh) resumes it.
@@ -170,11 +188,19 @@ export function midstrikeHost(options: MidstrikeOptions): MidstrikeHost {
         disconnected: (room) => personAway(room),
         closing(room) {
           const game = reviewedGameOf.get(room);
-          if (game) reviewer.stop(game);
+          if (game) stopReviewing(game);
         },
       }
     : {};
-  return { bot, hooks, reviewer };
+  const setReviewing = (on: boolean) => {
+    reviewing = on;
+    if (on) return;
+    for (const game of [...underReview]) {
+      stopReviewing(game);
+      unreviewed.add(game);
+    }
+  };
+  return { bot, hooks, reviewer, setReviewing };
 }
 
 /** Several hooks as one: each of them told, in order. */

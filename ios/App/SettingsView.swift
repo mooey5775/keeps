@@ -11,14 +11,25 @@ enum KeepsGame {
 /// The app's settings: sharing the games played on the phone (Analytics: off until the person turns it on); the card
 /// game itself, its makers and where to buy it, as the website has them; and which version this is.
 struct SettingsView: View {
+  let core: Core
+  /// Round reviews of the games on the phone (on unless turned off).
+  static let reviewsKey = "roundReviews"
   @Environment(\.dismiss) private var dismiss
   @AppStorage(Analytics.sharingKey) private var sharing = false
+  @AppStorage(SettingsView.reviewsKey) private var reviews = true
 
   var body: some View {
     NavigationStack {
       Form {
         Section {
+          Toggle("Round reviews", isOn: $reviews)
+            .onChange(of: reviews) { _, on in core.setReviews(on) }
+        } footer: {
+          Text("After each round against Midstrike on this phone, how it went, move by move. Midstrike works them out as you play, which takes battery; turned off, the next game isn't reviewed. Online games are reviewed by the website's server either way.")
+        }
+        Section {
           Toggle("Share statistics about my games on this phone", isOn: $sharing)
+            .onChange(of: sharing) { _, on in if !on { Analytics.shared.stopSharing() } }
         } footer: {
           Text("How your games against Midstrike on this phone go (who won, at which level, how long they took), to make Midstrike better. They're sent with a random id for this phone, never your name or where you are. Online games are counted by the website's server either way.")
         }

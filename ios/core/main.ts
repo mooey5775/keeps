@@ -88,13 +88,18 @@ async function boot(): Promise<void> {
   });
 
   (window as unknown as { keepsCore: { receive(json: string): void } }).keepsCore = {
-    receive: coreBridge(server, post, (ms, seed) => {
-      botDelayMs = ms;
-      if (seed !== undefined) {
-        fixedSeed = seed;
-        fixedRandom = seeded([...seed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261), 1);
-      }
-    }),
+    receive: coreBridge(
+      server,
+      post,
+      (ms, seed) => {
+        botDelayMs = ms;
+        if (seed !== undefined) {
+          fixedSeed = seed;
+          fixedRandom = seeded([...seed].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0, 2166136261), 1);
+        }
+      },
+      (on) => host.setReviewing(on),
+    ),
   };
   post({ t: 'ready', workers: search.size, network: `${policy.info.run} ${policy.info.step} (${policy.info.fingerprint})`, cards: cardCatalog() });
 }

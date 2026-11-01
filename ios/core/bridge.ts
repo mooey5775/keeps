@@ -35,6 +35,8 @@ export type FromApp =
    * makes every game the same (the deal, the seating, Midstrike's draws from its network).
    */
   | { t: 'config'; botDelayMs: number; seed?: string }
+  /** Round reviews of the phone's games on or off (the app's setting: they cost battery). */
+  | { t: 'reviews'; on: boolean }
   /**
    * A game the app kept (`saved`), taken up again where it was: its room rebuilt from `game` and its replay log, and
    * connection `id` (new) in your seat, as if you'd come back to it.
@@ -120,7 +122,12 @@ type Connection = { receive(m: ClientMessage): void; close(): void; events: Trac
  * The app's messages (JSON, FromApp) to `receive`; the core's to `post`. `configure`: the app's settings (Midstrike's
  * botDelayMs; a seed for tests). A message that fails to be handled is posted back as `failed`.
  */
-export function coreBridge(server: LocalServer, post: (m: ToApp) => void, configure: (botDelayMs: number, seed?: string) => void): (json: string) => void {
+export function coreBridge(
+  server: LocalServer,
+  post: (m: ToApp) => void,
+  configure: (botDelayMs: number, seed?: string) => void,
+  reviewing: (on: boolean) => void = () => {},
+): (json: string) => void {
   const connections = new Map<number, Connection>();
   const deliver = (id: number, message: ServerMessage) => {
     const connection = connections.get(id);
@@ -144,6 +151,7 @@ export function coreBridge(server: LocalServer, post: (m: ToApp) => void, config
     try {
       const m = JSON.parse(json) as FromApp;
       if (m.t === 'config') configure(m.botDelayMs, m.seed);
+      else if (m.t === 'reviews') reviewing(m.on);
       else if (m.t === 'connect') {
         const receive = (message: ServerMessage) => deliver(m.id, message);
         const connection = m.server

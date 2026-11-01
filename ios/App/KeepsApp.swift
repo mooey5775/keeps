@@ -1,12 +1,13 @@
 import SwiftUI
 import WebKit
 
-/// Keeps: the card game, offline against Midstrike.
+/// Keeps: the card game, against Midstrike on the phone, and online.
 @main
 struct KeepsApp: App {
   @State private var core: Core?
   @State private var game: Game?
   @State private var status = "Starting…"
+  @Environment(\.scenePhase) private var phase
 
   init() {
     Theme.registerFonts()
@@ -27,6 +28,8 @@ struct KeepsApp: App {
         if let core { CoreView(core: core).frame(width: 1, height: 1).opacity(0.01) }
       }
       .task { await start() }
+      // Back in the foreground (perhaps online again): statistics kept from offline games go, if they're shared.
+      .onChange(of: phase) { _, now in if now == .active, game != nil { Analytics.shared.flush() } }
     }
   }
 
@@ -37,6 +40,10 @@ struct KeepsApp: App {
       let ready = try await core.start()
       print("Core ready: \(ready.network), \(Int(ready.workers)) search workers")
       fflush(stdout)
+      // The person's settings, to the core (round reviews are on unless they turned them off).
+      core.setReviews(UserDefaults.standard.object(forKey: SettingsView.reviewsKey) as? Bool ?? true)
+      // Statistics of games played offline, kept until now, if the person shares them.
+      Analytics.shared.flush()
       let environment = Internal.environment
       if environment["KEEPS_SELFTEST"] != nil {
         UIApplication.shared.isIdleTimerDisabled = true
