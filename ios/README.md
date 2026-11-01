@@ -62,7 +62,8 @@ taken up the same way.
   server counts its games as it counts a browser's.
 - **On the phone,** games are counted only if the person turns on "Share my games on this phone" in Settings (off
   until then). The core sends the app the same events the website's server sends (its local server's tracker), and
-  the app passes them to PostHog with the website's public project key (`config.json`): `App/Analytics.swift`.
+  the app passes them to PostHog with the website's public project key (`config.json`), under the phone's random id:
+  no names (the players', the winner's) and no location. `App/Analytics.swift`.
 - **Shake to report** (or "Report a problem" in the menus): a sheet for what happened, sent to the website's
   `/dispute` with the app's version and device, a screenshot taken as the report began (the server keeps it, behind
   the admin password), and the game: the online room's seat, or the phone's game's replay. `App/Report.swift`.

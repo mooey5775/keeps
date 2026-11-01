@@ -35,8 +35,13 @@ final class Analytics {
   func record(_ event: ToAppAnalytics) {
     guard sharing else { return }
     var properties = (try? JSONSerialization.jsonObject(with: Data(event.properties.utf8))) as? [String: Any] ?? [:]
+    // Not who you are: the phone's random id only, no name (the game's own names of its players aside: player_names),
+    // and no place (no lookup of the address it's sent from).
+    for name in ["player_names", "player_ips", "scores", "marks"] where properties[name] != nil { properties[name] = nil }
+    if let winner = properties["winner"] as? String, winner != "Midstrike" { properties["winner"] = "you" }
     properties["distinct_id"] = event.client
-    properties["$set"] = ["name": event.name]
+    properties["$geoip_disable"] = true
+    properties["$ip"] = NSNull()
     properties["platform"] = "ios"
     properties["on_the_phone"] = true
     properties["app_version"] = AppInfo.version

@@ -10,9 +10,9 @@ struct SettingsView: View {
     NavigationStack {
       Form {
         Section {
-          Toggle("Share my games on this phone", isOn: $sharing)
+          Toggle("Share statistics about my games on this phone", isOn: $sharing)
         } footer: {
-          Text("Anonymous statistics about your games against Midstrike on this phone (who won, at which level, how long it took), to make Midstrike better. Online games are counted by the website's server either way.")
+          Text("How your games against Midstrike on this phone go (who won, at which level, how long they took), to make Midstrike better. They're sent with a random id for this phone, never your name or where you are. Online games are counted by the website's server either way.")
         }
         Section("About") {
           LabeledContent("Version", value: "\(AppInfo.version) (\(AppInfo.build))")
