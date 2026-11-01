@@ -91,4 +91,14 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
 - **Your-turn notifications**, online: a push when it's your move and the app is closed (the server sends it through
   Apple's push service; waits for the developer account).
 - **The round review** (the website's end-of-round review, with each move's win chance and better moves). The core already makes it; the app doesn't show it yet. It should run on the phone at a reduced budget: reuse Midstrike's live searches, use smaller samples, at low priority.
-- **Before the App Store:** confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app.
+- **Room links open the app** (Universal Links): `applinks:playkeeps.online` in the app's Associated Domains, the
+  server serving `/.well-known/apple-app-site-association` for `/r/*`, and the app joining the room it's given; a
+  long-press still opens the page in Safari, so the website stays playable. Needs the paid developer account.
+- **The round review on the phone** uses half the website's sample sizes (`scaledSizes(0.5)` in `core/main.ts`): watch
+  how long a round's review takes on a real phone, and its battery, before going further either way.
+- **Before the App Store:**
+  - confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app;
+  - the privacy manifest (`PrivacyInfo.xcprivacy`: UserDefaults is a required-reason API) and the App Store's privacy
+    labels: the install id, game statistics (only if shared), and what a report sends (its text, the contact given,
+    a screenshot, the game). No tracking prompt (App Tracking Transparency): none of it is joined with other
+    companies' data or used for ads.
