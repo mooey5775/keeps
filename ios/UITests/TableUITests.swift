@@ -484,5 +484,19 @@ final class TableUITests: XCTestCase {
     XCTAssertFalse(app.alerts["Something went wrong"].exists)
   }
 
+  func testSettingsCreditTheGameAndOfferToBuyIt() throws {
+    app = XCUIApplication()
+    app.launch()
+    let settings = app.buttons["Settings"]
+    XCTAssertTrue(settings.waitForExistence(timeout: 30), "no lobby")
+    XCTAssertTrue(app.descendants(matching: .any)["Keeps is by David & Elaina Buffkin"].exists, "the lobby doesn't credit the game's makers")
+    settings.tap()
+    XCTAssertTrue(app.descendants(matching: .any)["Buy Keeps on Amazon"].waitForExistence(timeout: 5), "no link to buy the game")
+    XCTAssertTrue(app.switches["Share statistics about my games on this phone"].exists, "no sharing setting")
+    // Off until turned on.
+    XCTAssertEqual(app.switches["Share statistics about my games on this phone"].value as? String, "0")
+    app.buttons["Done"].tap()
+  }
+
   func testAGameOfFourShowsEveryPlayer() throws { playOnlineWith(others: 3) }
 }

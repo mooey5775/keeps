@@ -40,52 +40,66 @@ struct LobbyView: View {
       LinearGradient(colors: [Theme.background.opacity(0.35), Theme.background.opacity(0.7), Theme.background.opacity(0.35)], startPoint: .top, endPoint: .bottom)
         .ignoresSafeArea()
         .allowsHitTesting(false)
-      VStack(spacing: 28) {
-        Spacer()
-        VStack(spacing: 6) {
-          Text("KEEPS").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
-          Text(place == .phone ? "against Midstrike" : "online").font(Theme.text(.title3)).italic().foregroundStyle(Theme.muted)
-        }
-        Picker("Where", selection: $place) {
-          Text("On this phone").tag(Place.phone)
-          Text("Online").tag(Place.online)
-        }
-        .pickerStyle(.segmented)
-        VStack(alignment: .leading, spacing: 18) {
-          row("Your name") {
-            HStack(spacing: 8) {
-              TextField("Your name", text: $name, prompt: Text("For the game's log").foregroundStyle(Theme.muted.opacity(0.7)))
-                .font(Theme.text(.body))
-                .foregroundStyle(Theme.text)
-                .textContentType(.givenName)
-                .autocorrectionDisabled()
-                .submitLabel(.done)
-                .focused($naming)
-                .onSubmit { naming = false }
-                .onChange(of: name) { _, new in if new.count > 20 { name = String(new.prefix(20)) } }  // the server's NAME_MAX
-              Image(systemName: naming ? "checkmark.circle.fill" : "pencil")
-                .foregroundStyle(naming ? Theme.gold : Theme.muted)
-                .onTapGesture { naming.toggle() }
-                .accessibilityHidden(true)
+      // (Scrolls only when it's taller than the screen: a kept game's rows, a large text size.)
+      GeometryReader { screen in
+        ScrollView {
+          VStack(spacing: 28) {
+            Spacer()
+            VStack(spacing: 6) {
+              Text("KEEPS").font(Theme.heading(64, relativeTo: .largeTitle)).foregroundStyle(Theme.goldBright)
+              Text(place == .phone ? "against Midstrike" : "online").font(Theme.text(.title3)).italic().foregroundStyle(Theme.muted)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Theme.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-            .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(naming ? Theme.gold : Theme.line, lineWidth: naming ? 1.5 : 1) }
-            .contentShape(Rectangle())
-            .onTapGesture { naming = true }
+            Picker("Where", selection: $place) {
+              Text("On this phone").tag(Place.phone)
+              Text("Online").tag(Place.online)
+            }
+            .pickerStyle(.segmented)
+            VStack(alignment: .leading, spacing: 18) {
+              row("Your name") {
+                HStack(spacing: 8) {
+                  TextField("Your name", text: $name, prompt: Text("For the game's log").foregroundStyle(Theme.muted.opacity(0.7)))
+                    .font(Theme.text(.body))
+                    .foregroundStyle(Theme.text)
+                    .textContentType(.givenName)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($naming)
+                    .onSubmit { naming = false }
+                    .onChange(of: name) { _, new in if new.count > 20 { name = String(new.prefix(20)) } }  // the server's NAME_MAX
+                  Image(systemName: naming ? "checkmark.circle.fill" : "pencil")
+                    .foregroundStyle(naming ? Theme.gold : Theme.muted)
+                    .onTapGesture { naming.toggle() }
+                    .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .background(Theme.background.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
+                .overlay { RoundedRectangle(cornerRadius: 10).strokeBorder(naming ? Theme.gold : Theme.line, lineWidth: naming ? 1.5 : 1) }
+                .contentShape(Rectangle())
+                .onTapGesture { naming = true }
+              }
+              if place == .online { onlineRows } else { phoneRows }
+            }
+            .padding(20)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .environment(\.colorScheme, .dark)
+            if place == .online { onlineButtons } else { phoneButtons }
+            Spacer()
+            footer
           }
-          if place == .online { onlineRows } else { phoneRows }
+          .padding(.horizontal, 24)
+          .frame(maxWidth: 520)
+          .frame(maxWidth: .infinity, minHeight: screen.size.height)
+          // Touching anywhere else puts the keyboard away (the controls take their own touches first).
+          .contentShape(Rectangle())
+          .onTapGesture {
+            naming = false
+            coding = false
+          }
         }
-        .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-        .environment(\.colorScheme, .dark)
-        if place == .online { onlineButtons } else { phoneButtons }
-        Spacer()
-        footer
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollDismissesKeyboard(.interactively)
       }
-      .padding(.horizontal, 24)
-      .frame(maxWidth: 520)
     }
     .toolbar {
       ToolbarItemGroup(placement: .keyboard) {
@@ -98,15 +112,21 @@ struct LobbyView: View {
     }
   }
 
-  /// Settings and reporting a problem: one small line at the bottom.
+  /// The game's makers (as the website credits them), then settings and reporting a problem: small, at the bottom.
   private var footer: some View {
-    HStack(spacing: 10) {
-      Button("Settings") { settings = true }
-      Text("·").foregroundStyle(Theme.muted)
-      Button("Report a problem") { game.report = .now() }
+    VStack(spacing: 6) {
+      Link(destination: KeepsGame.site) {
+        Text("Keeps is by David & Elaina Buffkin").font(Theme.text(.caption)).italic()
+      }
+      .tint(Theme.muted)
+      HStack(spacing: 10) {
+        Button("Settings") { settings = true }
+        Text("·").foregroundStyle(Theme.muted)
+        Button("Report a problem") { game.report = .now() }
+      }
+      .font(Theme.text(.footnote))
+      .tint(Theme.muted)
     }
-    .font(Theme.text(.footnote))
-    .tint(Theme.muted)
     .padding(.bottom, 8)
     .sheet(isPresented: $settings) { SettingsView() }
   }
