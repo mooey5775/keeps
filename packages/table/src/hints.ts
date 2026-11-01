@@ -13,5 +13,9 @@ export function hintLabel(hint: Hint, options: Option[]): string {
   return order ? `Put the pile in this order: ${order.map((c) => CARDS[c].name).join(', ')}` : 'A move';
 }
 
-/** Its chance of winning the round when the bot searched it, otherwise how likely its network is to play it. */
-export const hintChance = (h: Hint) => (h.win === undefined ? `${Math.round(100 * h.probability)}%` : `${Math.round(100 * h.win)}% to win the round`);
+/**
+ * Its chance of winning the round when the bot searched it, otherwise how likely its network is to play it; nothing
+ * when there was nothing to weigh it against (one legal move, or a pile reorder, which comes alone).
+ */
+export const hintChance = (h: Hint) =>
+  h.win !== undefined ? `${Math.round(100 * h.win)}% to win the round` : h.probability >= 1 ? '' : `${Math.round(100 * h.probability)}%`;

@@ -83,4 +83,8 @@ schemes:
         KeepsTests: [test]
         KeepsUITests: [test]
     test:
-      targets: [KeepsTests, KeepsUITests]
+      # The UI tests' classes run side by side, each on a clone of the simulator (ios/test.sh says how many).
+      targets:
+        - name: KeepsTests
+        - name: KeepsUITests
+          parallelizable: true

@@ -57,8 +57,10 @@ struct KeepsApp: App {
         status = "Self-test done"
         return
       }
-      // KEEPS_SEED (for tests): every game dealt the same.
-      if let seed = environment["KEEPS_SEED"] { core.configure(botDelayMs: 900, seed: seed) }
+      // KEEPS_SEED (for tests): every game dealt the same. KEEPS_BOT_DELAY=150: Midstrike quicker than the 900 ms a
+      // person needs to follow it (the UI tests wait on it often).
+      let delay = environment["KEEPS_BOT_DELAY"].flatMap(Int.init)
+      if environment["KEEPS_SEED"] != nil || delay != nil { core.configure(botDelayMs: delay ?? 900, seed: environment["KEEPS_SEED"]) }
       // KEEPS_LAG=300 (for tests): the game's messages arrive 300 ms late, as on a slow phone.
       if let lag = environment["KEEPS_LAG"].flatMap(Double.init) { core.lag = lag / 1000 }
       let game = Game(core: core, book: CardBook(ready.cards))

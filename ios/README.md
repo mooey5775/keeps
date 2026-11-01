@@ -35,6 +35,7 @@ APP_ID=${APP_ID:-online.playkeeps.KeepsSpike}   # until the developer account ha
 - `KEEPS_SELFTEST=1 ios/sync.sh` plays whole games headless on the phone or simulator.
 - `KEEPS_SEED=ui-7` at launch makes every game the same, for the UI tests: the deal, the seating, Midstrike's draws.
   The UI tests use `ui-7` (your first cards played on their own) and `ui-keep-3` (your first card a Keep card).
+- `KEEPS_BOT_DELAY=150` makes Midstrike wait 150 ms before each move instead of 900 (the UI tests use it).
 - `KEEPS_LAG=2000` holds the game's messages 2 s, as on a slow phone (a move touched twice in that time is made once).
 - `KEEPS_CONTINUE=3` goes straight into the kept game (`Documents/playing.json`) and makes your next 3 moves at random;
   `KEEPS_TRACE=1` prints every message between the app and the core, timed (and keeps the phone awake). On the phone:

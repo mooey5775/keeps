@@ -317,7 +317,7 @@ struct Hints: View {
   }
 }
 
-/// Tithes: your pile, top first, in the order you drag it into.
+/// Tithes: your pile, top first, in the order you drag it into (with training mode's hint, which the sheet would cover).
 struct OrderPileSheet: View {
   let game: Game
   let prompt: PromptViewMineOrderPile
@@ -326,6 +326,10 @@ struct OrderPileSheet: View {
   var body: some View {
     NavigationStack {
       List {
+        // Training mode's hint is in the panel this sheet covers: here too.
+        if game.training, let hints = game.table?.hints {
+          Section { Hints(hints: hints).listRowInsets(EdgeInsets()).listRowBackground(Color.clear) }
+        }
         Section {
           ForEach(order, id: \.self) { card in
             HStack(spacing: 12) {

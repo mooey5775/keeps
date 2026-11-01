@@ -25,13 +25,13 @@ struct SettingsView: View {
           Toggle("Round reviews", isOn: $reviews)
             .onChange(of: reviews) { _, on in core.setReviews(on) }
         } footer: {
-          Text("After each round against Midstrike on this phone, how it went, move by move. Midstrike works them out as you play, which takes battery; turned off, the next game isn't reviewed. Online games are reviewed by the website's server either way.")
+          Text("A move-by-move review after each round. Uses battery.")
         }
         Section {
           Toggle("Share statistics about my games on this phone", isOn: $sharing)
             .onChange(of: sharing) { _, on in if !on { Analytics.shared.stopSharing() } }
         } footer: {
-          Text("How your games against Midstrike on this phone go (who won, at which level, how long they took), to make Midstrike better. They're sent with a random id for this phone, never your name or where you are. Online games are counted by the website's server either way.")
+          Text("Who won, at which level, how long it took. No name or location.")
         }
         Section {
           Link(destination: KeepsGame.amazon) { Label("Buy Keeps on Amazon", systemImage: "cart") }
