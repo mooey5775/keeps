@@ -12,6 +12,8 @@ cd "${ROOT:?}"
 [ -f ios/local.env ] && . ios/local.env
 MAC=${MAC:?the Mac to test on (user@host): set it in ios/local.env (see ios/README.md)}
 SIMULATOR=${SIMULATOR:-iPhone 17}
+# The simulator's iOS, fixed: installing a newer one (for a new device) mustn't change what the tests run on.
+SIMULATOR_OS=${SIMULATOR_OS:-27.0}
 # (A connection that's gone, the Mac asleep or off the network, is given up on within a minute, not waited on.)
 ALIVE=(-o ServerAliveInterval=15 -o ServerAliveCountMax=4)
 SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C" "${ALIVE[@]}")
@@ -59,14 +61,14 @@ ONLY_TESTING=""
 if [ -n "${ONLY:-}" ]; then
   case "$ONLY" in *UITests*) ONLY_TESTING="-only-testing:KeepsUITests/$ONLY" ;; *) ONLY_TESTING="-only-testing:KeepsTests/$ONLY" ;; esac
 fi
-command ssh -o ControlPath=none "${ALIVE[@]}" -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" "$ONLY_TESTING" <<'REMOTE'
+command ssh -o ControlPath=none "${ALIVE[@]}" -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" "$SIMULATOR_OS" "$ONLY_TESTING" <<'REMOTE'
 set -euo pipefail
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps/ios
 mkdir -p build/core
 xcodegen generate --quiet
-xcodebuild -project Keeps.xcodeproj -scheme KeepsTests -destination "platform=iOS Simulator,name=$1" -derivedDataPath build/derived-tests \
-  -parallel-testing-enabled YES -parallel-testing-worker-count 3 ${2:+"$2"} test 2>&1 \
+xcodebuild -project Keeps.xcodeproj -scheme KeepsTests -destination "platform=iOS Simulator,name=$1,OS=$2" -derivedDataPath build/derived-tests \
+  -parallel-testing-enabled YES -parallel-testing-worker-count 3 ${3:+"$3"} test 2>&1 \
   | grep -iE "Test Case .*(passed|failed)|error:|XCTAssert|Executed|\*\* TEST" | sed -E 's/^.*Test [Cc]ase/Test case/'
 REMOTE
 phase "done"
