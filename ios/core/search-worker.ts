@@ -5,6 +5,7 @@ import { Policy } from '@keeps/bot/policy.ts';
 import { reviewGames, type ReviewJob, type ReviewResult } from '@keeps/bot/review/jobs.ts';
 import { drive, playWorlds, type WorldsJob } from '@keeps/bot/search/lockstep.ts';
 import { encodeRequest } from '@keeps/bot/search/request.ts';
+import { awakeTimeout } from './awake.ts';
 
 export type SearchWorkerMessage =
   | { t: 'init'; weights: ArrayBuffer }
@@ -22,9 +23,14 @@ let policy: Policy | null = null;
 const NETWORK_MS = 30_000;
 
 async function logits(rows: Float32Array[]): Promise<Float32Array> {
-  const response = await fetch('/nn/forward', { method: 'POST', body: encodeRequest(rows), signal: AbortSignal.timeout(NETWORK_MS) }).catch((error: unknown) => {
-    throw new Error(`the network didn't answer ${rows.length} rows in ${NETWORK_MS / 1000} s (${error instanceof Error ? error.message : String(error)})`);
-  });
+  // (Counted in time the app runs: a phone locked while the network works isn't the network failing.)
+  const abort = new AbortController();
+  const cancel = awakeTimeout(NETWORK_MS, () => abort.abort(new Error('timed out')));
+  const response = await fetch('/nn/forward', { method: 'POST', body: encodeRequest(rows), signal: abort.signal })
+    .catch((error: unknown) => {
+      throw new Error(`the network didn't answer ${rows.length} rows in ${NETWORK_MS / 1000} s (${error instanceof Error ? error.message : String(error)})`);
+    })
+    .finally(cancel);
   if (!response.ok) throw new Error(`the network: HTTP ${response.status} ${await response.text()}`);
   return new Float32Array(await response.arrayBuffer());
 }

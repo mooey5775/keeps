@@ -10,8 +10,13 @@
 //
 // The round review's jobs (review-jobs.ts) go to the same workers, but only when no search is waiting, and at most one
 // a worker: the live game always comes first.
+//
+// A worker that takes too long is taken for stuck, its work failed, and it's replaced; its place takes no work until
+// the new worker is ready (work sent to the old one would never be answered). Too long is counted in time the app runs
+// (awake.ts): a phone locked mid-search pauses the workers, it doesn't make them stuck.
 import type { ReviewJob, ReviewResult } from '@keeps/bot/review/jobs.ts';
 import { Superseded, type EvaluateJob, type WorldsPool } from '@keeps/bot/search/search.ts';
+import { awakeTimeout } from './awake.ts';
 import type { SearchWorkerMessage, SearchWorkerReply } from './search-worker.ts';
 
 /** Worlds per chunk: enough playouts for a worker to batch (each world plays every candidate move). */
@@ -37,12 +42,17 @@ interface QueuedReview {
   reject: (e: Error) => void;
 }
 
+/** A search worker, as the pool starts it (a Web Worker running search-worker.ts; tests give their own). */
+export type MakeWorker = () => Worker;
+const searchWorker: MakeWorker = () => new Worker(new URL('./search-worker.ts', import.meta.url), { type: 'module' });
+
 export class WorkerSearch implements WorldsPool {
-  private readonly workers: Worker[] = [];
+  /** The workers; null where one was lost and its replacement isn't ready yet. */
+  private readonly workers: (Worker | null)[] = [];
   /** Each chunk sent and not yet answered: its worker, and what to tell its search. */
   private readonly waiting = new Map<
     number,
-    { worker: Worker; review: boolean; resolve: (answer: never) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }
+    { worker: Worker; review: boolean; resolve: (answer: never) => void; reject: (e: Error) => void; cancel: () => void }
   >();
   private id = 0;
   private seed = (Math.random() * 2 ** 32) >>> 0;
@@ -52,11 +62,15 @@ export class WorkerSearch implements WorldsPool {
   /** Review jobs waiting: taken only when no chunk is. */
   private readonly reviews: QueuedReview[] = [];
 
-  private constructor() {}
+  private readonly make: MakeWorker;
+
+  private constructor(make: MakeWorker) {
+    this.make = make;
+  }
 
   /** `count` workers, each with the network's weights (for its policy's sampling; Core ML runs the network). */
-  static async start(count: number, weights: ArrayBuffer): Promise<WorkerSearch> {
-    const pool = new WorkerSearch();
+  static async start(count: number, weights: ArrayBuffer, make: MakeWorker = searchWorker): Promise<WorkerSearch> {
+    const pool = new WorkerSearch(make);
     pool.weights = weights;
     pool.workers.push(...(await Promise.all(Array.from({ length: count }, () => pool.spawn()))));
     return pool;
@@ -64,7 +78,7 @@ export class WorkerSearch implements WorldsPool {
 
   /** A worker, ready (its weights loaded). */
   private spawn(): Promise<Worker> {
-    const w = new Worker(new URL('./search-worker.ts', import.meta.url), { type: 'module' });
+    const w = this.make();
     return new Promise<Worker>((resolve, reject) => {
       w.onmessage = (e: MessageEvent<SearchWorkerReply>) => {
         const m = e.data;
@@ -73,7 +87,7 @@ export class WorkerSearch implements WorldsPool {
         const job = this.waiting.get(m.id!);
         if (!job) return;
         this.waiting.delete(m.id!);
-        clearTimeout(job.timer);
+        job.cancel();
         if (m.t === 'error') job.reject(new Error(m.message));
         else (job.resolve as (answer: unknown) => void)(m.t === 'search' ? m.rows : m.result);
         this.pump();
@@ -87,24 +101,33 @@ export class WorkerSearch implements WorldsPool {
     });
   }
 
-  /** `worker` is gone: its chunks fail with `why`, and a new worker takes its place. */
+  /** `worker` is gone: its chunks fail with `why`, and a new worker takes its place (none meanwhile). */
   private lose(worker: Worker, why: string): void {
     const at = this.workers.indexOf(worker);
     if (at < 0) return;
     console.error(why);
     worker.terminate();
+    this.workers[at] = null;
     for (const [id, job] of this.waiting) {
       if (job.worker !== worker) continue;
       this.waiting.delete(id);
-      clearTimeout(job.timer);
+      job.cancel();
       job.reject(new Error(why));
     }
+    this.replace(at);
+  }
+
+  /** A new worker in place `at`; if it can't start, another try a little later (the place stays empty meanwhile). */
+  private replace(at: number): void {
     this.spawn().then(
       (fresh) => {
         this.workers[at] = fresh;
         this.pump();
       },
-      (error: unknown) => console.error(`a search worker couldn't be replaced: ${error instanceof Error ? error.message : String(error)}`),
+      (error: unknown) => {
+        console.error(`a search worker couldn't be replaced: ${error instanceof Error ? error.message : String(error)}`);
+        setTimeout(() => this.replace(at), 5000);
+      },
     );
   }
 
@@ -135,6 +158,7 @@ export class WorkerSearch implements WorldsPool {
    */
   private pump(): void {
     for (const worker of this.workers) {
+      if (!worker) continue;
       const mine = [...this.waiting.values()].filter((w) => w.worker === worker);
       let held = mine.length;
       while (held < PER_WORKER && this.queue.length > 0) {
@@ -149,8 +173,8 @@ export class WorkerSearch implements WorldsPool {
       if (held < PER_WORKER && this.queue.length === 0 && this.reviews.length > 0 && !mine.some((w) => w.review)) {
         const next = this.reviews.shift()!;
         const id = ++this.id;
-        const timer = setTimeout(() => this.lose(worker, `a search worker took over ${REVIEW_MS / 1000} s on a review job`), REVIEW_MS);
-        this.waiting.set(id, { worker, review: true, resolve: next.resolve as (answer: never) => void, reject: next.reject, timer });
+        const cancel = awakeTimeout(REVIEW_MS, () => this.lose(worker, `a search worker took over ${REVIEW_MS / 1000} s on a review job`));
+        this.waiting.set(id, { worker, review: true, resolve: next.resolve as (answer: never) => void, reject: next.reject, cancel });
         worker.postMessage({ t: 'review', id, job: next.job } satisfies SearchWorkerMessage);
       }
     }
@@ -158,8 +182,8 @@ export class WorkerSearch implements WorldsPool {
 
   private run(worker: Worker, { job, resolve, reject }: Queued): void {
     const id = ++this.id;
-    const timer = setTimeout(() => this.lose(worker, `a search worker took over ${CHUNK_MS / 1000} s on ${job.n} worlds`), CHUNK_MS);
-    this.waiting.set(id, { worker, review: false, resolve: resolve as (answer: never) => void, reject, timer });
+    const cancel = awakeTimeout(CHUNK_MS, () => this.lose(worker, `a search worker took over ${CHUNK_MS / 1000} s on ${job.n} worlds`));
+    this.waiting.set(id, { worker, review: false, resolve: resolve as (answer: never) => void, reject, cancel });
     worker.postMessage({ t: 'search', id, job } satisfies SearchWorkerMessage);
   }
 }

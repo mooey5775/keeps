@@ -37,6 +37,34 @@ extension UIWindow {
   }
 }
 
+/// Shows a report over whatever is on screen. A SwiftUI sheet would come from the app's root view, which can't present
+/// one while another sheet is up (the round review, the log, Settings): the report is presented by the screen on top.
+@MainActor enum ReportPresenter {
+  static func present(_ report: Report, game: Game) {
+    guard let root = UIApplication.shared.connectedScenes.compactMap({ ($0 as? UIWindowScene)?.keyWindow }).first?.rootViewController else { return }
+    var top = root
+    while let next = top.presentedViewController, !next.isBeingDismissed { top = next }
+    // (Closed however it's closed, the report is over: another can begin.)
+    let host = UIHostingController(rootView: ReportView(game: game, report: report).onDisappear { if game.report?.id == report.id { game.report = nil } })
+    host.overrideUserInterfaceStyle = .dark
+    top.present(host, animated: true)
+  }
+}
+
+#if DEBUG
+/// For the UI tests (KEEPS_TEST_HOOKS), which can't shake the phone: they post this Darwin notification (the simulator
+/// passes those between the tests' process and the app's), and the app takes it as a shake.
+enum TestShake {
+  static let name = "online.playkeeps.test.shake"
+
+  static func listen() {
+    CFNotificationCenterAddObserver(CFNotificationCenterGetDarwinNotifyCenter(), nil, { _, _, _, _, _ in
+      DispatchQueue.main.async { NotificationCenter.default.post(name: .shaken, object: nil) }
+    }, name as CFString, nil, .deliverImmediately)
+  }
+}
+#endif
+
 struct ReportView: View {
   let game: Game
   let report: Report
@@ -47,6 +75,8 @@ struct ReportView: View {
   @State private var withScreenshot = true
   @State private var sending = false
   @State private var failure: String?
+  /// Sent: said here, then closed (an alert from the app's root couldn't show over a sheet the report came over).
+  @State private var sent = false
 
   var body: some View {
     NavigationStack {
@@ -86,6 +116,7 @@ struct ReportView: View {
             .disabled(sending || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
       }
+      .alert("Thanks: your report was sent.", isPresented: $sent) { Button("OK") { dismiss() } }
     }
   }
 
@@ -109,8 +140,7 @@ struct ReportView: View {
       request.httpBody = try JSONSerialization.data(withJSONObject: body)
       let (data, response) = try await URLSession.shared.data(for: request)
       if (response as? HTTPURLResponse)?.statusCode == 200 {
-        game.notice = "Thanks: your report was sent."
-        dismiss()
+        sent = true
       } else {
         failure = ((try? JSONSerialization.jsonObject(with: data)) as? [String: Any])?["error"] as? String ?? "It wasn't sent. Please try again."
       }

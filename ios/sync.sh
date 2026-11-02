@@ -20,7 +20,9 @@ DEVICE=${DEVICE:-}
 APP_ID=${APP_ID:-online.playkeeps.Keeps}
 # Signing uses the build keychain (ios/tools/setup-build-keychain.sh, once). Without it, codesign needs the login
 # keychain unlocked in this very ssh session: a shared connection in which you unlocked it is reused, if there is one.
-SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C")
+# (A connection that's gone, the Mac asleep or off the network, is given up on within a minute, not waited on.)
+ALIVE=(-o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C" "${ALIVE[@]}")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 export RSYNC_RSH="ssh -o ControlPath=$HOME/.ssh/keeps-mac-%C"
 WEIGHTS=packages/bot/weights/midstrike.bin

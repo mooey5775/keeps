@@ -12,7 +12,9 @@ cd "${ROOT:?}"
 [ -f ios/local.env ] && . ios/local.env
 MAC=${MAC:?the Mac to test on (user@host): set it in ios/local.env (see ios/README.md)}
 SIMULATOR=${SIMULATOR:-iPhone 17}
-SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C")
+# (A connection that's gone, the Mac asleep or off the network, is given up on within a minute, not waited on.)
+ALIVE=(-o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+SSH_OPTS=(-o ControlPath="$HOME/.ssh/keeps-mac-%C" "${ALIVE[@]}")
 ssh() { command ssh "${SSH_OPTS[@]}" "$@"; }
 export RSYNC_RSH="ssh -o ControlPath=$HOME/.ssh/keeps-mac-%C"
 
@@ -57,7 +59,7 @@ ONLY_TESTING=""
 if [ -n "${ONLY:-}" ]; then
   case "$ONLY" in *UITests*) ONLY_TESTING="-only-testing:KeepsUITests/$ONLY" ;; *) ONLY_TESTING="-only-testing:KeepsTests/$ONLY" ;; esac
 fi
-command ssh -o ControlPath=none -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" "$ONLY_TESTING" <<'REMOTE'
+command ssh -o ControlPath=none "${ALIVE[@]}" -o ExitOnForwardFailure=yes -R 7777:localhost:7777 "$MAC" bash -s -- "$(printf %q "$SIMULATOR")" "$ONLY_TESTING" <<'REMOTE'
 set -euo pipefail
 eval "$(/opt/homebrew/bin/brew shellenv)"
 cd ~/src/keeps/ios

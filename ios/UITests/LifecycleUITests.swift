@@ -107,6 +107,32 @@ final class LifecycleUITests: KeepsUITestCase {
     XCTAssertTrue(yourPile.exists, "the table isn't back")
   }
 
+  func testShakingReportsAProblemOverASheet() throws {
+    app = newApp()
+    app.launchEnvironment["KEEPS_PLAY"] = "easy:5"
+    app.launchEnvironment["KEEPS_SEED"] = Deal.alone.rawValue
+    app.launchEnvironment["KEEPS_TEST_HOOKS"] = "1"
+    app.launch()
+    XCTAssertTrue(yourTurn())
+    // The log open over the table (a sheet), then a shake: the report comes over the log.
+    app.buttons["Game log"].tap()
+    XCTAssertTrue(app.navigationBars["Game log"].waitForExistence(timeout: 5), "no log")
+    shake()
+    let text = app.textFields["report text"]
+    XCTAssertTrue(text.waitForExistence(timeout: 5), "shaking over the log started no report")
+    app.buttons["Cancel"].tap()
+    XCTAssertTrue(eventually(5) { !text.exists }, "the report didn't close")
+    XCTAssertTrue(app.navigationBars["Game log"].exists, "the log went with the report")
+    // And again: one report closed, another can begin.
+    shake()
+    XCTAssertTrue(text.waitForExistence(timeout: 5), "a second shake started no report")
+  }
+
+  /// A shake, as the app's test hook takes it (KEEPS_TEST_HOOKS; the tests can't shake the phone).
+  private func shake() {
+    CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(), CFNotificationName("online.playkeeps.test.shake" as CFString), nil, nil, true)
+  }
+
   func testARoundIsReviewedOnThePhone() throws {
     // A game to one mark, your moves made at random until it's over.
     app = newApp()

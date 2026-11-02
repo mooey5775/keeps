@@ -45,6 +45,9 @@ struct KeepsApp: App {
       // Statistics of games played offline, kept until now, if the person shares them.
       Analytics.shared.flush()
       let environment = Internal.environment
+      #if DEBUG
+      if environment["KEEPS_TEST_HOOKS"] != nil { TestShake.listen() }
+      #endif
       if environment["KEEPS_SELFTEST"] != nil {
         UIApplication.shared.isIdleTimerDisabled = true
         let games = (environment["KEEPS_SELFTEST_GAMES"] ?? "hard:1,easy:1").split(separator: ",").map { spec in
@@ -99,9 +102,9 @@ struct RootView: View {
     }
     // The card being held, shown over everything: the table, and any sheet over it.
     .background(PreviewWindow(game: game))
-    // Shaking the phone reports a problem (the screen taken as it was).
+    // Shaking the phone reports a problem (the screen taken as it was), over whatever is on screen.
     .onReceive(NotificationCenter.default.publisher(for: .shaken)) { _ in if game.report == nil { game.report = .now() } }
-    .sheet(item: $game.report) { ReportView(game: game, report: $0) }
+    .onChange(of: game.report?.id) { _, id in if id != nil, let report = game.report { ReportPresenter.present(report, game: game) } }
     .alert(game.notice ?? "", isPresented: Binding(get: { game.notice != nil && game.problem == nil }, set: { if !$0 { game.notice = nil } })) {
       Button("OK") { game.notice = nil }
     }
