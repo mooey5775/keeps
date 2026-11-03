@@ -91,7 +91,6 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
 
 - **Your-turn notifications**, online: a push when it's your move and the app is closed (the server sends it through
   Apple's push service; waits for the developer account).
-- **The round review** (the website's end-of-round review, with each move's win chance and better moves). The core already makes it; the app doesn't show it yet. It should run on the phone at a reduced budget: reuse Midstrike's live searches, use smaller samples, at low priority.
 - **Room links open the app** (Universal Links): `applinks:playkeeps.online` in the app's Associated Domains, the
   server serving `/.well-known/apple-app-site-association` for `/r/*`, and the app joining the room it's given; a
   long-press still opens the page in Safari, so the website stays playable. Needs the paid developer account.
