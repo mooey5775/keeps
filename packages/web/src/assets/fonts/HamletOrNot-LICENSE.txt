@@ -1,4 +1,16 @@
 HamletOrNot (Regular, version 1.0, 2004-11-21)
-Digitized by Manfred Klein and Petra Heidorn after the Cranach Presse "Hamlet" type.
-License: Freeware (as stated in the font's distribution, https://www.fontspace.com/hamletornot-font-f1499).
-Used for headings, matching keepsgame.com.
+Digitized by Manfred Klein and Petra Heidorn (CybaPee Creations) after the Cranach Presse "Hamlet" type.
+https://www.fontspace.com/hamletornot-font-f1499
+
+Manfred Klein's terms of use:
+
+  Manfred's fonts are free for private and charity use. They are even free for commercial use - but if there's
+  any profit, pls make a donation to organizations like Doctors Without Borders.
+
+  These fonts can NOT be included in any compilation CDs, disks or products, either commercial or shareware unless
+  prior permission granted.
+
+  All typefaces were created by Manfred Klein 2001-2008.
+
+Keeps uses it for its headings, matching keepsgame.com, on the website and in the app. That is use of the font, not
+a compilation of fonts, which is what the second paragraph rules out.

@@ -44,6 +44,7 @@ struct SettingsView: View {
         }
         Section("About") {
           LabeledContent("Version", value: "\(AppInfo.version) (\(AppInfo.build))")
+          NavigationLink("Licenses") { LicensesView() }
         }
       }
       .navigationTitle("Settings")

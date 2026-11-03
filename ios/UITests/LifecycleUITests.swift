@@ -158,6 +158,14 @@ final class LifecycleUITests: KeepsUITestCase {
     XCTAssertFalse(app.alerts["Something went wrong"].exists)
   }
 
+  /// The screen as it is, kept with the results (to look at).
+  private func keep(_ name: String) {
+    let shot = XCTAttachment(screenshot: app.screenshot())
+    shot.name = name
+    shot.lifetime = .keepAlways
+    add(shot)
+  }
+
   func testSettingsCreditTheGameOfferToBuyItAndSwitchReviews() throws {
     app = newApp()
     app.launch()
@@ -171,6 +179,21 @@ final class LifecycleUITests: KeepsUITestCase {
     XCTAssertEqual(app.switches["Share statistics about my games on this phone"].value as? String, "0")
     // Round reviews: on until turned off.
     XCTAssertEqual(app.switches["Round reviews"].value as? String, "1")
+    // The licences of what the app ships that isn't ours, each in full.
+    app.swipeUp()
+    app.buttons["Licenses"].tap()
+    XCTAssertTrue(app.buttons["HamletOrNot"].waitForExistence(timeout: 5), "no licence for the heading font")
+    keep("Licenses")
+    app.buttons["Libre Baskerville"].tap()
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'SIL OPEN FONT LICENSE Version 1.1'")).firstMatch.waitForExistence(timeout: 5), "the font's licence isn't shown")
+    keep("Libre Baskerville's licence")
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.buttons["HamletOrNot"].tap()
+    XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Manfred Klein'")).firstMatch.waitForExistence(timeout: 5), "the heading font's terms aren't shown")
+    keep("HamletOrNot's terms")
+    // Back to Settings (its Done is on its own page).
+    app.navigationBars.buttons.element(boundBy: 0).tap()
+    app.navigationBars.buttons.element(boundBy: 0).tap()
     app.buttons["Done"].tap()
   }
 }

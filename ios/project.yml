@@ -28,6 +28,10 @@ targets:
       - path: build/fonts
         type: folder
         buildPhase: resources
+      # The licences of what the app ships that isn't ours (Settings, Licenses).
+      - path: build/licenses
+        type: folder
+        buildPhase: resources
       # Made on the Mac by training/keeps_bot/coreml.py (sync.sh); Xcode compiles it to KeepsPolicy.mlmodelc.
       - path: build/KeepsPolicy.mlpackage
     settings:

@@ -97,7 +97,6 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
 - **The round review on the phone** uses half the website's sample sizes (`scaledSizes(0.5)` in `core/main.ts`): watch
   how long a round's review takes on a real phone, and its battery, before going further either way.
 - **Before the App Store:**
-  - confirm that HamletOrNot (the heading font, "freeware") may be shipped in an app;
   - the privacy manifest (`PrivacyInfo.xcprivacy`: UserDefaults is a required-reason API) and the App Store's privacy
     labels: the install id, game statistics (only if shared), and what a report sends (its text, the contact given,
     a screenshot, the game). No tracking prompt (App Tracking Transparency): none of it is joined with other

@@ -31,7 +31,7 @@ ios/tools/build-core.sh
 
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build ~/src/keeps/training ~/src/keeps/packages/bot/weights'
 rsync -a --delete ios/App ios/Shared ios/project.yml "$MAC:src/keeps/ios/"
-rsync -a --delete ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
+rsync -a --delete ios/build/core ios/build/cards ios/build/fonts ios/build/licenses "$MAC:src/keeps/ios/build/"
 rsync -a --delete --exclude=__pycache__ training/keeps_bot training/marvel "$MAC:src/keeps/training/"
 rsync -a "$WEIGHTS" "$MAC:src/keeps/$WEIGHTS"
 

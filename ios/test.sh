@@ -55,7 +55,7 @@ grep -q ready ios/build/test-server.log || { cat ios/build/test-server.log; exit
 ssh "$MAC" 'mkdir -p ~/src/keeps/ios/build'
 phase "the Mac: building and testing"
 rsync -a --delete ios/App ios/Shared ios/Tests ios/UITests ios/project.yml "$MAC:src/keeps/ios/"
-rsync -a --delete ios/build/goldens ios/build/core ios/build/cards ios/build/fonts "$MAC:src/keeps/ios/build/"
+rsync -a --delete ios/build/goldens ios/build/core ios/build/cards ios/build/fonts ios/build/licenses "$MAC:src/keeps/ios/build/"
 # (ONLY names a test without its target: the UI tests' are in KeepsUITests, the rest in KeepsTests.)
 ONLY_TESTING=""
 if [ -n "${ONLY:-}" ]; then
