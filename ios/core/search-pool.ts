@@ -19,8 +19,14 @@ import { Superseded, type EvaluateJob, type WorldsPool } from '@keeps/bot/search
 import { awakeTimeout } from './awake.ts';
 import type { SearchWorkerMessage, SearchWorkerReply } from './search-worker.ts';
 
-/** Worlds per chunk: enough playouts for a worker to batch (each world plays every candidate move). */
-const CHUNK = 64;
+/**
+ * Playouts per chunk (each world plays every candidate move): enough for a worker to batch, and about the same work
+ * whatever the decision. Worlds per chunk follow from it: 64 at four candidate moves, 5 at Providence's 46 pairs.
+ * (A chunk of 64 worlds whatever the decision made a 46-move one's chunks eleven times the work, past the watchdog.)
+ */
+const CHUNK_PLAYOUTS = 256;
+/** Worlds per chunk, at most. */
+const CHUNK_WORLDS = 64;
 
 /** How long a worker may take over one chunk before it's taken for stuck: replaced, and its chunk failed. */
 const CHUNK_MS = 90_000;
@@ -139,7 +145,8 @@ export class WorkerSearch implements WorldsPool {
     const { state, me, myLog, commands, n, wanted = () => true } = job;
     const seed = this.seed;
     this.seed = (this.seed + 0x9e3779b9) >>> 0;
-    const chunks = Array.from({ length: Math.ceil(n / CHUNK) }, (_, c) => ({ n: Math.min(CHUNK, n - c * CHUNK), seed: (seed + Math.imul(c, 0x85ebca6b)) >>> 0 }));
+    const per = Math.max(1, Math.min(CHUNK_WORLDS, Math.floor(CHUNK_PLAYOUTS / Math.max(1, commands.length))));
+    const chunks = Array.from({ length: Math.ceil(n / per) }, (_, c) => ({ n: Math.min(per, n - c * per), seed: (seed + Math.imul(c, 0x85ebca6b)) >>> 0 }));
     const rows = chunks.map((chunk) => new Promise<number[][]>((resolve, reject) => this.queue.push({ job: { state, me, myLog, commands, ...chunk }, wanted, resolve, reject })));
     this.pump();
     return (await Promise.all(rows)).flat();

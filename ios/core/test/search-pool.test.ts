@@ -42,6 +42,19 @@ class FakeWorker {
     this.reply({ t: 'review', id: job.id, result: result as ReviewResult });
   }
 
+  /** Every search chunk sent to it, answered: a row of results per world, one per candidate move. */
+  answerSearches(): void {
+    for (const m of this.received.splice(0)) {
+      if (m.t !== 'search') continue;
+      this.reply({ t: 'search', id: m.id, rows: Array.from({ length: m.job.n }, () => m.job.commands.map(() => 0)) });
+    }
+  }
+
+  /** The search chunks sent to it so far: worlds and candidate moves of each. */
+  chunks(): { worlds: number; moves: number }[] {
+    return this.received.flatMap((m) => (m.t === 'search' ? [{ worlds: m.job.n, moves: m.job.commands.length }] : []));
+  }
+
   jobs(): number {
     return this.received.filter((m) => m.t !== 'init').length;
   }
@@ -91,6 +104,31 @@ describe('awakeTimeout', () => {
 });
 
 describe('the search pool', () => {
+  it("sends a search out in chunks of about the same work whatever the decision: fewer worlds a chunk the more moves", async () => {
+    const workers: FakeWorker[] = [];
+    const pool = await WorkerSearch.start(1, new ArrayBuffer(0), () => workers[workers.push(new FakeWorker(true)) - 1] as unknown as Worker);
+    const worker = workers[0]!;
+    for (const [moves, worlds] of [
+      [4, 64],
+      [46, 5],
+      [1, 64],
+    ] as const) {
+      const search = pool.evaluate({ state: {} as never, me: 2, myLog: [], commands: Array.from({ length: moves }, () => ({}) as never), n: 512 });
+      const seen: { worlds: number; moves: number }[] = [];
+      // (The worker holds two chunks at a time: answered, it takes the next.)
+      for (let i = 0; i < 200 && seen.reduce((a, c) => a + c.worlds, 0) < 512; i++) {
+        seen.push(...worker.chunks());
+        worker.answerSearches();
+        await flush();
+      }
+      expect(seen.reduce((a, c) => a + c.worlds, 0)).toBe(512);
+      expect(Math.max(...seen.map((c) => c.worlds))).toBe(worlds);
+      expect(Math.max(...seen.map((c) => c.worlds * c.moves))).toBeLessThanOrEqual(256);
+      expect(await search).toHaveLength(512);
+    }
+  });
+
+
   it('loses no worker to a phone locked mid-job: the job goes on and is answered', async () => {
     const workers: FakeWorker[] = [];
     const pool = await WorkerSearch.start(1, new ArrayBuffer(0), () => workers[workers.push(new FakeWorker(true)) - 1] as unknown as Worker);
