@@ -15,7 +15,8 @@ struct LicensesView: View {
   private let items = [
     Item(name: "Libre Baskerville", what: "The text font. SIL Open Font License 1.1", file: "LibreBaskerville-OFL.txt"),
     Item(name: "HamletOrNot", what: "The heading font, by Manfred Klein and Petra Heidorn. Free for commercial use", file: "HamletOrNot-LICENSE.txt"),
-    Item(name: "Keeps", what: "The game, its rules and its card art: © David & Elaina Buffkin", file: nil),
+    // (As the website and Settings credit them.)
+    Item(name: "Keeps", what: "The game is by David & Elaina Buffkin. Card art © their respective owners", file: nil),
   ]
 
   var body: some View {
