@@ -4,11 +4,14 @@
 //   node packages/learn/tools/searchat.ts <replay> <K> [worlds] [weights]
 // <replay>: a replay log (the server's data/replays, the app's Documents/games); <K>: the decision after its first K
 // commands; worlds 512 by default; weights Midstrike's. ROLLOUTS=sampled or greedy: only that one. THREADS as match.ts.
+// SEARCH_INFERENCE=<socket of training/keeps_bot/serve.py>: the playouts batched, the network served there (a GPU, or
+// the CPU), as gpu03 searches for the website.
 import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 import { apply, newGame, parseReplayLog, type GameState, type Seat, type TraceEvent } from '@keeps/engine';
 import { BotPlayer, Policy } from '@keeps/bot';
+import { BatchedPool } from '@keeps/bot/search/batch-search.ts';
 import { RolloutPool } from '@keeps/bot/search/rollout-pool.ts';
 import { atWorlds, searchChoose, setSearchLog, type SearchReport } from '@keeps/bot/search/search.ts';
 
@@ -19,6 +22,7 @@ const replay = parseReplayLog(readFileSync(path, 'utf8'));
 const K = Number(kArg);
 if (!(K >= 0 && K <= replay.commands.length)) throw new Error(`K must be 0 to ${replay.commands.length}`);
 const threads = Number(process.env.THREADS ?? Math.max(1, availableParallelism() - 2));
+const inference = process.env.SEARCH_INFERENCE || null;
 const policy = Policy.load(readFileSync(weights));
 setSearchLog(() => {});
 
@@ -46,7 +50,7 @@ function position(): { state: GameState; events: TraceEvent[]; bot: BotPlayer } 
 
 const kinds = process.env.ROLLOUTS === 'sampled' ? [true] : process.env.ROLLOUTS === 'greedy' ? [false] : [true, false];
 for (const sampled of kinds) {
-  const pool = new RolloutPool(threads, weights, sampled);
+  const pool = inference ? new BatchedPool(threads, weights, inference, sampled, () => {}) : new RolloutPool(threads, weights, sampled);
   const { state, events, bot } = position();
   let report: SearchReport | null = null;
   await searchChoose(bot, state, events, atWorlds(pool, Number(worldsArg)), { report: (r) => (report = r) });
