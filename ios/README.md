@@ -85,19 +85,6 @@ seat's token, as a browser's tab does). The app keeps that seat, so after it clo
   (`pnpm -C ios/core test`, and with every package's: `pnpm test`); the UI tests play on `ios/tools/test-server.ts`,
   which `test.sh` runs here and forwards to the Mac (`KEEPS_SERVER=ws://localhost:7777/ws`).
 
-## TODO
+## What's next
 
-- **Next:** the online room's polish (who's connected while playing, a spectator's table).
-
-- **Your-turn notifications**, online: a push when it's your move and the app is closed (the server sends it through
-  Apple's push service; waits for the developer account).
-- **Room links open the app** (Universal Links): `applinks:playkeeps.online` in the app's Associated Domains, the
-  server serving `/.well-known/apple-app-site-association` for `/r/*`, and the app joining the room it's given; a
-  long-press still opens the page in Safari, so the website stays playable. Needs the paid developer account.
-- **The round review on the phone** uses half the website's sample sizes (`scaledSizes(0.5)` in `core/main.ts`): watch
-  how long a round's review takes on a real phone, and its battery, before going further either way.
-- **Before the App Store:**
-  - the privacy manifest (`PrivacyInfo.xcprivacy`: UserDefaults is a required-reason API) and the App Store's privacy
-    labels: the install id, game statistics (only if shared), and what a report sends (its text, the contact given,
-    a screenshot, the game). No tracking prompt (App Tracking Transparency): none of it is joined with other
-    companies' data or used for ads.
+In [docs/ROADMAP.md](../docs/ROADMAP.md), the one list for the website, the app and Midstrike.

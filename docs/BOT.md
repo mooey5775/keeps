@@ -41,9 +41,10 @@ Decisions (2026-10-21):
   the engine's reveal windows. Revealing while the opponent is deciding is not modelled, to keep one player acting
   at a time as OpenSpiel requires.
 
-## TODO (a running list)
+## Open problems
 
-For the bot and its next training run; each with what it would take. (The iOS app's list is in ios/README.md.)
+The bot's open problems, in detail, each with what it would take. What to do next, and in what order, is in
+[ROADMAP.md](ROADMAP.md).
 
 - **Providence is sometimes missed.** The network plays it 16% of the time on average where it's playable, and under 1%
   at three positions in four, and in game XDMY (2026-10-30) it missed a swap that won the round outright: only search
@@ -91,7 +92,7 @@ For the bot and its next training run; each with what it would take. (The iOS ap
 - Every other reveal timing the clarifications describe (Interest when a Coin card enters, Retribution when the
   triggering card is played, Last Laugh at round end) happens in a reveal window or on the holder's own decision, so
   it's available.
-- **TODO: the belief forgets a pile it saw when a card leaves it unseen.** After the player sees a pile whole (Tithes)
+- **The belief forgets a pile it saw when a card leaves it unseen.** After the player sees a pile whole (Tithes)
   or its top (Epiphany, Prayer), and the opponent then takes from it at a position they can't see (Requisition), the
   belief drops every card it knew was there (`forgetMembers`): one of them left, it can't say which. Yet the pile is
   still those cards minus one, and once the taken card shows up (played, say) the player knows the pile exactly. The
@@ -256,7 +257,8 @@ Heads-up Keeps is **chess-like in its tactics, card-game-like in its hidden info
 ### Next
 
 Done since: Ataraxos's learner (VRPO; `vrpo1` is Midstrike's network), and search at play time (Midstrike). Open: a
-learned belief network, training on search-improved targets, and the TODO list above.
+learned belief network, training on search-improved targets, and the open problems above (in order:
+[ROADMAP.md](ROADMAP.md)).
 
 ### Ideas for future model improvements
 
