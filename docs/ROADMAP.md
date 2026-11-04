@@ -39,9 +39,9 @@ From a long talk with David Buffkin, Keeps' co-creator (2026-11-03):
    - Then: the clarifications and engine tests for each, the protocol version raised, the network retrained and held to
      the Providence benchmark, the website and the app deployed together.
 2. **Ship the phone's search fix** (`da43f88`: a search's chunks are the same work whatever the decision; Konwoo's
-   "Midstrike is crashing", 2026-11-03, on a 46-option Providence choice). It's on Konwoo's phone (build 236) to try.
-   Then: the full iOS suite, pushed, on your phone. If that decision is still too slow on a phone (it's about 11× a
-   usual one), consider capping the work for decisions with many options.
+   "Midstrike is crashing", 2026-11-03, on a 46-option Providence choice). Confirmed on Konwoo's phone (build 236).
+   Left: the full iOS suite, and your phone. If that decision is too slow on a phone (it's about 11× a usual one),
+   consider capping the work for decisions with many options.
 3. **Move Midstrike's search off gpu03,** which isn't ours to rely on. The search is bound by the CPU (the game engine
    and the world sampler: 97% of its time), not the network, so no GPU is needed. The plan:
    - measure 512 worlds (the phone's Hard) against 2,048 (the website's), to see if the website can search less;
